@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT } from "../src/lib/spotify-shared.js";
 import { createToolHandlers } from "../src/tools.js";
 
 describe("tool handlers", () => {
@@ -58,11 +59,13 @@ describe("tool handlers", () => {
 
     const result = await handlers.getPlaylistItems({
       playlistId: "playlist",
-      limit: 51
+      limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT + 1
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("less than or equal to 50");
+    expect(result.content[0]?.text).toContain(
+      `less than or equal to ${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}`
+    );
   });
 
   it("rejects public collaborative playlist creation at validation time", async () => {

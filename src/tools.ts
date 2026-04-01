@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { formatErrorMessage } from "./errors.js";
 import type { SpotifyClient } from "./lib/spotify.js";
+import { SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT } from "./lib/spotify-shared.js";
 
 /**
  * Shared validation for paginated playlist listing.
@@ -23,7 +24,7 @@ export const playlistIdSchema = z.object({
  */
 export const playlistItemsSchema = z.object({
   playlistId: z.string().min(1),
-  limit: z.number().int().min(1).max(50).default(50),
+  limit: z.number().int().min(1).max(SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT).default(SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT),
   offset: z.number().int().min(0).default(0)
 });
 

@@ -1,10 +1,4 @@
-import {
-  SPOTIFY_API_BASE_URL,
-  getSpotifyClientId,
-  getSpotifyRedirectUri
-} from "../config.js";
-import { SpotifyApiError, SpotifyMcpError } from "../errors.js";
-import { SpotifyOAuthClient } from "../auth/oauth.js";
+import { SpotifyMcpError } from "../errors.js";
 import { TokenStore } from "../auth/token-store.js";
 import type {
   MutationResult,
@@ -13,82 +7,41 @@ import type {
   PlaylistListResult,
   PlaylistSummary,
   SpotifyProfile,
-  StoredTokens,
-  TrackResult,
   TrackSearchResult
 } from "../types.js";
-
-type FetchLike = typeof fetch;
-
-type SpotifyPage<T> = {
-  items: T[];
-  limit: number;
-  offset: number;
-  total: number;
-  next: string | null;
-};
-
-type SpotifyPlaylistObject = {
-  id: string;
-  uri: string;
-  name: string;
-  description: string | null;
-  public: boolean | null;
-  collaborative: boolean;
-  owner: {
-    id: string;
-    display_name: string | null;
-  };
-  tracks: {
-    total: number;
-  };
-  snapshot_id?: string;
-};
-
-type SpotifyTrackObject = {
-  id: string | null;
-  uri: string;
-  name: string;
-  duration_ms: number;
-  explicit: boolean;
-  album?: {
-    name: string;
-  } | null;
-  artists: Array<{ name: string }>;
-};
-
-type SpotifyPlaylistItemObject = {
-  added_at: string | null;
-  track: SpotifyTrackObject | null;
-};
+import { SpotifyRequestClient } from "./spotify-request-client.js";
+import {
+  SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+  SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT,
+  chunkUris,
+  isSnapshotConflict,
+  normalizePlaylist,
+  normalizeTrack,
+  rejectLocalPlaylistUris,
+  type FetchLike,
+  type SpotifyPage,
+  type SpotifyPlaylistItemObject,
+  type SpotifyPlaylistObject,
+  type SpotifyTrackObject
+} from "./spotify-shared.js";
 
 /**
  * Thin Spotify Web API client with token refresh, retry, normalization, and
  * playlist-specific guardrails for the local MCP workflow.
  */
 export class SpotifyClient {
-  /**
-   * Shared OAuth helper used only for refreshes after the initial CLI login.
-   */
-  private readonly oauthClient: SpotifyOAuthClient;
+  private readonly requests: SpotifyRequestClient;
   /**
    * Profile cache avoids paying an extra `/me` request on every ownership check.
    */
   private profileCache: SpotifyProfile | null = null;
 
   /**
-   * The token store is the runtime credential source, while `fetchImpl` stays
-   * injectable so request behavior can be verified without live Spotify calls.
+   * `fetchImpl` stays injectable so request behavior can be verified without
+   * live Spotify calls.
    */
-  constructor(
-    private readonly tokenStore: TokenStore,
-    private readonly fetchImpl: FetchLike = fetch
-  ) {
-    this.oauthClient = new SpotifyOAuthClient(
-      getSpotifyClientId(),
-      getSpotifyRedirectUri(),
-      fetchImpl
-    );
+  constructor(tokenStore: TokenStore, fetchImpl: FetchLike = fetch) {
+    this.requests = new SpotifyRequestClient(tokenStore, fetchImpl);
   }
 
   /**
@@ -102,7 +55,7 @@ export class SpotifyClient {
       return this.profileCache;
     }
 
-    const response = await this.request<{
+    const response = await this.requests.request<{
       id: string;
       display_name: string | null;
       uri: string;
@@ -126,7 +79,7 @@ export class SpotifyClient {
    * to read instead of the client silently traversing the whole library.
    */
   async listPlaylists(limit: number, offset: number): Promise<PlaylistListResult> {
-    const page = await this.request<SpotifyPage<SpotifyPlaylistObject>>(
+    const page = await this.requests.request<SpotifyPage<SpotifyPlaylistObject>>(
       `/me/playlists?${new URLSearchParams({
         limit: String(limit),
         offset: String(offset)
@@ -149,7 +102,7 @@ export class SpotifyClient {
    * pass through `ensureCanModifyPlaylist`.
    */
   async getPlaylist(playlistId: string): Promise<PlaylistSummary> {
-    const playlist = await this.request<SpotifyPlaylistObject>(`/playlists/${encodeURIComponent(playlistId)}`);
+    const playlist = await this.requests.request<SpotifyPlaylistObject>(`/playlists/${encodeURIComponent(playlistId)}`);
     return normalizePlaylist(playlist);
   }
 
@@ -160,7 +113,7 @@ export class SpotifyClient {
    * computes them once here to keep reorder/remove call sites simple.
    */
   async getPlaylistItems(playlistId: string, limit: number, offset: number): Promise<PlaylistItemsResult> {
-    const page = await this.request<SpotifyPage<SpotifyPlaylistItemObject>>(
+    const page = await this.requests.request<SpotifyPage<SpotifyPlaylistItemObject>>(
       `/playlists/${encodeURIComponent(playlistId)}/items?${new URLSearchParams({
         limit: String(limit),
         offset: String(offset)
@@ -189,7 +142,7 @@ export class SpotifyClient {
    * on a broader search abstraction.
    */
   async searchTracks(query: string, limit: number): Promise<TrackSearchResult> {
-    const response = await this.request<{
+    const response = await this.requests.request<{
       tracks: SpotifyPage<SpotifyTrackObject>;
     }>(
       `/search?${new URLSearchParams({
@@ -218,7 +171,7 @@ export class SpotifyClient {
     public?: boolean;
     collaborative?: boolean;
   }): Promise<PlaylistSummary> {
-    const playlist = await this.request<SpotifyPlaylistObject>("/me/playlists", {
+    const playlist = await this.requests.request<SpotifyPlaylistObject>("/me/playlists", {
       method: "POST",
       body: JSON.stringify({
         name: input.name,
@@ -249,7 +202,7 @@ export class SpotifyClient {
     });
     await this.validatePlaylistDetailChange(input);
 
-    await this.requestEmpty(`/playlists/${encodeURIComponent(input.playlistId)}`, {
+    await this.requests.requestEmpty(`/playlists/${encodeURIComponent(input.playlistId)}`, {
       method: "PUT",
       body: JSON.stringify({
         name: input.name,
@@ -281,8 +234,8 @@ export class SpotifyClient {
     let snapshotId = "";
     let batchPosition = input.position;
 
-    for (const chunk of chunkUris(input.uris, 100)) {
-      const response = await this.request<{ snapshot_id: string }>(
+    for (const chunk of chunkUris(input.uris, SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT)) {
+      const response = await this.requests.request<{ snapshot_id: string }>(
         `/playlists/${encodeURIComponent(input.playlistId)}/items`,
         {
           method: "POST",
@@ -327,9 +280,9 @@ export class SpotifyClient {
     let snapshotId = playlist.snapshot_id ?? undefined;
     let removedCount = 0;
 
-    for (const chunk of chunkUris(input.uris, 100)) {
+    for (const chunk of chunkUris(input.uris, SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT)) {
       try {
-        const response = await this.request<{ snapshot_id: string }>(
+        const response = await this.requests.request<{ snapshot_id: string }>(
           `/playlists/${encodeURIComponent(input.playlistId)}/items`,
           {
             method: "DELETE",
@@ -383,7 +336,7 @@ export class SpotifyClient {
     const playlist = await this.getPlaylist(input.playlistId);
 
     try {
-      const response = await this.request<{ snapshot_id: string }>(
+      const response = await this.requests.request<{ snapshot_id: string }>(
         `/playlists/${encodeURIComponent(input.playlistId)}/items`,
         {
           method: "PUT",
@@ -433,7 +386,7 @@ export class SpotifyClient {
       collaborative: false
     });
 
-    for (const chunk of chunkUris(cloneableUris, 100)) {
+    for (const chunk of chunkUris(cloneableUris, SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT)) {
       await this.addPlaylistItems({
         playlistId: clone.id,
         uris: chunk
@@ -450,7 +403,7 @@ export class SpotifyClient {
   private async collectCloneablePlaylistUris(sourcePlaylistId: string): Promise<string[]> {
     const uris: string[] = [];
     let offset = 0;
-    const limit = 50;
+    const limit = SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT;
 
     while (true) {
       const page = await this.getPlaylistItems(sourcePlaylistId, limit, offset);
@@ -520,233 +473,4 @@ export class SpotifyClient {
       );
     }
   }
-
-  /**
-   * Executes a Spotify JSON request with automatic token refresh and basic
-   * Spotify-directed backoff on `429`.
-   *
-   * Only one refresh retry is attempted for a given request path so auth errors
-   * do not recurse indefinitely.
-   */
-  private async request<T>(
-    path: string,
-    init: RequestInit = {},
-    hasRetried = false,
-    rateLimitRetriesRemaining = 2
-  ): Promise<T> {
-    const tokens = await this.getValidTokens();
-
-    const response = await this.fetchImpl(`${SPOTIFY_API_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        authorization: `Bearer ${tokens.accessToken}`,
-        "content-type": "application/json",
-        ...(init.headers ?? {})
-      }
-    });
-
-    if (response.status === 401 && !hasRetried) {
-      await this.refreshTokens(tokens);
-      return this.request<T>(path, init, true, rateLimitRetriesRemaining);
-    }
-
-    if (response.status === 429) {
-      if (rateLimitRetriesRemaining <= 0) {
-        const message = await readSpotifyError(response);
-        throw new SpotifyApiError(message, response.status, readRetryAfter(response));
-      }
-
-      const retryAfterSeconds = Number(response.headers.get("retry-after") || "1");
-      await delay(retryAfterSeconds * 1000);
-      return this.request<T>(path, init, hasRetried, rateLimitRetriesRemaining - 1);
-    }
-
-    if (!response.ok) {
-      const message = await readSpotifyError(response);
-      throw new SpotifyApiError(message, response.status, readRetryAfter(response));
-    }
-
-    return (await response.json()) as T;
-  }
-
-  /**
-   * Variant of `request` for endpoints that return no body on success.
-   */
-  private async requestEmpty(
-    path: string,
-    init: RequestInit = {},
-    hasRetried = false,
-    rateLimitRetriesRemaining = 2
-  ): Promise<void> {
-    const tokens = await this.getValidTokens();
-
-    const response = await this.fetchImpl(`${SPOTIFY_API_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        authorization: `Bearer ${tokens.accessToken}`,
-        "content-type": "application/json",
-        ...(init.headers ?? {})
-      }
-    });
-
-    if (response.status === 401 && !hasRetried) {
-      await this.refreshTokens(tokens);
-      return this.requestEmpty(path, init, true, rateLimitRetriesRemaining);
-    }
-
-    if (response.status === 429) {
-      if (rateLimitRetriesRemaining <= 0) {
-        const message = await readSpotifyError(response);
-        throw new SpotifyApiError(message, response.status, readRetryAfter(response));
-      }
-
-      const retryAfterSeconds = Number(response.headers.get("retry-after") || "1");
-      await delay(retryAfterSeconds * 1000);
-      return this.requestEmpty(path, init, hasRetried, rateLimitRetriesRemaining - 1);
-    }
-
-    if (!response.ok) {
-      const message = await readSpotifyError(response);
-      throw new SpotifyApiError(message, response.status, readRetryAfter(response));
-    }
-  }
-
-  /**
-   * Returns currently usable tokens, refreshing them shortly before expiration.
-   *
-   * The one-minute buffer prevents a request from starting with a token that is
-   * likely to expire while the call is in flight.
-   */
-  private async getValidTokens(): Promise<StoredTokens> {
-    const tokens = await this.tokenStore.read();
-
-    if (!tokens) {
-      throw new SpotifyMcpError(
-        "Spotify is not authenticated. Run `pnpm auth` first.",
-        "auth_missing_tokens"
-      );
-    }
-
-    if (Date.now() < tokens.expiresAt - 60_000) {
-      return tokens;
-    }
-
-    return this.refreshTokens(tokens);
-  }
-
-  /**
-   * Refreshes and persists tokens so the next request path sees the same state.
-   */
-  private async refreshTokens(tokens: StoredTokens): Promise<StoredTokens> {
-    const refreshed = await this.oauthClient.refreshAccessToken(tokens);
-    await this.tokenStore.write(refreshed);
-    return refreshed;
-  }
-}
-
-/**
- * Normalizes Spotify's playlist object into the smaller MCP response shape.
- */
-function normalizePlaylist(playlist: SpotifyPlaylistObject): PlaylistSummary {
-  return {
-    id: playlist.id,
-    uri: playlist.uri,
-    name: playlist.name,
-    description: playlist.description,
-    public: playlist.public,
-    collaborative: playlist.collaborative,
-    owner: {
-      id: playlist.owner.id,
-      display_name: playlist.owner.display_name
-    },
-    tracks_total: playlist.tracks.total,
-    snapshot_id: playlist.snapshot_id ?? null
-  };
-}
-
-/**
- * Normalizes a Spotify track object for playlist-building use cases.
- */
-function normalizeTrack(track: SpotifyTrackObject): TrackResult {
-  return {
-    id: track.id ?? track.uri,
-    uri: track.uri,
-    name: track.name,
-    artists: track.artists.map((artist) => artist.name),
-    album: track.album?.name ?? null,
-    duration_ms: track.duration_ms,
-    explicit: track.explicit
-  };
-}
-
-/**
- * Splits URI lists to Spotify's per-request playlist mutation limits.
- */
-function chunkUris(uris: string[], chunkSize: number): string[][] {
-  const chunks: string[][] = [];
-
-  for (let index = 0; index < uris.length; index += chunkSize) {
-    chunks.push(uris.slice(index, index + chunkSize));
-  }
-
-  return chunks;
-}
-
-function rejectLocalPlaylistUris(uris: string[], action: "clone" | "remove"): void {
-  const hasLocalFile = uris.some((uri) => uri.startsWith("spotify:local:"));
-
-  if (!hasLocalFile) {
-    return;
-  }
-
-  const message =
-    action === "clone"
-      ? "Clone cannot copy Spotify local-file playlist items through the Web API."
-      : "Remove does not support Spotify local-file playlist items by URI.";
-
-  throw new SpotifyMcpError(
-    `${message} Remove or replace the local files in Spotify first, then retry.`,
-    "playlist_local_file_unsupported"
-  );
-}
-
-function isSnapshotConflict(error: unknown): error is SpotifyApiError {
-  return (
-    error instanceof SpotifyApiError &&
-    error.status === 400 &&
-    error.message.toLowerCase().includes("snapshot")
-  );
-}
-
-/**
- * Extracts a useful message from Spotify's JSON error payload when present.
- */
-async function readSpotifyError(response: Response): Promise<string> {
-  try {
-    const payload = (await response.json()) as {
-      error?: {
-        message?: string;
-      };
-    };
-    return payload.error?.message || `Spotify API request failed with status ${response.status}.`;
-  } catch {
-    return `Spotify API request failed with status ${response.status}.`;
-  }
-}
-
-/**
- * Reads Spotify's optional backoff header as seconds.
- */
-function readRetryAfter(response: Response): number | undefined {
-  const retryAfter = response.headers.get("retry-after");
-  return retryAfter ? Number(retryAfter) : undefined;
-}
-
-/**
- * Small async delay helper used for Spotify-directed retry backoff.
- */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
