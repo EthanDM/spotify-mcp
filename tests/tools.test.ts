@@ -51,6 +51,20 @@ describe("tool handlers", () => {
     expect(result.content[0]?.text).toContain("less than or equal to 10");
   });
 
+  it("rejects playlist item page sizes above Spotify's current cap", async () => {
+    const handlers = createToolHandlers({
+      getPlaylistItems: vi.fn()
+    } as never);
+
+    const result = await handlers.getPlaylistItems({
+      playlistId: "playlist",
+      limit: 51
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("less than or equal to 50");
+  });
+
   it("rejects public collaborative playlist creation at validation time", async () => {
     const handlers = createToolHandlers({
       createPlaylist: vi.fn()

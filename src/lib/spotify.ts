@@ -450,7 +450,7 @@ export class SpotifyClient {
   private async collectCloneablePlaylistUris(sourcePlaylistId: string): Promise<string[]> {
     const uris: string[] = [];
     let offset = 0;
-    const limit = 100;
+    const limit = 50;
 
     while (true) {
       const page = await this.getPlaylistItems(sourcePlaylistId, limit, offset);

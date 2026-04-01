@@ -23,7 +23,7 @@ export const playlistIdSchema = z.object({
  */
 export const playlistItemsSchema = z.object({
   playlistId: z.string().min(1),
-  limit: z.number().int().min(1).max(100).default(100),
+  limit: z.number().int().min(1).max(50).default(50),
   offset: z.number().int().min(0).default(0)
 });
 
