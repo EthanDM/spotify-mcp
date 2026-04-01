@@ -1,0 +1,499 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { SpotifyClient } from "../../src/lib/spotify.js";
+import type { StoredTokens } from "../../src/types.js";
+
+const originalEnv = process.env;
+
+describe("SpotifyClient", () => {
+  beforeEach(() => {
+    process.env = {
+      ...originalEnv,
+      SPOTIFY_CLIENT_ID: "client-id",
+      SPOTIFY_REDIRECT_URI: "http://127.0.0.1:8787/callback"
+    };
+  });
+
+  it("constructs the expected list playlists request", async () => {
+    const store = createTokenStore();
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).toBe("https://api.spotify.com/v1/me/playlists?limit=20&offset=10");
+
+      return jsonResponse({
+        items: [],
+        limit: 20,
+        offset: 10,
+        total: 0,
+        next: null
+      });
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.listPlaylists(20, 10);
+
+    expect(result.offset).toBe(10);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes and retries after a 401", async () => {
+    const store = createTokenStore();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          access_token: "new-access",
+          token_type: "Bearer",
+          scope: "playlist-read-private",
+          expires_in: 3600,
+          refresh_token: "new-refresh"
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: "user",
+          display_name: "Ethan",
+          uri: "spotify:user:user",
+          product: "premium"
+        })
+      );
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const profile = await client.getMyProfile();
+
+    expect(profile.id).toBe("user");
+    expect(store.write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessToken: "new-access",
+        refreshToken: "new-refresh"
+      })
+    );
+  });
+
+  it("retries after a 429 response", async () => {
+    const store = createTokenStore();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response("rate limited", {
+          status: 429,
+          headers: { "retry-after": "0" }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          tracks: {
+            items: [],
+            limit: 10,
+            offset: 0,
+            total: 0,
+            next: null
+          }
+        })
+      );
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await client.searchTracks("odesza", 10);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails after bounded 429 retries instead of looping forever", async () => {
+    const store = createTokenStore();
+    const fetchMock = vi.fn(async () => {
+      return new Response("rate limited", {
+        status: 429,
+        headers: { "retry-after": "0" }
+      });
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await expect(client.searchTracks("odesza", 10)).rejects.toThrow("status 429");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("reads playlist items from Spotify's current /items endpoint", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist/items?limit=100&offset=0": () =>
+        jsonResponse({
+          items: [playlistItemResponse("spotify:track:1")],
+          limit: 100,
+          offset: 0,
+          total: 1,
+          next: null
+        })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const page = await client.getPlaylistItems("playlist", 100, 0);
+
+    expect(page.items[0]?.track?.uri).toBe("spotify:track:1");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/playlists/playlist/items?limit=100&offset=0",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: "Bearer access"
+        })
+      })
+    );
+  });
+
+  it("sends the expected payloads for playlist mutation requests", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "old" })),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      "POST https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            uris: ["spotify:track:1", "spotify:track:2"],
+            position: undefined
+          })
+        );
+        return jsonResponse({ snapshot_id: "snap-2" });
+      },
+      "PUT https://api.spotify.com/v1/playlists/playlist": (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            name: "Renamed",
+            description: "new",
+            public: undefined,
+            collaborative: undefined
+          })
+        );
+        return new Response(null, { status: 200 });
+      }
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await client.addPlaylistItems({
+      playlistId: "playlist",
+      uris: ["spotify:track:1", "spotify:track:2"]
+    });
+    const updated = await client.changePlaylistDetails({
+      playlistId: "playlist",
+      name: "Renamed",
+      description: "new"
+    });
+
+    expect(updated.name).toBe("Existing");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/playlists/playlist/items",
+      expect.objectContaining({
+        method: "POST"
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/playlists/playlist",
+      expect.objectContaining({
+        method: "PUT"
+      })
+    );
+  });
+
+  it("rejects metadata changes for collaborative playlists not owned by the current user", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse({
+          ...playlistResponse({ id: "playlist", ownerId: "owner", description: "shared" }),
+          collaborative: true
+        }),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await expect(
+      client.changePlaylistDetails({
+        playlistId: "playlist",
+        name: "Renamed"
+      })
+    ).rejects.toThrow("cannot modify");
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/playlists/playlist",
+      expect.objectContaining({
+        method: "PUT"
+      })
+    );
+  });
+
+  it("rejects making an existing public playlist collaborative without also making it private", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse({
+          ...playlistResponse({ id: "playlist", ownerId: "me", description: "public playlist" }),
+          public: true,
+          collaborative: false
+        }),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await expect(
+      client.changePlaylistDetails({
+        playlistId: "playlist",
+        collaborative: true
+      })
+    ).rejects.toThrow("must not be public");
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/playlists/playlist",
+      expect.objectContaining({
+        method: "PUT"
+      })
+    );
+  });
+
+  it("rejects removing local-file playlist items by URI before calling Spotify", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc" })),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await expect(
+      client.removePlaylistItems({
+        playlistId: "playlist",
+        uris: ["spotify:local:artist:album:track:1"]
+      })
+    ).rejects.toThrow("local-file");
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/playlists/playlist/items",
+      expect.objectContaining({
+        method: "DELETE"
+      })
+    );
+  });
+
+  it("fails clone before creating a playlist when source contains local files", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/source": () =>
+        jsonResponse(playlistResponse({ id: "source", ownerId: "owner", description: "desc", tracksTotal: 2 })),
+      "GET https://api.spotify.com/v1/playlists/source/items?limit=100&offset=0": () =>
+        jsonResponse({
+          items: [
+            playlistItemResponse("spotify:track:1"),
+            playlistItemResponse("spotify:local:artist:album:track:1")
+          ],
+          limit: 100,
+          offset: 0,
+          total: 2,
+          next: null
+        })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await expect(client.clonePlaylist({ sourcePlaylistId: "source" })).rejects.toThrow("local-file");
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/me/playlists",
+      expect.objectContaining({
+        method: "POST"
+      })
+    );
+  });
+
+  it("preserves non-snapshot 400 errors from reorder operations", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc" })),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              status: 400,
+              message: "range_start must be less than playlist length"
+            }
+          }),
+          {
+            status: 400,
+            headers: {
+              "content-type": "application/json"
+            }
+          }
+        )
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await expect(
+      client.reorderPlaylistItems({
+        playlistId: "playlist",
+        rangeStart: 99,
+        insertBefore: 0
+      })
+    ).rejects.toThrow("range_start must be less than playlist length");
+  });
+
+  it("clones a playlist across paginated playlist item pages and add batches", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/source": () =>
+        jsonResponse(playlistResponse({ id: "source", ownerId: "owner", description: "desc", tracksTotal: 101 })),
+      "POST https://api.spotify.com/v1/me/playlists": (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.name).toBe("Source (Copy)");
+        expect(body.public).toBe(false);
+        return jsonResponse(playlistResponse({ id: "clone", ownerId: "me", description: "desc", tracksTotal: 0 }));
+      },
+      "GET https://api.spotify.com/v1/playlists/source/items?limit=100&offset=0": () =>
+        jsonResponse({
+          items: Array.from({ length: 100 }, (_, index) => playlistItemResponse(`spotify:track:${index}`)),
+          limit: 100,
+          offset: 0,
+          total: 101,
+          next: "next"
+        }),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      "GET https://api.spotify.com/v1/playlists/clone": () =>
+        jsonResponse(playlistResponse({ id: "clone", ownerId: "me", description: "desc", tracksTotal: 101 })),
+      "POST https://api.spotify.com/v1/playlists/clone/items": (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        return jsonResponse({ snapshot_id: body.uris.length === 100 ? "snap-2" : "snap-3" });
+      },
+      "GET https://api.spotify.com/v1/playlists/source/items?limit=100&offset=100": () =>
+        jsonResponse({
+          items: [playlistItemResponse("spotify:track:100")],
+          limit: 100,
+          offset: 100,
+          total: 101,
+          next: null
+        })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.clonePlaylist({ sourcePlaylistId: "source" });
+
+    expect(result.id).toBe("clone");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/playlists/clone/items",
+      expect.objectContaining({ method: "POST" })
+    );
+    const cloneItemCalls = fetchMock.mock.calls.filter(
+      ([url]) => url === "https://api.spotify.com/v1/playlists/clone/items"
+    );
+    expect(cloneItemCalls).toHaveLength(2);
+  });
+});
+
+function createTokens(overrides: Partial<StoredTokens> = {}): StoredTokens {
+  return {
+    accessToken: "access",
+    refreshToken: "refresh",
+    expiresAt: Date.now() + 3_600_000,
+    scope: "playlist-read-private",
+    tokenType: "Bearer",
+    ...overrides
+  };
+}
+
+function createTokenStore(tokens: StoredTokens = createTokens()) {
+  return {
+    read: vi.fn(async () => tokens),
+    write: vi.fn(async () => undefined)
+  };
+}
+
+function jsonResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: {
+      "content-type": "application/json"
+    }
+  });
+}
+
+function playlistResponse(input: {
+  id: string;
+  ownerId: string;
+  description?: string;
+  tracksTotal?: number;
+}) {
+  return {
+    id: input.id,
+    uri: `spotify:playlist:${input.id}`,
+    name: input.id === "source" ? "Source" : "Existing",
+    description: input.description ?? null,
+    public: false,
+    collaborative: false,
+    owner: { id: input.ownerId, display_name: "Owner" },
+    tracks: { total: input.tracksTotal ?? 2 },
+    snapshot_id: `${input.id}-snapshot`
+  };
+}
+
+function playlistItemResponse(uri: string) {
+  return {
+    added_at: null,
+    track: {
+      id: uri.split(":").at(-1),
+      uri,
+      name: `Track ${uri}`,
+      duration_ms: 1000,
+      explicit: false,
+      album: { name: "Album" },
+      artists: [{ name: "Artist" }]
+    }
+  };
+}
+
+function createRouterFetchMock(
+  routes: Record<string, (url: string, init?: RequestInit) => Promise<Response> | Response>
+) {
+  return vi.fn(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    const key = `${method} ${url}`;
+    const handler = routes[key];
+
+    if (!handler) {
+      throw new Error(`Unhandled fetch: ${key}`);
+    }
+
+    return handler(url, init);
+  });
+}
