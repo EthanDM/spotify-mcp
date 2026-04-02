@@ -16,6 +16,7 @@ async function main(): Promise<void> {
   const client = new SpotifyClient(new TokenStore(getTokenFilePath()));
   const stamp = createTimestamp();
   const smokePrefix = `[spotify-mcp smoke ${stamp}]`;
+  const verbose = process.env.SPOTIFY_SMOKE_VERBOSE === "1";
 
   logStep("profile");
   const profile = await client.getMyProfile();
@@ -68,14 +69,14 @@ async function main(): Promise<void> {
     playlistId: target.id,
     uris: [trackC.uri, trackB.uri, trackA.uri]
   });
-  await waitForPlaylistItems(client, target.id, 10, 3, "target after replace");
+  await waitForPlaylistItems(client, target.id, 10, 3, "target after replace", verbose);
 
   logStep("clear playlist");
   await client.replacePlaylistItems({
     playlistId: target.id,
     uris: []
   });
-  await waitForPlaylistItems(client, target.id, 10, 0, "target after clear");
+  await waitForPlaylistItems(client, target.id, 10, 0, "target after clear", verbose);
 
   logStep("seed dedupe and merge state");
   await client.replacePlaylistItems({
@@ -86,14 +87,14 @@ async function main(): Promise<void> {
     playlistId: source.id,
     uris: [trackB.uri, trackC.uri]
   });
-  await waitForPlaylistItems(client, target.id, 10, 3, "target after seed");
-  await waitForPlaylistItems(client, source.id, 10, 2, "source after seed");
+  await waitForPlaylistItems(client, target.id, 10, 3, "target after seed", verbose);
+  await waitForPlaylistItems(client, source.id, 10, 2, "source after seed", verbose);
 
   logStep("dedupe playlist");
   await client.dedupePlaylist({
     playlistId: target.id
   });
-  await waitForPlaylistItems(client, target.id, 10, 2, "target after dedupe");
+  await waitForPlaylistItems(client, target.id, 10, 2, "target after dedupe", verbose);
 
   logStep("merge playlists");
   await client.mergePlaylists({
@@ -103,7 +104,7 @@ async function main(): Promise<void> {
   });
 
   logStep("reorder tracks");
-  const mergedItems = await waitForPlaylistItems(client, target.id, 10, 3, "target after merge");
+  const mergedItems = await waitForPlaylistItems(client, target.id, 10, 3, "target after merge", verbose);
   if (mergedItems.items.length >= 2) {
     await client.reorderPlaylistItems({
       playlistId: target.id,
@@ -111,10 +112,10 @@ async function main(): Promise<void> {
       insertBefore: 0
     });
   }
-  await waitForPlaylistItems(client, target.id, 10, 3, "target after reorder");
+  await waitForPlaylistItems(client, target.id, 10, 3, "target after reorder", verbose);
 
   logStep("remove track");
-  const removableItems = await waitForPlaylistItems(client, target.id, 10, 1, "target before remove");
+  const removableItems = await waitForPlaylistItems(client, target.id, 10, 1, "target before remove", verbose);
   const removableTrackUri = removableItems.items
     .map((item) => item.track?.uri)
     .find((uri) => typeof uri === "string");
@@ -196,7 +197,8 @@ async function waitForPlaylistItems(
   playlistId: string,
   limit: number,
   minimumCount: number,
-  label: string
+  label: string,
+  verbose: boolean
 ): Promise<Awaited<ReturnType<SpotifyClient["getPlaylistItems"]>>>
 {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -208,12 +210,14 @@ async function waitForPlaylistItems(
       .map((item) => item.track?.uri)
       .filter((uri): uri is string => typeof uri === "string");
 
-    console.log(
-      `[smoke] ${label} attempt ${attempt + 1}: summary=${playlist.tracks_total} visible=${items.items.length} resolved=${resolvedUris.length}`
-    );
-    console.log(
-      `[smoke] ${label} uris: ${items.items.map((item) => item.track?.uri ?? "null").join(", ")}`
-    );
+    if (verbose) {
+      console.log(
+        `[smoke] ${label} attempt ${attempt + 1}: summary=${playlist.tracks_total} visible=${items.items.length} resolved=${resolvedUris.length}`
+      );
+      console.log(
+        `[smoke] ${label} uris: ${items.items.map((item) => item.track?.uri ?? "null").join(", ")}`
+      );
+    }
 
     if (resolvedUris.length >= minimumCount) {
       return items;
