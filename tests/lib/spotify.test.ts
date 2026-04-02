@@ -411,6 +411,8 @@ describe("SpotifyClient", () => {
         tracks_total: 0,
         snapshot_id: "playlist-snapshot"
       },
+      original_count: 2,
+      final_count: 0,
       cleared_count: 2
     });
   });
@@ -495,6 +497,8 @@ describe("SpotifyClient", () => {
     });
 
     expect(result.cleared_count).toBeUndefined();
+    expect(result.original_count).toBe(2);
+    expect(result.final_count).toBe(2);
     expect(result.playlist.name).toBe("[Archived] Existing");
   });
 
@@ -549,7 +553,9 @@ describe("SpotifyClient", () => {
     expect(result).toEqual({
       playlist_id: "playlist",
       snapshot_id: "snap-add",
-      replaced_count: 101
+      replaced_count: 101,
+      original_count: 10,
+      final_count: 101
     });
   });
 
@@ -591,7 +597,9 @@ describe("SpotifyClient", () => {
     expect(result).toEqual({
       playlist_id: "playlist",
       snapshot_id: "snap-clear",
-      replaced_count: 0
+      replaced_count: 0,
+      original_count: 3,
+      final_count: 0
     });
   });
 
@@ -687,7 +695,12 @@ describe("SpotifyClient", () => {
     expect(result).toEqual({
       playlist_id: "target",
       snapshot_id: "snap-merge",
-      replaced_count: 5
+      replaced_count: 5,
+      original_count: 2,
+      final_count: 5,
+      duplicate_count_removed: 0,
+      source_playlist_count: 2,
+      source_item_count: 3
     });
   });
 
@@ -746,7 +759,10 @@ describe("SpotifyClient", () => {
     expect(result).toEqual({
       playlist_id: "playlist",
       snapshot_id: "snap-dedupe",
-      replaced_count: 3
+      replaced_count: 3,
+      original_count: 4,
+      final_count: 3,
+      duplicate_count_removed: 1
     });
   });
 
@@ -902,7 +918,9 @@ describe("SpotifyClient", () => {
     expect(result).toEqual({
       playlist_id: "playlist",
       snapshot_id: "snap-remove",
-      removed_count: 1
+      removed_count: 1,
+      original_count: 2,
+      final_count: 1
     });
   });
 

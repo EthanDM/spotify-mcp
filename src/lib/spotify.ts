@@ -274,7 +274,9 @@ export class SpotifyClient {
     clearItems?: boolean;
     prefix?: string;
   }): Promise<ArchivePlaylistResult> {
-    const current = await this.getPlaylist(input.playlistId);
+    const current = await this.ensureCanModifyPlaylist(input.playlistId, {
+      allowCollaborative: false
+    });
     const prefix = input.prefix ?? "[Archived] ";
     const archivedName = current.name.startsWith(prefix)
       ? current.name
@@ -297,10 +299,14 @@ export class SpotifyClient {
       });
     }
 
+    const finalPlaylist = input.clearItems
+      ? await this.getPlaylist(input.playlistId)
+      : archivedPlaylist;
+
     return {
-      playlist: input.clearItems
-        ? await this.getPlaylist(input.playlistId)
-        : archivedPlaylist,
+      playlist: finalPlaylist,
+      original_count: current.tracks_total,
+      final_count: finalPlaylist.tracks_total,
       ...(typeof clearedCount === "number"
         ? { cleared_count: clearedCount }
         : {})
@@ -365,7 +371,7 @@ export class SpotifyClient {
     playlistId: string;
     uris: string[];
   }): Promise<MutationResult> {
-    await this.ensureCanModifyPlaylist(input.playlistId, {
+    const playlist = await this.ensureCanModifyPlaylist(input.playlistId, {
       allowCollaborative: true
     });
     rejectLocalPlaylistUris(input.uris, "replace");
@@ -395,7 +401,9 @@ export class SpotifyClient {
     return {
       playlist_id: input.playlistId,
       snapshot_id: snapshotId,
-      replaced_count: input.uris.length
+      replaced_count: input.uris.length,
+      original_count: playlist.tracks_total,
+      final_count: input.uris.length
     };
   }
 
@@ -413,18 +421,31 @@ export class SpotifyClient {
     const mergedUris = await this.collectPlaylistUris(input.targetPlaylistId, {
       localAction: "replace"
     });
+    const originalCount = mergedUris.length;
+    let sourceItemCount = 0;
 
     for (const sourcePlaylistId of input.sourcePlaylistIds) {
       const sourceUris = await this.collectPlaylistUris(sourcePlaylistId, {
         localAction: "replace"
       });
       mergedUris.push(...sourceUris);
+      sourceItemCount += sourceUris.length;
     }
 
-    return this.replacePlaylistItems({
+    const finalUris = input.dedupe ? dedupeUris(mergedUris) : mergedUris;
+    const result = await this.replacePlaylistItems({
       playlistId: input.targetPlaylistId,
-      uris: input.dedupe ? dedupeUris(mergedUris) : mergedUris
+      uris: finalUris
     });
+
+    return {
+      ...result,
+      original_count: originalCount,
+      final_count: finalUris.length,
+      duplicate_count_removed: mergedUris.length - finalUris.length,
+      source_playlist_count: input.sourcePlaylistIds.length,
+      source_item_count: sourceItemCount
+    };
   }
 
   /**
@@ -435,11 +456,19 @@ export class SpotifyClient {
     const uris = await this.collectPlaylistUris(input.playlistId, {
       localAction: "replace"
     });
+    const dedupedUris = dedupeUris(uris);
 
-    return this.replacePlaylistItems({
+    const result = await this.replacePlaylistItems({
       playlistId: input.playlistId,
-      uris: dedupeUris(uris)
+      uris: dedupedUris
     });
+
+    return {
+      ...result,
+      original_count: uris.length,
+      final_count: dedupedUris.length,
+      duplicate_count_removed: uris.length - dedupedUris.length
+    };
   }
 
   /**
@@ -453,12 +482,11 @@ export class SpotifyClient {
     playlistId: string;
     uris: string[];
   }): Promise<MutationResult> {
-    await this.ensureCanModifyPlaylist(input.playlistId, {
+    const playlist = await this.ensureCanModifyPlaylist(input.playlistId, {
       allowCollaborative: true
     });
     rejectLocalPlaylistUris(input.uris, "remove");
 
-    const playlist = await this.getPlaylist(input.playlistId);
     let snapshotId = playlist.snapshot_id ?? undefined;
     let removedCount = 0;
 
@@ -502,7 +530,9 @@ export class SpotifyClient {
     return {
       playlist_id: input.playlistId,
       snapshot_id: snapshotId,
-      removed_count: removedCount
+      removed_count: removedCount,
+      original_count: playlist.tracks_total,
+      final_count: Math.max(playlist.tracks_total - removedCount, 0)
     };
   }
 
@@ -699,18 +729,18 @@ export class SpotifyClient {
     options: {
       allowCollaborative: boolean;
     }
-  ): Promise<void> {
+  ): Promise<PlaylistSummary> {
     const [playlist, me] = await Promise.all([
       this.getPlaylist(playlistId),
       this.getMyProfile()
     ]);
 
     if (playlist.owner.id === me.id) {
-      return;
+      return playlist;
     }
 
     if (options.allowCollaborative && playlist.collaborative) {
-      return;
+      return playlist;
     }
 
     throw new SpotifyMcpError(

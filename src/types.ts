@@ -95,6 +95,11 @@ export type MutationResult = {
   added_count?: number;
   removed_count?: number;
   replaced_count?: number;
+  original_count?: number;
+  final_count?: number;
+  duplicate_count_removed?: number;
+  source_playlist_count?: number;
+  source_item_count?: number;
 };
 
 /**
@@ -117,6 +122,8 @@ export type UnfollowPlaylistResult = {
  */
 export type ArchivePlaylistResult = {
   playlist: PlaylistSummary;
+  original_count: number;
+  final_count: number;
   cleared_count?: number;
 };
 

@@ -162,6 +162,8 @@ describe("tool handlers", () => {
         tracks_total: 0,
         snapshot_id: "snap"
       },
+      original_count: 2,
+      final_count: 0,
       cleared_count: 2
     }));
     const handlers = createToolHandlers({
@@ -187,7 +189,9 @@ describe("tool handlers", () => {
     const replacePlaylistItems = vi.fn(async () => ({
       playlist_id: "playlist",
       snapshot_id: "snap",
-      replaced_count: 0
+      replaced_count: 0,
+      original_count: 3,
+      final_count: 0
     }));
     const handlers = createToolHandlers({
       replacePlaylistItems
