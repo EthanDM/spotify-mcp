@@ -36,6 +36,41 @@ describe("SpotifyClient", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("normalizes playlist counts from Spotify's current items.total field", async () => {
+    const store = createTokenStore();
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        items: [
+          {
+            id: "playlist-1",
+            uri: "spotify:playlist:playlist-1",
+            name: "Playlist 1",
+            description: "desc",
+            public: false,
+            collaborative: false,
+            owner: {
+              id: "me",
+              display_name: "Ethan"
+            },
+            items: {
+              total: 42
+            },
+            snapshot_id: "snap-1"
+          }
+        ],
+        limit: 20,
+        offset: 0,
+        total: 1,
+        next: null
+      })
+    );
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.listPlaylists(20, 0);
+
+    expect(result.items[0]?.tracks_total).toBe(42);
+  });
+
   it("refreshes and retries after a 401", async () => {
     const store = createTokenStore();
     const fetchMock = vi

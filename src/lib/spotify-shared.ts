@@ -25,7 +25,10 @@ export type SpotifyPlaylistObject = {
     id: string;
     display_name: string | null;
   };
-  tracks: {
+  items?: {
+    total: number;
+  };
+  tracks?: {
     total: number;
   };
   snapshot_id?: string;
@@ -66,9 +69,18 @@ export function normalizePlaylist(playlist: SpotifyPlaylistObject): PlaylistSumm
       id: playlist.owner.id,
       display_name: playlist.owner.display_name
     },
-    tracks_total: playlist.tracks.total,
+    tracks_total: readPlaylistItemsTotal(playlist),
     snapshot_id: playlist.snapshot_id ?? null
   };
+}
+
+/**
+ * Spotify's playlist list endpoints now expose item counts under `items.total`,
+ * while some single-playlist responses still include the older `tracks.total`.
+ * The MCP shape only needs the count, so normalization accepts either field.
+ */
+function readPlaylistItemsTotal(playlist: SpotifyPlaylistObject): number {
+  return playlist.items?.total ?? playlist.tracks?.total ?? 0;
 }
 
 /**
