@@ -43,6 +43,53 @@ describe("tool handlers", () => {
     expect(result.structuredContent).toEqual({ id: "me" });
   });
 
+  it("rejects incomplete artist feedback before recording personalization state", async () => {
+    const handlers = createToolHandlers(
+      {} as never,
+      {
+        recordFeedback: vi.fn()
+      } as never
+    );
+
+    const result = await handlers.recordPersonalizationFeedback({
+      kind: "artist",
+      value: "Artist A"
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("require a sentiment");
+  });
+
+  it("passes valid personalization refresh input through to the service", async () => {
+    const refreshState = vi.fn(async () => ({
+      refreshed_at: "2026-04-02T00:00:00.000Z",
+      snapshot_path: "/tmp/snapshot.json",
+      context_path: "/tmp/context.md",
+      playlist_count: 1,
+      saved_track_count: 2,
+      saved_album_count: 3,
+      followed_artist_count: 4
+    }));
+    const handlers = createToolHandlers(
+      {} as never,
+      {
+        refreshState
+      } as never
+    );
+
+    const result = await handlers.refreshPersonalizationState({
+      playlistLimit: 100
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(refreshState).toHaveBeenCalledWith({
+      playlistLimit: 100,
+      savedTracksLimit: 200,
+      savedAlbumsLimit: 100,
+      followedArtistsLimit: 100
+    });
+  });
+
   it("rejects search limits above Spotify's current cap", async () => {
     const handlers = createToolHandlers({
       searchTracks: vi.fn()

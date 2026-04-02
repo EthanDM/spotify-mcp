@@ -136,6 +136,74 @@ describe("SpotifyClient", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("requests personalization source pages from the expected Spotify endpoints", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/me/tracks?limit=50&offset=0": () =>
+        jsonResponse({
+          items: [
+            {
+              added_at: "2026-04-02T00:00:00.000Z",
+              item: playlistItemResponse("spotify:track:1").item
+            }
+          ],
+          limit: 50,
+          offset: 0,
+          total: 1,
+          next: null
+        }),
+      "GET https://api.spotify.com/v1/me/albums?limit=50&offset=0": () =>
+        jsonResponse({
+          items: [
+            {
+              added_at: "2026-04-02T00:00:00.000Z",
+              item: {
+                id: "album-1",
+                uri: "spotify:album:album-1",
+                name: "Album 1",
+                total_tracks: 8,
+                artists: [{ name: "Artist 1" }]
+              }
+            }
+          ],
+          limit: 50,
+          offset: 0,
+          total: 1,
+          next: null
+        }),
+      "GET https://api.spotify.com/v1/me/following?type=artist&limit=50": () =>
+        jsonResponse({
+          artists: {
+            items: [
+              {
+                id: "artist-1",
+                uri: "spotify:artist:artist-1",
+                name: "Artist 1",
+                genres: ["electronic"],
+                popularity: 75
+              }
+            ],
+            limit: 50,
+            next: null,
+            cursors: {
+              after: null
+            }
+          }
+        })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const [tracks, albums, artists] = await Promise.all([
+      client.getSavedTracks(50, 0),
+      client.getSavedAlbums(50, 0),
+      client.getFollowedArtists(50)
+    ]);
+
+    expect(tracks.items[0]?.track.uri).toBe("spotify:track:1");
+    expect(albums.items[0]?.name).toBe("Album 1");
+    expect(artists.items[0]?.name).toBe("Artist 1");
+  });
+
   it("fails after bounded 429 retries instead of looping forever", async () => {
     const store = createTokenStore();
     const fetchMock = vi.fn(async () => {

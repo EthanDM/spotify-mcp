@@ -4,8 +4,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { TokenStore } from "./auth/token-store.js";
-import { getTokenFilePath } from "./config.js";
+import { getPersonalizationDirectoryPath, getTokenFilePath } from "./config.js";
 import { SpotifyClient } from "./lib/spotify.js";
+import { PersonalizationService } from "./personalization/service.js";
+import { PersonalizationStore } from "./personalization/store.js";
 import {
   addPlaylistItemsSchema,
   archivePlaylistSchema,
@@ -14,10 +16,13 @@ import {
   createPlaylistInputSchema,
   createToolHandlers,
   dedupePlaylistSchema,
+  getPersonalizationStateSchema,
   listPlaylistsSchema,
   mergePlaylistsSchema,
   playlistIdSchema,
   playlistItemsSchema,
+  recordPersonalizationFeedbackInputSchema,
+  refreshPersonalizationStateSchema,
   replacePlaylistItemsSchema,
   unfollowPlaylistSchema,
   removePlaylistItemsSchema,
@@ -35,7 +40,11 @@ const server = new McpServer({
 });
 
 const spotify = new SpotifyClient(new TokenStore(getTokenFilePath()));
-const handlers = createToolHandlers(spotify);
+const personalization = new PersonalizationService(
+  spotify,
+  new PersonalizationStore(getPersonalizationDirectoryPath())
+);
+const handlers = createToolHandlers(spotify, personalization);
 
 server.registerTool(
   "spotify_get_my_profile",
@@ -204,6 +213,50 @@ server.registerTool(
     inputSchema: clonePlaylistSchema.shape
   },
   handlers.clonePlaylist
+);
+
+server.registerTool(
+  "spotify_refresh_personalization_state",
+  {
+    title: "Refresh Spotify Personalization State",
+    description:
+      "Refreshes the local personalization snapshot from saved tracks, albums, playlists, and followed artists.",
+    inputSchema: refreshPersonalizationStateSchema.shape
+  },
+  handlers.refreshPersonalizationState
+);
+
+server.registerTool(
+  "spotify_get_personalization_context",
+  {
+    title: "Get Spotify Personalization Context",
+    description:
+      "Returns the compact generated personalization summary for future-agent context.",
+    inputSchema: {}
+  },
+  handlers.getPersonalizationContext
+);
+
+server.registerTool(
+  "spotify_get_personalization_state",
+  {
+    title: "Get Spotify Personalization State",
+    description:
+      "Returns the current personalization files, snapshot metadata, and recent interaction history.",
+    inputSchema: getPersonalizationStateSchema.shape
+  },
+  handlers.getPersonalizationState
+);
+
+server.registerTool(
+  "spotify_record_personalization_feedback",
+  {
+    title: "Record Spotify Personalization Feedback",
+    description:
+      "Records explicit taste feedback that should survive future Spotify refreshes.",
+    inputSchema: recordPersonalizationFeedbackInputSchema
+  },
+  handlers.recordPersonalizationFeedback
 );
 
 const transport = new StdioServerTransport();

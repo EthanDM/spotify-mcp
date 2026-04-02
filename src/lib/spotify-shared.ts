@@ -1,5 +1,10 @@
 import { SpotifyApiError, SpotifyMcpError } from "../errors.js";
-import type { PlaylistSummary, TrackResult } from "../types.js";
+import type {
+  FollowedArtistResult,
+  PlaylistSummary,
+  SavedAlbumResult,
+  TrackResult
+} from "../types.js";
 
 export type FetchLike = typeof fetch;
 
@@ -9,6 +14,15 @@ export type SpotifyPage<T> = {
   offset: number;
   total: number;
   next: string | null;
+};
+
+export type SpotifyCursorPage<T> = {
+  items: T[];
+  limit: number;
+  next: string | null;
+  cursors: {
+    after: string | null;
+  };
 };
 
 export type SpotifyPlaylistObject = {
@@ -41,6 +55,34 @@ export type SpotifyTrackObject = {
     name: string;
   } | null;
   artists: Array<{ name: string }>;
+};
+
+export type SpotifyAlbumObject = {
+  id: string;
+  uri: string;
+  name: string;
+  total_tracks?: number | null;
+  artists: Array<{ name: string }>;
+};
+
+export type SpotifyArtistObject = {
+  id: string;
+  uri: string;
+  name: string;
+  genres?: string[];
+  popularity?: number | null;
+};
+
+export type SpotifySavedTrackObject = {
+  added_at: string | null;
+  item?: SpotifyTrackObject | null;
+  track?: SpotifyTrackObject | null;
+};
+
+export type SpotifySavedAlbumObject = {
+  added_at: string | null;
+  item?: SpotifyAlbumObject | null;
+  album?: SpotifyAlbumObject | null;
 };
 
 export type SpotifyPlaylistItemObject = {
@@ -95,6 +137,39 @@ export function normalizeTrack(track: SpotifyTrackObject): TrackResult {
     album: track.album?.name ?? null,
     duration_ms: track.duration_ms,
     explicit: track.explicit
+  };
+}
+
+/**
+ * Normalizes a saved album entry into the compact summary shape used by the
+ * personalization refresh.
+ */
+export function normalizeSavedAlbum(
+  album: SpotifyAlbumObject,
+  addedAt: string | null
+): SavedAlbumResult {
+  return {
+    added_at: addedAt,
+    id: album.id,
+    uri: album.uri,
+    name: album.name,
+    artists: album.artists.map((artist) => artist.name),
+    total_tracks: album.total_tracks ?? null
+  };
+}
+
+/**
+ * Normalizes a followed artist into the fields used by future-agent summaries.
+ */
+export function normalizeArtist(
+  artist: SpotifyArtistObject
+): FollowedArtistResult {
+  return {
+    id: artist.id,
+    uri: artist.uri,
+    name: artist.name,
+    genres: artist.genres ?? [],
+    popularity: artist.popularity ?? null
   };
 }
 

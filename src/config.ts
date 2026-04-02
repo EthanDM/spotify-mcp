@@ -9,7 +9,9 @@ export const DEFAULT_SCOPES = [
   "playlist-read-private",
   "playlist-read-collaborative",
   "playlist-modify-private",
-  "playlist-modify-public"
+  "playlist-modify-public",
+  "user-library-read",
+  "user-follow-read"
 ];
 
 /**
@@ -47,4 +49,14 @@ export function getSpotifyRedirectUri(): string {
  */
 export function getTokenFilePath(): string {
   return path.join(homedir(), ".config", "spotify-mcp", "auth.json");
+}
+
+/**
+ * Returns the directory used for personalization state files.
+ *
+ * Personalization data stays outside the repo because it is user-specific
+ * runtime state, not source-controlled application data.
+ */
+export function getPersonalizationDirectoryPath(): string {
+  return path.join(homedir(), ".config", "spotify-mcp", "personalization");
 }

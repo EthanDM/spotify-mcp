@@ -10,6 +10,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint": "eslint . --max-warnings=0",
+    "personalize:refresh": "tsx src/personalization/cli.ts refresh",
     "smoke": "tsx src/smoke.ts",
     "start": "node dist/server.js",
     "test": "vitest run",

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { formatErrorMessage } from "./errors.js";
 import type { SpotifyClient } from "./lib/spotify.js";
 import { SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT } from "./lib/spotify-shared.js";
+import type { PersonalizationService } from "./personalization/service.js";
 
 /**
  * Shared validation for paginated playlist listing.
@@ -162,14 +163,72 @@ export const archivePlaylistSchema = z.object({
   confirm: z.literal(true)
 });
 
+/**
+ * Rebuilds the local personalization snapshot from Spotify library state.
+ */
+export const refreshPersonalizationStateSchema = z.object({
+  playlistLimit: z.number().int().min(1).max(500).default(250),
+  savedTracksLimit: z.number().int().min(1).max(500).default(200),
+  savedAlbumsLimit: z.number().int().min(1).max(250).default(100),
+  followedArtistsLimit: z.number().int().min(1).max(250).default(100)
+});
+
+/**
+ * Small inspection input for personalization state reads.
+ */
+export const getPersonalizationStateSchema = z.object({
+  recentEventLimit: z.number().int().min(1).max(100).default(20)
+});
+
+/**
+ * Explicit taste feedback that should survive future Spotify refreshes.
+ */
+const recordPersonalizationFeedbackFields = {
+  kind: z.enum(["artist", "genre", "note", "discovery_level"]),
+  sentiment: z.enum(["prefer", "avoid"]).optional(),
+  value: z.string().min(1),
+  context: z.string().optional()
+};
+
+export const recordPersonalizationFeedbackSchema = z
+  .object(recordPersonalizationFeedbackFields)
+  .superRefine((input, refinement) => {
+    if (
+      (input.kind === "artist" || input.kind === "genre") &&
+      !input.sentiment
+    ) {
+      refinement.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Artist and genre feedback require a sentiment.",
+        path: ["sentiment"]
+      });
+    }
+
+    if (
+      input.kind === "discovery_level" &&
+      !["low", "medium", "high"].includes(input.value)
+    ) {
+      refinement.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Discovery level must be one of: low, medium, high.",
+        path: ["value"]
+      });
+    }
+  });
+
 export const createPlaylistInputSchema = createPlaylistFields;
 export const changePlaylistDetailsInputSchema = changePlaylistDetailsFields;
+export const recordPersonalizationFeedbackInputSchema =
+  recordPersonalizationFeedbackFields;
 
 /**
  * Produces testable handler functions so validation, normalization, and error
  * behavior can be exercised without booting an MCP transport.
  */
-export function createToolHandlers(spotify: SpotifyClient) {
+export function createToolHandlers(
+  spotify: SpotifyClient,
+  personalization?: PersonalizationService
+) {
   return {
     async getMyProfile() {
       return toolSuccess(await spotify.getMyProfile());
@@ -200,92 +259,238 @@ export function createToolHandlers(spotify: SpotifyClient) {
     },
 
     async createPlaylist(args: unknown) {
-      return withParsedArgs(createPlaylistSchema, args, (input) =>
-        spotify.createPlaylist(input)
+      return withParsedArgsAndEffect(
+        createPlaylistSchema,
+        args,
+        (input) => spotify.createPlaylist(input),
+        (_input, result) =>
+          logPersonalizationEvent(personalization, "playlist_created", {
+            playlistId: result.id,
+            playlistName: result.name,
+            public: result.public ?? false
+          })
       );
     },
 
     async changePlaylistDetails(args: unknown) {
-      return withParsedArgs(changePlaylistDetailsSchema, args, (input) =>
-        spotify.changePlaylistDetails(input)
+      return withParsedArgsAndEffect(
+        changePlaylistDetailsSchema,
+        args,
+        (input) => spotify.changePlaylistDetails(input),
+        (input, result) =>
+          logPersonalizationEvent(personalization, "playlist_details_changed", {
+            playlistId: input.playlistId,
+            playlistName: result.name,
+            public: result.public ?? false
+          })
       );
     },
 
     async unfollowPlaylist(args: unknown) {
-      return withParsedArgs(unfollowPlaylistSchema, args, (input) =>
-        spotify.unfollowPlaylist(input.playlistId)
+      return withParsedArgsAndEffect(
+        unfollowPlaylistSchema,
+        args,
+        (input) => spotify.unfollowPlaylist(input.playlistId),
+        (input) =>
+          logPersonalizationEvent(personalization, "playlist_unfollowed", {
+            playlistId: input.playlistId
+          })
       );
     },
 
     async archivePlaylist(args: unknown) {
-      return withParsedArgs(archivePlaylistSchema, args, (input) =>
-        spotify.archivePlaylist({
-          playlistId: input.playlistId,
-          clearItems: input.clearItems,
-          prefix: input.prefix
-        })
+      return withParsedArgsAndEffect(
+        archivePlaylistSchema,
+        args,
+        (input) =>
+          spotify.archivePlaylist({
+            playlistId: input.playlistId,
+            clearItems: input.clearItems,
+            prefix: input.prefix
+          }),
+        (input) =>
+          logPersonalizationEvent(personalization, "playlist_archived", {
+            playlistId: input.playlistId,
+            clearItems: input.clearItems ?? false
+          })
       );
     },
 
     async addPlaylistItems(args: unknown) {
-      return withParsedArgs(addPlaylistItemsSchema, args, (input) =>
-        spotify.addPlaylistItems(input)
+      return withParsedArgsAndEffect(
+        addPlaylistItemsSchema,
+        args,
+        (input) => spotify.addPlaylistItems(input),
+        (input) =>
+          logPersonalizationEvent(personalization, "playlist_items_added", {
+            playlistId: input.playlistId,
+            addedCount: input.uris.length
+          })
       );
     },
 
     async replacePlaylistItems(args: unknown) {
-      return withParsedArgs(replacePlaylistItemsSchema, args, (input) =>
-        spotify.replacePlaylistItems({
-          playlistId: input.playlistId,
-          uris: input.uris
-        })
+      return withParsedArgsAndEffect(
+        replacePlaylistItemsSchema,
+        args,
+        (input) =>
+          spotify.replacePlaylistItems({
+            playlistId: input.playlistId,
+            uris: input.uris
+          }),
+        (input) =>
+          logPersonalizationEvent(personalization, "playlist_items_replaced", {
+            playlistId: input.playlistId,
+            finalCount: input.uris.length
+          })
       );
     },
 
     async mergePlaylists(args: unknown) {
-      return withParsedArgs(mergePlaylistsSchema, args, (input) =>
-        spotify.mergePlaylists({
-          targetPlaylistId: input.targetPlaylistId,
-          sourcePlaylistIds: input.sourcePlaylistIds,
-          dedupe: input.dedupe
-        })
+      return withParsedArgsAndEffect(
+        mergePlaylistsSchema,
+        args,
+        (input) =>
+          spotify.mergePlaylists({
+            targetPlaylistId: input.targetPlaylistId,
+            sourcePlaylistIds: input.sourcePlaylistIds,
+            dedupe: input.dedupe
+          }),
+        (input) =>
+          logPersonalizationEvent(personalization, "playlist_merged", {
+            playlistId: input.targetPlaylistId,
+            sourcePlaylistIds: input.sourcePlaylistIds,
+            dedupe: input.dedupe ?? false
+          })
       );
     },
 
     async dedupePlaylist(args: unknown) {
-      return withParsedArgs(dedupePlaylistSchema, args, (input) =>
-        spotify.dedupePlaylist({
-          playlistId: input.playlistId
-        })
+      return withParsedArgsAndEffect(
+        dedupePlaylistSchema,
+        args,
+        (input) =>
+          spotify.dedupePlaylist({
+            playlistId: input.playlistId
+          }),
+        (input) =>
+          logPersonalizationEvent(personalization, "playlist_deduped", {
+            playlistId: input.playlistId
+          })
       );
     },
 
     async removePlaylistItems(args: unknown) {
-      return withParsedArgs(removePlaylistItemsSchema, args, (input) =>
-        spotify.removePlaylistItems({
-          playlistId: input.playlistId,
-          uris: input.uris
-        })
+      return withParsedArgsAndEffect(
+        removePlaylistItemsSchema,
+        args,
+        (input) =>
+          spotify.removePlaylistItems({
+            playlistId: input.playlistId,
+            uris: input.uris
+          }),
+        (input) =>
+          logPersonalizationEvent(personalization, "playlist_items_removed", {
+            playlistId: input.playlistId,
+            removedCount: input.uris.length
+          })
       );
     },
 
     async reorderPlaylistItems(args: unknown) {
-      return withParsedArgs(reorderPlaylistItemsSchema, args, (input) =>
-        spotify.reorderPlaylistItems({
-          playlistId: input.playlistId,
-          rangeStart: input.range_start,
-          insertBefore: input.insert_before,
-          rangeLength: input.range_length
-        })
+      return withParsedArgsAndEffect(
+        reorderPlaylistItemsSchema,
+        args,
+        (input) =>
+          spotify.reorderPlaylistItems({
+            playlistId: input.playlistId,
+            rangeStart: input.range_start,
+            insertBefore: input.insert_before,
+            rangeLength: input.range_length
+          }),
+        (input) =>
+          logPersonalizationEvent(personalization, "playlist_items_reordered", {
+            playlistId: input.playlistId,
+            rangeStart: input.range_start,
+            insertBefore: input.insert_before,
+            rangeLength: input.range_length ?? 1
+          })
       );
     },
 
     async clonePlaylist(args: unknown) {
-      return withParsedArgs(clonePlaylistSchema, args, (input) =>
-        spotify.clonePlaylist(input)
+      return withParsedArgsAndEffect(
+        clonePlaylistSchema,
+        args,
+        (input) => spotify.clonePlaylist(input),
+        (input, result) =>
+          logPersonalizationEvent(personalization, "playlist_cloned", {
+            sourcePlaylistId: input.sourcePlaylistId,
+            clonePlaylistId: result.id
+          })
+      );
+    },
+
+    async refreshPersonalizationState(args: unknown) {
+      if (!personalization) {
+        return toolError(
+          new Error("Personalization service is not configured.")
+        );
+      }
+
+      return withParsedArgs(refreshPersonalizationStateSchema, args, (input) =>
+        personalization.refreshState(input)
+      );
+    },
+
+    async getPersonalizationContext() {
+      if (!personalization) {
+        return toolError(
+          new Error("Personalization service is not configured.")
+        );
+      }
+
+      return toolSuccess(await personalization.getContext());
+    },
+
+    async getPersonalizationState(args: unknown) {
+      if (!personalization) {
+        return toolError(
+          new Error("Personalization service is not configured.")
+        );
+      }
+
+      return withParsedArgs(getPersonalizationStateSchema, args, (input) =>
+        personalization.getState(input)
+      );
+    },
+
+    async recordPersonalizationFeedback(args: unknown) {
+      if (!personalization) {
+        return toolError(
+          new Error("Personalization service is not configured.")
+        );
+      }
+
+      return withParsedArgs(
+        recordPersonalizationFeedbackSchema,
+        args,
+        (input) => personalization.recordFeedback(input)
       );
     }
   };
+}
+
+async function logPersonalizationEvent(
+  personalization: PersonalizationService | undefined,
+  type: string,
+  details: Record<string, string | number | boolean | string[]>
+): Promise<void> {
+  if (!personalization) {
+    return;
+  }
+
+  await personalization.recordEvent(type, details);
 }
 
 /**
@@ -300,6 +505,26 @@ async function withParsedArgs<TSchema extends z.ZodTypeAny, TResult>(
   try {
     const parsed = schema.parse(args);
     return toolSuccess(await handler(parsed));
+  } catch (error) {
+    return toolError(error);
+  }
+}
+
+/**
+ * Equivalent to `withParsedArgs`, but also runs a post-success side effect for
+ * cases like personalization event logging.
+ */
+async function withParsedArgsAndEffect<TSchema extends z.ZodTypeAny, TResult>(
+  schema: TSchema,
+  args: unknown,
+  handler: (input: z.infer<TSchema>) => Promise<TResult>,
+  effect: (input: z.infer<TSchema>, result: TResult) => Promise<void>
+) {
+  try {
+    const parsed = schema.parse(args);
+    const result = await handler(parsed);
+    await effect(parsed, result);
+    return toolSuccess(result);
   } catch (error) {
     return toolError(error);
   }

@@ -2,11 +2,14 @@ import { SpotifyMcpError } from "../errors.js";
 import type { TokenStoreLike } from "../auth/token-store.js";
 import type {
   ArchivePlaylistResult,
+  FollowedArtistsPageResult,
   MutationResult,
   PlaylistItem,
   PlaylistItemsResult,
   PlaylistListResult,
   PlaylistSummary,
+  SavedAlbumsPageResult,
+  SavedTracksPageResult,
   SpotifyProfile,
   TrackSearchResult,
   UnfollowPlaylistResult
@@ -16,14 +19,21 @@ import {
   SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
   SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT,
   chunkUris,
+  normalizeArtist,
   isSnapshotConflict,
+  normalizeSavedAlbum,
   normalizePlaylist,
   normalizeTrack,
   rejectLocalPlaylistUris,
   type FetchLike,
+  type SpotifyAlbumObject,
+  type SpotifyArtistObject,
+  type SpotifyCursorPage,
   type SpotifyPage,
   type SpotifyPlaylistItemObject,
   type SpotifyPlaylistObject,
+  type SpotifySavedAlbumObject,
+  type SpotifySavedTrackObject,
   type SpotifyTrackObject
 } from "./spotify-shared.js";
 
@@ -177,6 +187,103 @@ export class SpotifyClient {
       items: response.tracks.items.map(normalizeTrack),
       limit: response.tracks.limit,
       total: response.tracks.total
+    };
+  }
+
+  /**
+   * Returns one page of the current user's saved tracks for personalization refreshes.
+   */
+  async getSavedTracks(
+    limit: number,
+    offset: number
+  ): Promise<SavedTracksPageResult> {
+    const page = await this.requests.request<
+      SpotifyPage<SpotifySavedTrackObject>
+    >(
+      `/me/tracks?${new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset)
+      }).toString()}`
+    );
+
+    return {
+      items: page.items.flatMap((item) => {
+        const track = item.item ?? item.track;
+
+        if (!track) {
+          return [];
+        }
+
+        return [
+          {
+            added_at: item.added_at,
+            track: normalizeTrack(track)
+          }
+        ];
+      }),
+      limit: page.limit,
+      offset: page.offset,
+      total: page.total,
+      next_offset: page.next ? page.offset + page.limit : null
+    };
+  }
+
+  /**
+   * Returns one page of the current user's saved albums for personalization refreshes.
+   */
+  async getSavedAlbums(
+    limit: number,
+    offset: number
+  ): Promise<SavedAlbumsPageResult> {
+    const page = await this.requests.request<
+      SpotifyPage<SpotifySavedAlbumObject>
+    >(
+      `/me/albums?${new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset)
+      }).toString()}`
+    );
+
+    return {
+      items: page.items.flatMap((item) => {
+        const album = item.item ?? item.album;
+
+        if (!album) {
+          return [];
+        }
+
+        return [
+          normalizeSavedAlbum(album as SpotifyAlbumObject, item.added_at)
+        ];
+      }),
+      limit: page.limit,
+      offset: page.offset,
+      total: page.total,
+      next_offset: page.next ? page.offset + page.limit : null
+    };
+  }
+
+  /**
+   * Returns one cursor page of followed artists for personalization refreshes.
+   */
+  async getFollowedArtists(
+    limit: number,
+    after?: string
+  ): Promise<FollowedArtistsPageResult> {
+    const response = await this.requests.request<{
+      artists: SpotifyCursorPage<SpotifyArtistObject>;
+    }>(
+      `/me/following?${new URLSearchParams({
+        type: "artist",
+        limit: String(limit),
+        ...(after ? { after } : {})
+      }).toString()}`
+    );
+
+    return {
+      items: response.artists.items.map(normalizeArtist),
+      limit: response.artists.limit,
+      next_after: response.artists.next ? response.artists.cursors.after : null
     };
   }
 

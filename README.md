@@ -24,6 +24,10 @@ The server exposes these tools:
 - `spotify_remove_playlist_items`
 - `spotify_reorder_playlist_items`
 - `spotify_clone_playlist`
+- `spotify_refresh_personalization_state`
+- `spotify_get_personalization_context`
+- `spotify_get_personalization_state`
+- `spotify_record_personalization_feedback`
 
 ## What It Does Not Do
 
@@ -73,6 +77,10 @@ This project uses PKCE and requests these scopes:
 - `playlist-read-collaborative`
 - `playlist-modify-private`
 - `playlist-modify-public`
+- `user-library-read`
+- `user-follow-read`
+
+If you authenticated before the personalization layer was added, run `pnpm auth` again so the stored token includes the new read scopes.
 
 The auth command:
 
@@ -133,6 +141,12 @@ args = ["--dir", "/absolute/path/to/spotify-mcp", "dev"]
 - `spotify_replace_playlist_items`, `spotify_remove_playlist_items`, `spotify_reorder_playlist_items`, `spotify_merge_playlists`, `spotify_dedupe_playlist`, `spotify_unfollow_playlist`, and `spotify_archive_playlist` require `confirm: true`.
 - Remove and reorder fetch the latest playlist snapshot before mutating.
 - Clone copies items in batches and creates the destination playlist as private unless you explicitly opt into `public: true`.
+- Personalization state is stored outside the repo in `~/.config/spotify-mcp/personalization/`.
+- The personalization layer keeps four files separate on purpose:
+  - `profile-snapshot.json` for refreshable Spotify-derived state
+  - `user-preferences.json` for durable explicit preferences
+  - `interaction-log.ndjson` for append-only MCP history
+  - `personalization-context.md` for future-agent context
 
 ## Example Calls
 
@@ -191,6 +205,28 @@ Merge playlists into a target:
 }
 ```
 
+Refresh the personalization snapshot:
+
+```json
+{
+  "playlistLimit": 250,
+  "savedTracksLimit": 200,
+  "savedAlbumsLimit": 100,
+  "followedArtistsLimit": 100
+}
+```
+
+Record explicit personalization feedback:
+
+```json
+{
+  "kind": "artist",
+  "sentiment": "prefer",
+  "value": "Fred again..",
+  "context": "Repeatedly keep this artist in late-night playlists"
+}
+```
+
 ## Verification
 
 Local verification:
@@ -221,6 +257,14 @@ Detailed smoke polling logs are off by default. Enable them with:
 ```bash
 SPOTIFY_SMOKE_VERBOSE=1 pnpm smoke
 ```
+
+Refresh the local personalization files:
+
+```bash
+pnpm personalize:refresh
+```
+
+That command refreshes liked-track, saved-album, playlist, and followed-artist state and rebuilds the generated personalization summary future agents can use as context.
 
 ## CI
 

@@ -84,6 +84,68 @@ export type TrackSearchResult = {
 };
 
 /**
+ * Saved-track page item used by personalization refreshes.
+ */
+export type SavedTrackResult = {
+  added_at: string | null;
+  track: TrackResult;
+};
+
+/**
+ * Page result for the current user's saved tracks.
+ */
+export type SavedTracksPageResult = {
+  items: SavedTrackResult[];
+  limit: number;
+  offset: number;
+  total: number;
+  next_offset: number | null;
+};
+
+/**
+ * Saved album shape needed for taste summaries.
+ */
+export type SavedAlbumResult = {
+  added_at: string | null;
+  id: string;
+  uri: string;
+  name: string;
+  artists: string[];
+  total_tracks: number | null;
+};
+
+/**
+ * Page result for the current user's saved albums.
+ */
+export type SavedAlbumsPageResult = {
+  items: SavedAlbumResult[];
+  limit: number;
+  offset: number;
+  total: number;
+  next_offset: number | null;
+};
+
+/**
+ * Followed artist shape used by personalization refreshes.
+ */
+export type FollowedArtistResult = {
+  id: string;
+  uri: string;
+  name: string;
+  genres: string[];
+  popularity: number | null;
+};
+
+/**
+ * Cursor-page result for followed artists.
+ */
+export type FollowedArtistsPageResult = {
+  items: FollowedArtistResult[];
+  limit: number;
+  next_after: string | null;
+};
+
+/**
  * Standard mutation response for playlist writes.
  *
  * The optional counts let callers confirm how much work was applied without
