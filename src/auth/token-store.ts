@@ -45,7 +45,10 @@ export class TokenStore implements TokenStoreLike {
    * both the directory and file private to the current user.
    */
   async write(tokens: StoredTokens): Promise<void> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true, mode: 0o700 });
+    await fs.mkdir(path.dirname(this.filePath), {
+      recursive: true,
+      mode: 0o700
+    });
     await fs.writeFile(this.filePath, JSON.stringify(tokens, null, 2), {
       encoding: "utf8",
       mode: 0o600

@@ -20,17 +20,24 @@ async function main(): Promise<void> {
 
   logStep("profile");
   const profile = await client.getMyProfile();
-  console.log(`Authenticated as ${profile.display_name ?? profile.id} (${profile.id})`);
+  console.log(
+    `Authenticated as ${profile.display_name ?? profile.id} (${profile.id})`
+  );
 
   logStep("list playlists");
   const playlists = await client.listPlaylists(5, 0);
-  console.log(`Found ${playlists.total} playlists. Top ${playlists.items.length}:`);
+  console.log(
+    `Found ${playlists.total} playlists. Top ${playlists.items.length}:`
+  );
   for (const playlist of playlists.items) {
     console.log(`- ${playlist.name} (${playlist.tracks_total} tracks)`);
   }
 
   logStep("search tracks");
-  const search = await client.searchTracks(process.env.SPOTIFY_SMOKE_QUERY?.trim() || "ODESZA", 10);
+  const search = await client.searchTracks(
+    process.env.SPOTIFY_SMOKE_QUERY?.trim() || "ODESZA",
+    10
+  );
   const seedTracks = pickUniqueTracks(search.items, 3);
 
   if (seedTracks.length < 3) {
@@ -69,14 +76,28 @@ async function main(): Promise<void> {
     playlistId: target.id,
     uris: [trackC.uri, trackB.uri, trackA.uri]
   });
-  await waitForPlaylistItems(client, target.id, 10, 3, "target after replace", verbose);
+  await waitForPlaylistItems(
+    client,
+    target.id,
+    10,
+    3,
+    "target after replace",
+    verbose
+  );
 
   logStep("clear playlist");
   await client.replacePlaylistItems({
     playlistId: target.id,
     uris: []
   });
-  await waitForPlaylistItems(client, target.id, 10, 0, "target after clear", verbose);
+  await waitForPlaylistItems(
+    client,
+    target.id,
+    10,
+    0,
+    "target after clear",
+    verbose
+  );
 
   logStep("seed dedupe and merge state");
   await client.replacePlaylistItems({
@@ -87,14 +108,35 @@ async function main(): Promise<void> {
     playlistId: source.id,
     uris: [trackB.uri, trackC.uri]
   });
-  await waitForPlaylistItems(client, target.id, 10, 3, "target after seed", verbose);
-  await waitForPlaylistItems(client, source.id, 10, 2, "source after seed", verbose);
+  await waitForPlaylistItems(
+    client,
+    target.id,
+    10,
+    3,
+    "target after seed",
+    verbose
+  );
+  await waitForPlaylistItems(
+    client,
+    source.id,
+    10,
+    2,
+    "source after seed",
+    verbose
+  );
 
   logStep("dedupe playlist");
   await client.dedupePlaylist({
     playlistId: target.id
   });
-  await waitForPlaylistItems(client, target.id, 10, 2, "target after dedupe", verbose);
+  await waitForPlaylistItems(
+    client,
+    target.id,
+    10,
+    2,
+    "target after dedupe",
+    verbose
+  );
 
   logStep("merge playlists");
   await client.mergePlaylists({
@@ -104,7 +146,14 @@ async function main(): Promise<void> {
   });
 
   logStep("reorder tracks");
-  const mergedItems = await waitForPlaylistItems(client, target.id, 10, 3, "target after merge", verbose);
+  const mergedItems = await waitForPlaylistItems(
+    client,
+    target.id,
+    10,
+    3,
+    "target after merge",
+    verbose
+  );
   if (mergedItems.items.length >= 2) {
     await client.reorderPlaylistItems({
       playlistId: target.id,
@@ -112,16 +161,32 @@ async function main(): Promise<void> {
       insertBefore: 0
     });
   }
-  await waitForPlaylistItems(client, target.id, 10, 3, "target after reorder", verbose);
+  await waitForPlaylistItems(
+    client,
+    target.id,
+    10,
+    3,
+    "target after reorder",
+    verbose
+  );
 
   logStep("remove track");
-  const removableItems = await waitForPlaylistItems(client, target.id, 10, 1, "target before remove", verbose);
+  const removableItems = await waitForPlaylistItems(
+    client,
+    target.id,
+    10,
+    1,
+    "target before remove",
+    verbose
+  );
   const removableTrackUri = removableItems.items
     .map((item) => item.track?.uri)
     .find((uri) => typeof uri === "string");
 
   if (!removableTrackUri) {
-    throw new Error("Smoke run could not find a track URI to remove from the merged playlist.");
+    throw new Error(
+      "Smoke run could not find a track URI to remove from the merged playlist."
+    );
   }
 
   await client.removePlaylistItems({
@@ -144,11 +209,19 @@ async function main(): Promise<void> {
   console.log("");
   console.log("Smoke run completed.");
   console.log("Created playlists:");
-  console.log(`- target: ${target.name} (${target.id}) -> ${targetItems.total} tracks`);
-  console.log(`- source: ${source.name} (${source.id}) -> ${sourceItems.total} tracks`);
-  console.log(`- clone: ${clone.name} (${clone.id}) -> ${cloneItems.total} tracks`);
+  console.log(
+    `- target: ${target.name} (${target.id}) -> ${targetItems.total} tracks`
+  );
+  console.log(
+    `- source: ${source.name} (${source.id}) -> ${sourceItems.total} tracks`
+  );
+  console.log(
+    `- clone: ${clone.name} (${clone.id}) -> ${cloneItems.total} tracks`
+  );
   console.log("");
-  console.log("Spotify does not expose playlist deletion via this client, so remove these manually when done.");
+  console.log(
+    "Spotify does not expose playlist deletion via this client, so remove these manually when done."
+  );
 }
 
 function createTimestamp(): string {
@@ -199,8 +272,7 @@ async function waitForPlaylistItems(
   minimumCount: number,
   label: string,
   verbose: boolean
-): Promise<Awaited<ReturnType<SpotifyClient["getPlaylistItems"]>>>
-{
+): Promise<Awaited<ReturnType<SpotifyClient["getPlaylistItems"]>>> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const [playlist, items] = await Promise.all([
       client.getPlaylist(playlistId),

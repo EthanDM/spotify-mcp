@@ -80,8 +80,13 @@ export class SpotifyClient {
    * Pagination is passed through explicitly so Codex can control how much data
    * to read instead of the client silently traversing the whole library.
    */
-  async listPlaylists(limit: number, offset: number): Promise<PlaylistListResult> {
-    const page = await this.requests.request<SpotifyPage<SpotifyPlaylistObject>>(
+  async listPlaylists(
+    limit: number,
+    offset: number
+  ): Promise<PlaylistListResult> {
+    const page = await this.requests.request<
+      SpotifyPage<SpotifyPlaylistObject>
+    >(
       `/me/playlists?${new URLSearchParams({
         limit: String(limit),
         offset: String(offset)
@@ -104,7 +109,9 @@ export class SpotifyClient {
    * pass through `ensureCanModifyPlaylist`.
    */
   async getPlaylist(playlistId: string): Promise<PlaylistSummary> {
-    const playlist = await this.requests.request<SpotifyPlaylistObject>(`/playlists/${encodeURIComponent(playlistId)}`);
+    const playlist = await this.requests.request<SpotifyPlaylistObject>(
+      `/playlists/${encodeURIComponent(playlistId)}`
+    );
     return normalizePlaylist(playlist);
   }
 
@@ -114,18 +121,30 @@ export class SpotifyClient {
    * Spotify item pages do not carry absolute positions per row, so the client
    * computes them once here to keep reorder/remove call sites simple.
    */
-  async getPlaylistItems(playlistId: string, limit: number, offset: number): Promise<PlaylistItemsResult> {
-    const page = await this.requests.request<SpotifyPage<SpotifyPlaylistItemObject>>(
-      `/playlists/${encodeURIComponent(playlistId)}/items?${new URLSearchParams({
-        limit: String(limit),
-        offset: String(offset)
-      }).toString()}`
+  async getPlaylistItems(
+    playlistId: string,
+    limit: number,
+    offset: number
+  ): Promise<PlaylistItemsResult> {
+    const page = await this.requests.request<
+      SpotifyPage<SpotifyPlaylistItemObject>
+    >(
+      `/playlists/${encodeURIComponent(playlistId)}/items?${new URLSearchParams(
+        {
+          limit: String(limit),
+          offset: String(offset)
+        }
+      ).toString()}`
     );
 
     const items: PlaylistItem[] = page.items.map((item, index) => ({
       position: page.offset + index,
       added_at: item.added_at,
-      track: item.item ? normalizeTrack(item.item) : item.track ? normalizeTrack(item.track) : null
+      track: item.item
+        ? normalizeTrack(item.item)
+        : item.track
+          ? normalizeTrack(item.track)
+          : null
     }));
 
     return {
@@ -173,15 +192,18 @@ export class SpotifyClient {
     public?: boolean;
     collaborative?: boolean;
   }): Promise<PlaylistSummary> {
-    const playlist = await this.requests.request<SpotifyPlaylistObject>("/me/playlists", {
-      method: "POST",
-      body: JSON.stringify({
-        name: input.name,
-        description: input.description ?? "",
-        public: input.public ?? false,
-        collaborative: input.collaborative ?? false
-      })
-    });
+    const playlist = await this.requests.request<SpotifyPlaylistObject>(
+      "/me/playlists",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: input.name,
+          description: input.description ?? "",
+          public: input.public ?? false,
+          collaborative: input.collaborative ?? false
+        })
+      }
+    );
 
     return normalizePlaylist(playlist);
   }
@@ -204,15 +226,18 @@ export class SpotifyClient {
     });
     await this.validatePlaylistDetailChange(input);
 
-    await this.requests.requestEmpty(`/playlists/${encodeURIComponent(input.playlistId)}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        name: input.name,
-        description: input.description,
-        public: input.public,
-        collaborative: input.collaborative
-      })
-    });
+    await this.requests.requestEmpty(
+      `/playlists/${encodeURIComponent(input.playlistId)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          name: input.name,
+          description: input.description,
+          public: input.public,
+          collaborative: input.collaborative
+        })
+      }
+    );
 
     return this.getPlaylist(input.playlistId);
   }
@@ -224,9 +249,12 @@ export class SpotifyClient {
    * endpoint only unfollows the playlist for the current user.
    */
   async unfollowPlaylist(playlistId: string): Promise<UnfollowPlaylistResult> {
-    await this.requests.requestEmpty(`/playlists/${encodeURIComponent(playlistId)}/followers`, {
-      method: "DELETE"
-    });
+    await this.requests.requestEmpty(
+      `/playlists/${encodeURIComponent(playlistId)}/followers`,
+      {
+        method: "DELETE"
+      }
+    );
 
     return {
       playlist_id: playlistId,
@@ -248,7 +276,9 @@ export class SpotifyClient {
   }): Promise<ArchivePlaylistResult> {
     const current = await this.getPlaylist(input.playlistId);
     const prefix = input.prefix ?? "[Archived] ";
-    const archivedName = current.name.startsWith(prefix) ? current.name : `${prefix}${current.name}`;
+    const archivedName = current.name.startsWith(prefix)
+      ? current.name
+      : `${prefix}${current.name}`;
 
     const archivedPlaylist = await this.changePlaylistDetails({
       playlistId: input.playlistId,
@@ -268,8 +298,12 @@ export class SpotifyClient {
     }
 
     return {
-      playlist: input.clearItems ? await this.getPlaylist(input.playlistId) : archivedPlaylist,
-      ...(typeof clearedCount === "number" ? { cleared_count: clearedCount } : {})
+      playlist: input.clearItems
+        ? await this.getPlaylist(input.playlistId)
+        : archivedPlaylist,
+      ...(typeof clearedCount === "number"
+        ? { cleared_count: clearedCount }
+        : {})
     };
   }
 
@@ -292,7 +326,10 @@ export class SpotifyClient {
     let snapshotId = "";
     let batchPosition = input.position;
 
-    for (const chunk of chunkUris(input.uris, SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT)) {
+    for (const chunk of chunkUris(
+      input.uris,
+      SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT
+    )) {
       const response = await this.requests.request<{ snapshot_id: string }>(
         `/playlists/${encodeURIComponent(input.playlistId)}/items`,
         {
@@ -425,7 +462,10 @@ export class SpotifyClient {
     let snapshotId = playlist.snapshot_id ?? undefined;
     let removedCount = 0;
 
-    for (const chunk of chunkUris(input.uris, SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT)) {
+    for (const chunk of chunkUris(
+      input.uris,
+      SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT
+    )) {
       try {
         const response = await this.requests.request<{ snapshot_id: string }>(
           `/playlists/${encodeURIComponent(input.playlistId)}/items`,
@@ -453,7 +493,10 @@ export class SpotifyClient {
     }
 
     if (!snapshotId) {
-      throw new SpotifyMcpError("Spotify did not return a snapshot ID after removing items.", "playlist_remove_failed");
+      throw new SpotifyMcpError(
+        "Spotify did not return a snapshot ID after removing items.",
+        "playlist_remove_failed"
+      );
     }
 
     return {
@@ -523,7 +566,9 @@ export class SpotifyClient {
     public?: boolean;
   }): Promise<PlaylistSummary> {
     const source = await this.getPlaylist(input.sourcePlaylistId);
-    const cloneableUris = await this.collectCloneablePlaylistUris(input.sourcePlaylistId);
+    const cloneableUris = await this.collectCloneablePlaylistUris(
+      input.sourcePlaylistId
+    );
     const clone = await this.createPlaylist({
       name: input.name ?? `${source.name} (Copy)`,
       description: input.description ?? source.description ?? "",
@@ -531,7 +576,10 @@ export class SpotifyClient {
       collaborative: false
     });
 
-    for (const chunk of chunkUris(cloneableUris, SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT)) {
+    for (const chunk of chunkUris(
+      cloneableUris,
+      SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT
+    )) {
       await this.addPlaylistItems({
         playlistId: clone.id,
         uris: chunk
@@ -545,7 +593,9 @@ export class SpotifyClient {
    * Reads the full source playlist once so clone can fail before creating a
    * destination playlist when the source contains unsupported local-file items.
    */
-  private async collectCloneablePlaylistUris(sourcePlaylistId: string): Promise<string[]> {
+  private async collectCloneablePlaylistUris(
+    sourcePlaylistId: string
+  ): Promise<string[]> {
     return this.collectPlaylistUris(sourcePlaylistId, {
       localAction: "clone"
     });
@@ -561,13 +611,20 @@ export class SpotifyClient {
       localAction: "clone" | "replace";
     }
   ): Promise<string[]> {
-    let lastAttempt: { uris: string[]; unresolvedCount: number; totalCount: number } | null = null;
+    let lastAttempt: {
+      uris: string[];
+      unresolvedCount: number;
+      totalCount: number;
+    } | null = null;
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const result = await this.readPlaylistUris(playlistId, options);
       lastAttempt = result;
 
-      if (result.unresolvedCount === 0 || result.uris.length === result.totalCount) {
+      if (
+        result.unresolvedCount === 0 ||
+        result.uris.length === result.totalCount
+      ) {
         return result.uris;
       }
 
@@ -643,7 +700,10 @@ export class SpotifyClient {
       allowCollaborative: boolean;
     }
   ): Promise<void> {
-    const [playlist, me] = await Promise.all([this.getPlaylist(playlistId), this.getMyProfile()]);
+    const [playlist, me] = await Promise.all([
+      this.getPlaylist(playlistId),
+      this.getMyProfile()
+    ]);
 
     if (playlist.owner.id === me.id) {
       return;

@@ -165,10 +165,7 @@ Merge playlists into a target:
 ```json
 {
   "targetPlaylistId": "37i9dQZF1DXTARGET",
-  "sourcePlaylistIds": [
-    "37i9dQZF1DXSOURCEA",
-    "37i9dQZF1DXSOURCEB"
-  ],
+  "sourcePlaylistIds": ["37i9dQZF1DXSOURCEA", "37i9dQZF1DXSOURCEB"],
   "dedupe": true,
   "confirm": true
 }

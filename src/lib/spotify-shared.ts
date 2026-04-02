@@ -1,8 +1,5 @@
 import { SpotifyApiError, SpotifyMcpError } from "../errors.js";
-import type {
-  PlaylistSummary,
-  TrackResult
-} from "../types.js";
+import type { PlaylistSummary, TrackResult } from "../types.js";
 
 export type FetchLike = typeof fetch;
 
@@ -58,7 +55,9 @@ export const SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT = 100;
 /**
  * Normalizes Spotify's playlist object into the smaller MCP response shape.
  */
-export function normalizePlaylist(playlist: SpotifyPlaylistObject): PlaylistSummary {
+export function normalizePlaylist(
+  playlist: SpotifyPlaylistObject
+): PlaylistSummary {
   return {
     id: playlist.id,
     uri: playlist.uri,

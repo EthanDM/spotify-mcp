@@ -5,7 +5,10 @@ import type { StoredTokens } from "../../src/types.js";
 
 describe("SpotifyOAuthClient", () => {
   it("builds the PKCE authorize URL", () => {
-    const client = new SpotifyOAuthClient("client-id", "http://127.0.0.1:8787/callback");
+    const client = new SpotifyOAuthClient(
+      "client-id",
+      "http://127.0.0.1:8787/callback"
+    );
     const url = new URL(
       client.createAuthorizeUrl({
         codeChallenge: "challenge",

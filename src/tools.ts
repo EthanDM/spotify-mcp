@@ -24,7 +24,12 @@ export const playlistIdSchema = z.object({
  */
 export const playlistItemsSchema = z.object({
   playlistId: z.string().min(1),
-  limit: z.number().int().min(1).max(SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT).default(SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT)
+    .default(SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT),
   offset: z.number().int().min(0).default(0)
 });
 
@@ -46,13 +51,12 @@ const createPlaylistFields = {
   collaborative: z.boolean().optional()
 };
 
-export const createPlaylistSchema = z.object(createPlaylistFields).refine(
-  (input) => !(input.public === true && input.collaborative === true),
-  {
+export const createPlaylistSchema = z
+  .object(createPlaylistFields)
+  .refine((input) => !(input.public === true && input.collaborative === true), {
     message: "Collaborative playlists must not be public.",
     path: ["collaborative"]
-  }
-);
+  });
 
 /**
  * Metadata fields that can be changed on an existing playlist.
@@ -65,13 +69,12 @@ const changePlaylistDetailsFields = {
   collaborative: z.boolean().optional()
 };
 
-export const changePlaylistDetailsSchema = z.object(changePlaylistDetailsFields).refine(
-  (input) => !(input.public === true && input.collaborative === true),
-  {
+export const changePlaylistDetailsSchema = z
+  .object(changePlaylistDetailsFields)
+  .refine((input) => !(input.public === true && input.collaborative === true), {
     message: "Collaborative playlists must not be public.",
     path: ["collaborative"]
-  }
-);
+  });
 
 /**
  * Input for appending or inserting track URIs into a playlist.
@@ -179,7 +182,9 @@ export function createToolHandlers(spotify: SpotifyClient) {
     },
 
     async getPlaylist(args: unknown) {
-      return withParsedArgs(playlistIdSchema, args, (input) => spotify.getPlaylist(input.playlistId));
+      return withParsedArgs(playlistIdSchema, args, (input) =>
+        spotify.getPlaylist(input.playlistId)
+      );
     },
 
     async getPlaylistItems(args: unknown) {
@@ -195,7 +200,9 @@ export function createToolHandlers(spotify: SpotifyClient) {
     },
 
     async createPlaylist(args: unknown) {
-      return withParsedArgs(createPlaylistSchema, args, (input) => spotify.createPlaylist(input));
+      return withParsedArgs(createPlaylistSchema, args, (input) =>
+        spotify.createPlaylist(input)
+      );
     },
 
     async changePlaylistDetails(args: unknown) {
@@ -221,7 +228,9 @@ export function createToolHandlers(spotify: SpotifyClient) {
     },
 
     async addPlaylistItems(args: unknown) {
-      return withParsedArgs(addPlaylistItemsSchema, args, (input) => spotify.addPlaylistItems(input));
+      return withParsedArgs(addPlaylistItemsSchema, args, (input) =>
+        spotify.addPlaylistItems(input)
+      );
     },
 
     async replacePlaylistItems(args: unknown) {
@@ -272,7 +281,9 @@ export function createToolHandlers(spotify: SpotifyClient) {
     },
 
     async clonePlaylist(args: unknown) {
-      return withParsedArgs(clonePlaylistSchema, args, (input) => spotify.clonePlaylist(input));
+      return withParsedArgs(clonePlaylistSchema, args, (input) =>
+        spotify.clonePlaylist(input)
+      );
     }
   };
 }
@@ -306,7 +317,7 @@ function toolSuccess(result: unknown) {
     content: Array<{ type: "text"; text: string }>;
     structuredContent?: Record<string, unknown>;
   } = {
-    content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }]
   };
 
   if (isRecord(result)) {

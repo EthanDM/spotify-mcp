@@ -53,7 +53,9 @@ async function main(): Promise<void> {
  * local callback flow is designed to handle.
  */
 function assertSupportedRedirectUri(redirectUri: URL): void {
-  const isLocalHost = redirectUri.hostname === "127.0.0.1" || redirectUri.hostname === "localhost";
+  const isLocalHost =
+    redirectUri.hostname === "127.0.0.1" ||
+    redirectUri.hostname === "localhost";
 
   if (redirectUri.protocol !== "http:" || !isLocalHost) {
     throw new SpotifyMcpError(
@@ -69,7 +71,10 @@ function assertSupportedRedirectUri(redirectUri: URL): void {
  * The temporary server shuts down after the first success or failure so this
  * command never lingers as a background listener.
  */
-function waitForAuthorizationCode(redirectUri: URL, expectedState: string): Promise<string> {
+function waitForAuthorizationCode(
+  redirectUri: URL,
+  expectedState: string
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const server = http.createServer((request, response) => {
       const requestUrl = new URL(request.url || "/", redirectUri.origin);
@@ -88,7 +93,12 @@ function waitForAuthorizationCode(redirectUri: URL, expectedState: string): Prom
         response.statusCode = 400;
         response.end("Invalid state");
         server.close();
-        reject(new SpotifyMcpError("Spotify auth state mismatch.", "auth_state_mismatch"));
+        reject(
+          new SpotifyMcpError(
+            "Spotify auth state mismatch.",
+            "auth_state_mismatch"
+          )
+        );
         return;
       }
 
@@ -96,7 +106,9 @@ function waitForAuthorizationCode(redirectUri: URL, expectedState: string): Prom
         response.statusCode = 400;
         response.end(`Spotify auth failed: ${error}`);
         server.close();
-        reject(new SpotifyMcpError(`Spotify auth failed: ${error}`, "auth_denied"));
+        reject(
+          new SpotifyMcpError(`Spotify auth failed: ${error}`, "auth_denied")
+        );
         return;
       }
 
@@ -104,7 +116,12 @@ function waitForAuthorizationCode(redirectUri: URL, expectedState: string): Prom
         response.statusCode = 400;
         response.end("Missing authorization code");
         server.close();
-        reject(new SpotifyMcpError("Spotify auth callback did not include a code.", "auth_missing_code"));
+        reject(
+          new SpotifyMcpError(
+            "Spotify auth callback did not include a code.",
+            "auth_missing_code"
+          )
+        );
         return;
       }
 

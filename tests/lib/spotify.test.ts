@@ -18,7 +18,9 @@ describe("SpotifyClient", () => {
   it("constructs the expected list playlists request", async () => {
     const store = createTokenStore();
     const fetchMock = vi.fn(async (url: string) => {
-      expect(url).toBe("https://api.spotify.com/v1/me/playlists?limit=20&offset=10");
+      expect(url).toBe(
+        "https://api.spotify.com/v1/me/playlists?limit=20&offset=10"
+      );
 
       return jsonResponse({
         items: [],
@@ -144,25 +146,32 @@ describe("SpotifyClient", () => {
     });
     const client = new SpotifyClient(store, fetchMock as typeof fetch);
 
-    await expect(client.searchTracks("odesza", 10)).rejects.toThrow("status 429");
+    await expect(client.searchTracks("odesza", 10)).rejects.toThrow(
+      "status 429"
+    );
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("reads playlist items from Spotify's current /items endpoint", async () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
-      [`GET https://api.spotify.com/v1/playlists/playlist/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
-        jsonResponse({
-          items: [playlistItemResponse("spotify:track:1")],
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: 0,
-          total: 1,
-          next: null
-        })
+      [`GET https://api.spotify.com/v1/playlists/playlist/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]:
+        () =>
+          jsonResponse({
+            items: [playlistItemResponse("spotify:track:1")],
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: 0,
+            total: 1,
+            next: null
+          })
     });
     const client = new SpotifyClient(store, fetchMock as typeof fetch);
 
-    const page = await client.getPlaylistItems("playlist", SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT, 0);
+    const page = await client.getPlaylistItems(
+      "playlist",
+      SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+      0
+    );
 
     expect(page.items[0]?.track?.uri).toBe("spotify:track:1");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -179,7 +188,13 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
-        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "old" })),
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "old"
+          })
+        ),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -187,7 +202,10 @@ describe("SpotifyClient", () => {
           uri: "spotify:user:me",
           product: "premium"
         }),
-      "POST https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+      "POST https://api.spotify.com/v1/playlists/playlist/items": (
+        _url,
+        init
+      ) => {
         expect(init?.body).toBe(
           JSON.stringify({
             uris: ["spotify:track:1", "spotify:track:2"],
@@ -359,7 +377,10 @@ describe("SpotifyClient", () => {
         );
         return new Response(null, { status: 200 });
       },
-      "PUT https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": (
+        _url,
+        init
+      ) => {
         expect(init?.body).toBe(
           JSON.stringify({
             uris: []
@@ -479,10 +500,20 @@ describe("SpotifyClient", () => {
 
   it("replaces playlist items exactly and appends overflow batches in order", async () => {
     const store = createTokenStore();
-    const uris = Array.from({ length: 101 }, (_, index) => `spotify:track:${index}`);
+    const uris = Array.from(
+      { length: 101 },
+      (_, index) => `spotify:track:${index}`
+    );
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
-        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc", tracksTotal: 10 })),
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 10
+          })
+        ),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -490,12 +521,18 @@ describe("SpotifyClient", () => {
           uri: "spotify:user:me",
           product: "premium"
         }),
-      "PUT https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": (
+        _url,
+        init
+      ) => {
         const body = JSON.parse(String(init?.body));
         expect(body.uris).toEqual(uris.slice(0, 100));
         return jsonResponse({ snapshot_id: "snap-replace" });
       },
-      "POST https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+      "POST https://api.spotify.com/v1/playlists/playlist/items": (
+        _url,
+        init
+      ) => {
         const body = JSON.parse(String(init?.body));
         expect(body.uris).toEqual(uris.slice(100));
         expect(body.position).toBeUndefined();
@@ -520,7 +557,14 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
-        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc", tracksTotal: 3 })),
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 3
+          })
+        ),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -528,7 +572,10 @@ describe("SpotifyClient", () => {
           uri: "spotify:user:me",
           product: "premium"
         }),
-      "PUT https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": (
+        _url,
+        init
+      ) => {
         const body = JSON.parse(String(init?.body));
         expect(body.uris).toEqual([]);
         return jsonResponse({ snapshot_id: "snap-clear" });
@@ -552,11 +599,32 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/target": () =>
-        jsonResponse(playlistResponse({ id: "target", ownerId: "me", description: "desc", tracksTotal: 2 })),
+        jsonResponse(
+          playlistResponse({
+            id: "target",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 2
+          })
+        ),
       "GET https://api.spotify.com/v1/playlists/source-a": () =>
-        jsonResponse(playlistResponse({ id: "source-a", ownerId: "owner", description: "desc", tracksTotal: 2 })),
+        jsonResponse(
+          playlistResponse({
+            id: "source-a",
+            ownerId: "owner",
+            description: "desc",
+            tracksTotal: 2
+          })
+        ),
       "GET https://api.spotify.com/v1/playlists/source-b": () =>
-        jsonResponse(playlistResponse({ id: "source-b", ownerId: "owner", description: "desc", tracksTotal: 1 })),
+        jsonResponse(
+          playlistResponse({
+            id: "source-b",
+            ownerId: "owner",
+            description: "desc",
+            tracksTotal: 1
+          })
+        ),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -564,36 +632,39 @@ describe("SpotifyClient", () => {
           uri: "spotify:user:me",
           product: "premium"
         }),
-      [`GET https://api.spotify.com/v1/playlists/target/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
-        jsonResponse({
-          items: [
-            playlistItemResponse("spotify:track:1"),
-            playlistItemResponse("spotify:track:2")
-          ],
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: 0,
-          total: 2,
-          next: null
-        }),
-      [`GET https://api.spotify.com/v1/playlists/source-a/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
-        jsonResponse({
-          items: [
-            playlistItemResponse("spotify:track:3"),
-            playlistItemResponse("spotify:track:4")
-          ],
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: 0,
-          total: 2,
-          next: null
-        }),
-      [`GET https://api.spotify.com/v1/playlists/source-b/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
-        jsonResponse({
-          items: [playlistItemResponse("spotify:track:5")],
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: 0,
-          total: 1,
-          next: null
-        }),
+      [`GET https://api.spotify.com/v1/playlists/target/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]:
+        () =>
+          jsonResponse({
+            items: [
+              playlistItemResponse("spotify:track:1"),
+              playlistItemResponse("spotify:track:2")
+            ],
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: 0,
+            total: 2,
+            next: null
+          }),
+      [`GET https://api.spotify.com/v1/playlists/source-a/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]:
+        () =>
+          jsonResponse({
+            items: [
+              playlistItemResponse("spotify:track:3"),
+              playlistItemResponse("spotify:track:4")
+            ],
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: 0,
+            total: 2,
+            next: null
+          }),
+      [`GET https://api.spotify.com/v1/playlists/source-b/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]:
+        () =>
+          jsonResponse({
+            items: [playlistItemResponse("spotify:track:5")],
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: 0,
+            total: 1,
+            next: null
+          }),
       "PUT https://api.spotify.com/v1/playlists/target/items": (_url, init) => {
         const body = JSON.parse(String(init?.body));
         expect(body.uris).toEqual([
@@ -624,7 +695,14 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
-        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc", tracksTotal: 4 })),
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 4
+          })
+        ),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -632,20 +710,24 @@ describe("SpotifyClient", () => {
           uri: "spotify:user:me",
           product: "premium"
         }),
-      [`GET https://api.spotify.com/v1/playlists/playlist/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
-        jsonResponse({
-          items: [
-            playlistItemResponse("spotify:track:1"),
-            playlistItemResponse("spotify:track:2"),
-            playlistItemResponse("spotify:track:1"),
-            playlistItemResponse("spotify:track:3")
-          ],
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: 0,
-          total: 4,
-          next: null
-        }),
-      "PUT https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+      [`GET https://api.spotify.com/v1/playlists/playlist/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]:
+        () =>
+          jsonResponse({
+            items: [
+              playlistItemResponse("spotify:track:1"),
+              playlistItemResponse("spotify:track:2"),
+              playlistItemResponse("spotify:track:1"),
+              playlistItemResponse("spotify:track:3")
+            ],
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: 0,
+            total: 4,
+            next: null
+          }),
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": (
+        _url,
+        init
+      ) => {
         const body = JSON.parse(String(init?.body));
         expect(body.uris).toEqual([
           "spotify:track:1",
@@ -673,7 +755,11 @@ describe("SpotifyClient", () => {
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
         jsonResponse({
-          ...playlistResponse({ id: "playlist", ownerId: "owner", description: "shared" }),
+          ...playlistResponse({
+            id: "playlist",
+            ownerId: "owner",
+            description: "shared"
+          }),
           collaborative: true
         }),
       "GET https://api.spotify.com/v1/me": () =>
@@ -706,7 +792,11 @@ describe("SpotifyClient", () => {
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
         jsonResponse({
-          ...playlistResponse({ id: "playlist", ownerId: "me", description: "public playlist" }),
+          ...playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "public playlist"
+          }),
           public: true,
           collaborative: false
         }),
@@ -739,7 +829,13 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
-        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc" })),
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc"
+          })
+        ),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -769,7 +865,13 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
-        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc" })),
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc"
+          })
+        ),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -777,7 +879,10 @@ describe("SpotifyClient", () => {
           uri: "spotify:user:me",
           product: "premium"
         }),
-      "DELETE https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+      "DELETE https://api.spotify.com/v1/playlists/playlist/items": (
+        _url,
+        init
+      ) => {
         expect(init?.body).toBe(
           JSON.stringify({
             items: [{ uri: "spotify:track:1" }],
@@ -805,22 +910,32 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/source": () =>
-        jsonResponse(playlistResponse({ id: "source", ownerId: "owner", description: "desc", tracksTotal: 2 })),
-      [`GET https://api.spotify.com/v1/playlists/source/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
-        jsonResponse({
-          items: [
-            playlistItemResponse("spotify:track:1"),
-            playlistItemResponse("spotify:local:artist:album:track:1")
-          ],
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: 0,
-          total: 2,
-          next: null
-        })
+        jsonResponse(
+          playlistResponse({
+            id: "source",
+            ownerId: "owner",
+            description: "desc",
+            tracksTotal: 2
+          })
+        ),
+      [`GET https://api.spotify.com/v1/playlists/source/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]:
+        () =>
+          jsonResponse({
+            items: [
+              playlistItemResponse("spotify:track:1"),
+              playlistItemResponse("spotify:local:artist:album:track:1")
+            ],
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: 0,
+            total: 2,
+            next: null
+          })
     });
     const client = new SpotifyClient(store, fetchMock as typeof fetch);
 
-    await expect(client.clonePlaylist({ sourcePlaylistId: "source" })).rejects.toThrow("local-file");
+    await expect(
+      client.clonePlaylist({ sourcePlaylistId: "source" })
+    ).rejects.toThrow("local-file");
 
     expect(fetchMock).not.toHaveBeenCalledWith(
       "https://api.spotify.com/v1/me/playlists",
@@ -834,7 +949,13 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
-        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc" })),
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc"
+          })
+        ),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -873,24 +994,39 @@ describe("SpotifyClient", () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/source": () =>
-        jsonResponse(playlistResponse({ id: "source", ownerId: "owner", description: "desc", tracksTotal: 101 })),
+        jsonResponse(
+          playlistResponse({
+            id: "source",
+            ownerId: "owner",
+            description: "desc",
+            tracksTotal: 101
+          })
+        ),
       "POST https://api.spotify.com/v1/me/playlists": (_url, init) => {
         const body = JSON.parse(String(init?.body));
         expect(body.name).toBe("Source (Copy)");
         expect(body.public).toBe(false);
-        return jsonResponse(playlistResponse({ id: "clone", ownerId: "me", description: "desc", tracksTotal: 0 }));
+        return jsonResponse(
+          playlistResponse({
+            id: "clone",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 0
+          })
+        );
       },
-      [`GET https://api.spotify.com/v1/playlists/source/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
-        jsonResponse({
-          items: Array.from(
-            { length: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT },
-            (_, index) => playlistItemResponse(`spotify:track:${index}`)
-          ),
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: 0,
-          total: 101,
-          next: "next"
-        }),
+      [`GET https://api.spotify.com/v1/playlists/source/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]:
+        () =>
+          jsonResponse({
+            items: Array.from(
+              { length: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT },
+              (_, index) => playlistItemResponse(`spotify:track:${index}`)
+            ),
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: 0,
+            total: 101,
+            next: "next"
+          }),
       "GET https://api.spotify.com/v1/me": () =>
         jsonResponse({
           id: "me",
@@ -899,31 +1035,44 @@ describe("SpotifyClient", () => {
           product: "premium"
         }),
       "GET https://api.spotify.com/v1/playlists/clone": () =>
-        jsonResponse(playlistResponse({ id: "clone", ownerId: "me", description: "desc", tracksTotal: 101 })),
+        jsonResponse(
+          playlistResponse({
+            id: "clone",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 101
+          })
+        ),
       "POST https://api.spotify.com/v1/playlists/clone/items": (_url, init) => {
         const body = JSON.parse(String(init?.body));
-        return jsonResponse({ snapshot_id: body.uris.length === 100 ? "snap-2" : "snap-3" });
+        return jsonResponse({
+          snapshot_id: body.uris.length === 100 ? "snap-2" : "snap-3"
+        });
       },
-      [`GET https://api.spotify.com/v1/playlists/source/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}`]: () =>
-        jsonResponse({
-          items: Array.from(
-            { length: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT },
-            (_, index) =>
-              playlistItemResponse(`spotify:track:${index + SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}`)
-          ),
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          total: 101,
-          next: "next"
-        }),
-      [`GET https://api.spotify.com/v1/playlists/source/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT * 2}`]: () =>
-        jsonResponse({
-          items: [playlistItemResponse("spotify:track:100")],
-          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
-          offset: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT * 2,
-          total: 101,
-          next: null
-        })
+      [`GET https://api.spotify.com/v1/playlists/source/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}`]:
+        () =>
+          jsonResponse({
+            items: Array.from(
+              { length: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT },
+              (_, index) =>
+                playlistItemResponse(
+                  `spotify:track:${index + SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}`
+                )
+            ),
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            total: 101,
+            next: "next"
+          }),
+      [`GET https://api.spotify.com/v1/playlists/source/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT * 2}`]:
+        () =>
+          jsonResponse({
+            items: [playlistItemResponse("spotify:track:100")],
+            limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+            offset: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT * 2,
+            total: 101,
+            next: null
+          })
     });
     const client = new SpotifyClient(store, fetchMock as typeof fetch);
 
@@ -1007,7 +1156,10 @@ function playlistItemResponse(uri: string) {
 }
 
 function createRouterFetchMock(
-  routes: Record<string, (url: string, init?: RequestInit) => Promise<Response> | Response>
+  routes: Record<
+    string,
+    (url: string, init?: RequestInit) => Promise<Response> | Response
+  >
 ) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";

@@ -35,7 +35,12 @@ export class SpotifyRequestClient {
     hasRetried = false,
     rateLimitRetriesRemaining = 2
   ): Promise<T> {
-    const response = await this.send(path, init, hasRetried, rateLimitRetriesRemaining);
+    const response = await this.send(
+      path,
+      init,
+      hasRetried,
+      rateLimitRetriesRemaining
+    );
     return (await response.json()) as T;
   }
 
@@ -76,17 +81,27 @@ export class SpotifyRequestClient {
     if (response.status === 429) {
       if (rateLimitRetriesRemaining <= 0) {
         const message = await readSpotifyError(response);
-        throw new SpotifyApiError(message, response.status, readRetryAfter(response));
+        throw new SpotifyApiError(
+          message,
+          response.status,
+          readRetryAfter(response)
+        );
       }
 
-      const retryAfterSeconds = Number(response.headers.get("retry-after") || "1");
+      const retryAfterSeconds = Number(
+        response.headers.get("retry-after") || "1"
+      );
       await delay(retryAfterSeconds * 1000);
       return this.send(path, init, hasRetried, rateLimitRetriesRemaining - 1);
     }
 
     if (!response.ok) {
       const message = await readSpotifyError(response);
-      throw new SpotifyApiError(message, response.status, readRetryAfter(response));
+      throw new SpotifyApiError(
+        message,
+        response.status,
+        readRetryAfter(response)
+      );
     }
 
     return response;
@@ -135,7 +150,10 @@ async function readSpotifyError(response: Response): Promise<string> {
         message?: string;
       };
     };
-    return payload.error?.message || `Spotify API request failed with status ${response.status}.`;
+    return (
+      payload.error?.message ||
+      `Spotify API request failed with status ${response.status}.`
+    );
   } catch {
     return `Spotify API request failed with status ${response.status}.`;
   }

@@ -51,7 +51,10 @@ export class SpotifyOAuthClient {
   /**
    * Exchanges the authorization code for the first access/refresh token pair.
    */
-  async exchangeCodeForTokens(code: string, codeVerifier: string): Promise<StoredTokens> {
+  async exchangeCodeForTokens(
+    code: string,
+    codeVerifier: string
+  ): Promise<StoredTokens> {
     const response = await this.fetchToken({
       client_id: this.clientId,
       grant_type: "authorization_code",
@@ -83,14 +86,19 @@ export class SpotifyOAuthClient {
    * This method intentionally returns the raw token payload so the normalization
    * logic for initial exchange vs refresh stays in one place.
    */
-  private async fetchToken(body: Record<string, string>): Promise<TokenResponse> {
-    const response = await this.fetchImpl(`${SPOTIFY_ACCOUNTS_BASE_URL}/api/token`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded"
-      },
-      body: new URLSearchParams(body)
-    });
+  private async fetchToken(
+    body: Record<string, string>
+  ): Promise<TokenResponse> {
+    const response = await this.fetchImpl(
+      `${SPOTIFY_ACCOUNTS_BASE_URL}/api/token`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams(body)
+      }
+    );
 
     if (!response.ok) {
       const text = await response.text();
@@ -117,7 +125,10 @@ function normalizeTokenResponse(
   const refreshToken = response.refresh_token || fallbackRefreshToken;
 
   if (!refreshToken) {
-    throw new SpotifyMcpError("Spotify did not return a refresh token.", "auth_missing_refresh_token");
+    throw new SpotifyMcpError(
+      "Spotify did not return a refresh token.",
+      "auth_missing_refresh_token"
+    );
   }
 
   return {

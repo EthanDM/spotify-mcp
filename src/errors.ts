@@ -3,7 +3,10 @@
  * this project rather than from Spotify's HTTP API.
  */
 export class SpotifyMcpError extends Error {
-  constructor(message: string, readonly code: string) {
+  constructor(
+    message: string,
+    readonly code: string
+  ) {
     super(message);
     this.name = "SpotifyMcpError";
   }

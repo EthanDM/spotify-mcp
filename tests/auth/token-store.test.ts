@@ -9,7 +9,9 @@ import type { StoredTokens } from "../../src/types.js";
 
 describe("TokenStore", () => {
   it("writes and reads tokens from disk", async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "spotify-mcp-token-store-"));
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "spotify-mcp-token-store-")
+    );
     const store = new TokenStore(path.join(tempDir, "auth.json"));
     const tokens: StoredTokens = {
       accessToken: "access",
@@ -24,7 +26,9 @@ describe("TokenStore", () => {
   });
 
   it("returns null when tokens do not exist", async () => {
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "spotify-mcp-token-store-missing-"));
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "spotify-mcp-token-store-missing-")
+    );
     const store = new TokenStore(path.join(tempDir, "missing.json"));
 
     await expect(store.read()).resolves.toBeNull();
