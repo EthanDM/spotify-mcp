@@ -111,7 +111,10 @@ export function chunkUris(uris: string[], chunkSize: number): string[][] {
   return chunks;
 }
 
-export function rejectLocalPlaylistUris(uris: string[], action: "clone" | "remove"): void {
+export function rejectLocalPlaylistUris(
+  uris: string[],
+  action: "clone" | "remove" | "replace"
+): void {
   const hasLocalFile = uris.some((uri) => uri.startsWith("spotify:local:"));
 
   if (!hasLocalFile) {
@@ -121,7 +124,9 @@ export function rejectLocalPlaylistUris(uris: string[], action: "clone" | "remov
   const message =
     action === "clone"
       ? "Clone cannot copy Spotify local-file playlist items through the Web API."
-      : "Remove does not support Spotify local-file playlist items by URI.";
+      : action === "replace"
+        ? "Replace does not support Spotify local-file playlist items."
+        : "Remove does not support Spotify local-file playlist items by URI.";
 
   throw new SpotifyMcpError(
     `${message} Remove or replace the local files in Spotify first, then retry.`,

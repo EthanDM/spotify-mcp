@@ -14,6 +14,7 @@ This MVP exposes a small playlist-oriented tool surface over Spotify's Web API:
 - `spotify_create_playlist`
 - `spotify_change_playlist_details`
 - `spotify_add_playlist_items`
+- `spotify_replace_playlist_items`
 - `spotify_remove_playlist_items`
 - `spotify_reorder_playlist_items`
 - `spotify_clone_playlist`
@@ -63,7 +64,7 @@ This command:
 - exchanges the returned code for tokens
 - stores tokens in `~/.config/spotify-mcp/auth.json`
 
-If the browser does not open automatically, copy the printed URL into your browser.
+Copy the printed URL into your browser to complete the login.
 
 ## Run The MCP Server
 
@@ -72,6 +73,8 @@ For development:
 ```bash
 pnpm dev
 ```
+
+This runs the source server under `tsx watch`, so local edits hot reload automatically.
 
 For production:
 
@@ -82,19 +85,26 @@ pnpm start
 
 ## Codex Configuration
 
-Add this to `~/.codex/config.toml`:
+Recommended local iteration setup:
+
+```toml
+[mcp_servers.spotify]
+command = "pnpm"
+args = ["--dir", "/Users/ethanmillstein/GitHub/spotify-mcp", "dev"]
+```
+
+Stable built-server setup:
 
 ```toml
 [mcp_servers.spotify]
 command = "node"
-args = ["/Users/ethanmillstein/GitHub/spotify-mcp/dist/server.js"]
+args = ["--env-file=/Users/ethanmillstein/GitHub/spotify-mcp/.env", "/Users/ethanmillstein/GitHub/spotify-mcp/dist/server.js"]
 ```
-
-For local iteration, you can point Codex at `tsx` instead, but the built `dist/server.js` path is the stable default.
 
 ## Tool Notes
 
 - New playlists default to `public: false`.
+- `spotify_replace_playlist_items` requires `confirm: true` and treats the input URI list as the exact final playlist order.
 - `spotify_remove_playlist_items` and `spotify_reorder_playlist_items` require `confirm: true`.
 - Remove and reorder fetch the latest playlist snapshot before mutating.
 - Clone copies items in batches and creates the destination playlist as private unless you explicitly opt into `public: true`.
@@ -119,6 +129,19 @@ Add tracks:
     "spotify:track:4iV5W9uYEdYUVa79Axb7Rh",
     "spotify:track:1301WleyT98MSxVHPZCA6M"
   ]
+}
+```
+
+Replace the full playlist body:
+
+```json
+{
+  "playlistId": "37i9dQZF1DX...",
+  "uris": [
+    "spotify:track:4iV5W9uYEdYUVa79Axb7Rh",
+    "spotify:track:1301WleyT98MSxVHPZCA6M"
+  ],
+  "confirm": true
 }
 ```
 
@@ -152,3 +175,19 @@ Run:
 ```bash
 pnpm test
 ```
+
+## Smoke Checklist
+
+Run these once after setup to verify the local server against your real account:
+
+1. `spotify_get_my_profile`
+2. `spotify_list_playlists` with `limit: 5`, `offset: 0`
+3. `spotify_create_playlist` with a temporary private name
+4. `spotify_search_tracks` with a simple query like `ODESZA`
+5. `spotify_add_playlist_items` with one returned track URI
+6. `spotify_replace_playlist_items` with two known track URIs and `confirm: true`
+7. `spotify_remove_playlist_items` with one URI and `confirm: true`
+8. `spotify_reorder_playlist_items` with `confirm: true`
+9. `spotify_clone_playlist` on a small source playlist
+
+If those pass, the personal local workflow is in good shape end to end.

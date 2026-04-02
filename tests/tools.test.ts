@@ -14,6 +14,7 @@ describe("tool handlers", () => {
       createPlaylist: vi.fn(),
       changePlaylistDetails: vi.fn(),
       addPlaylistItems: vi.fn(),
+      replacePlaylistItems: vi.fn(),
       removePlaylistItems: vi.fn(),
       reorderPlaylistItems: vi.fn(),
       clonePlaylist: vi.fn()
@@ -81,5 +82,19 @@ describe("tool handlers", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("must not be public");
+  });
+
+  it("requires confirm=true when replacing playlist items", async () => {
+    const handlers = createToolHandlers({
+      replacePlaylistItems: vi.fn()
+    } as never);
+
+    const result = await handlers.replacePlaylistItems({
+      playlistId: "playlist",
+      uris: ["spotify:track:1"]
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("Invalid literal value");
   });
 });

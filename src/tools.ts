@@ -83,6 +83,15 @@ export const addPlaylistItemsSchema = z.object({
 });
 
 /**
+ * Destructive replace input for setting an exact ordered playlist body.
+ */
+export const replacePlaylistItemsSchema = z.object({
+  playlistId: z.string().min(1),
+  uris: z.array(z.string().startsWith("spotify:")).min(1),
+  confirm: z.literal(true)
+});
+
+/**
  * Destructive remove input. `confirm: true` is required so accidental tool
  * calls fail validation before any Spotify request is sent.
  */
@@ -160,6 +169,15 @@ export function createToolHandlers(spotify: SpotifyClient) {
 
     async addPlaylistItems(args: unknown) {
       return withParsedArgs(addPlaylistItemsSchema, args, (input) => spotify.addPlaylistItems(input));
+    },
+
+    async replacePlaylistItems(args: unknown) {
+      return withParsedArgs(replacePlaylistItemsSchema, args, (input) =>
+        spotify.replacePlaylistItems({
+          playlistId: input.playlistId,
+          uris: input.uris
+        })
+      );
     },
 
     async removePlaylistItems(args: unknown) {

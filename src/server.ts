@@ -17,6 +17,7 @@ import {
   listPlaylistsSchema,
   playlistIdSchema,
   playlistItemsSchema,
+  replacePlaylistItemsSchema,
   removePlaylistItemsSchema,
   reorderPlaylistItemsSchema,
   searchTracksSchema
@@ -112,6 +113,16 @@ server.registerTool(
     inputSchema: addPlaylistItemsSchema.shape
   },
   handlers.addPlaylistItems
+);
+
+server.registerTool(
+  "spotify_replace_playlist_items",
+  {
+    title: "Replace Spotify Playlist Items",
+    description: "Replaces a playlist with an exact ordered list of track URIs. Requires confirm=true.",
+    inputSchema: replacePlaylistItemsSchema.shape
+  },
+  handlers.replacePlaylistItems
 );
 
 server.registerTool(

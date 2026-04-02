@@ -94,6 +94,7 @@ export type MutationResult = {
   snapshot_id: string;
   added_count?: number;
   removed_count?: number;
+  replaced_count?: number;
 };
 
 /**

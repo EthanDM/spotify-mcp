@@ -235,6 +235,45 @@ describe("SpotifyClient", () => {
     );
   });
 
+  it("replaces playlist items exactly and appends overflow batches in order", async () => {
+    const store = createTokenStore();
+    const uris = Array.from({ length: 101 }, (_, index) => `spotify:track:${index}`);
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc", tracksTotal: 10 })),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.uris).toEqual(uris.slice(0, 100));
+        return jsonResponse({ snapshot_id: "snap-replace" });
+      },
+      "POST https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.uris).toEqual(uris.slice(100));
+        expect(body.position).toBeUndefined();
+        return jsonResponse({ snapshot_id: "snap-add" });
+      }
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.replacePlaylistItems({
+      playlistId: "playlist",
+      uris
+    });
+
+    expect(result).toEqual({
+      playlist_id: "playlist",
+      snapshot_id: "snap-add",
+      replaced_count: 101
+    });
+  });
+
   it("rejects metadata changes for collaborative playlists not owned by the current user", async () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({

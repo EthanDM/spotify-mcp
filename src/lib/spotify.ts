@@ -261,6 +261,55 @@ export class SpotifyClient {
   }
 
   /**
+   * Replaces a playlist with the exact ordered URI list provided by the caller.
+   *
+   * Spotify's replace endpoint accepts only one batch, so larger playlists are
+   * seeded with the first batch and then appended in order using add calls.
+   */
+  async replacePlaylistItems(input: {
+    playlistId: string;
+    uris: string[];
+  }): Promise<MutationResult> {
+    await this.ensureCanModifyPlaylist(input.playlistId, {
+      allowCollaborative: true
+    });
+    rejectLocalPlaylistUris(input.uris, "replace");
+
+    const chunks = chunkUris(input.uris, SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT);
+    const firstChunk = chunks[0];
+
+    if (!firstChunk) {
+      throw new SpotifyMcpError("Replace requires at least one track URI.", "playlist_replace_empty");
+    }
+
+    const response = await this.requests.request<{ snapshot_id: string }>(
+      `/playlists/${encodeURIComponent(input.playlistId)}/items`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          uris: firstChunk
+        })
+      }
+    );
+
+    let snapshotId = response.snapshot_id;
+
+    for (const chunk of chunks.slice(1)) {
+      const addResult = await this.addPlaylistItems({
+        playlistId: input.playlistId,
+        uris: chunk
+      });
+      snapshotId = addResult.snapshot_id;
+    }
+
+    return {
+      playlist_id: input.playlistId,
+      snapshot_id: snapshotId,
+      replaced_count: input.uris.length
+    };
+  }
+
+  /**
    * Removes items by URI only. This favors a small, predictable API over the
    * more complex position-specific delete variant.
    *
