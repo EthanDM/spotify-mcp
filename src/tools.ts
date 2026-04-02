@@ -149,6 +149,16 @@ export const unfollowPlaylistSchema = z.object({
   confirm: z.literal(true)
 });
 
+/**
+ * Opinionated archive workflow input for playlists the current user owns.
+ */
+export const archivePlaylistSchema = z.object({
+  playlistId: z.string().min(1),
+  clearItems: z.boolean().optional(),
+  prefix: z.string().min(1).optional(),
+  confirm: z.literal(true)
+});
+
 export const createPlaylistInputSchema = createPlaylistFields;
 export const changePlaylistDetailsInputSchema = changePlaylistDetailsFields;
 
@@ -197,6 +207,16 @@ export function createToolHandlers(spotify: SpotifyClient) {
     async unfollowPlaylist(args: unknown) {
       return withParsedArgs(unfollowPlaylistSchema, args, (input) =>
         spotify.unfollowPlaylist(input.playlistId)
+      );
+    },
+
+    async archivePlaylist(args: unknown) {
+      return withParsedArgs(archivePlaylistSchema, args, (input) =>
+        spotify.archivePlaylist({
+          playlistId: input.playlistId,
+          clearItems: input.clearItems,
+          prefix: input.prefix
+        })
       );
     },
 

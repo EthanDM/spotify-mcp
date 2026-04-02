@@ -1,6 +1,7 @@
 import { SpotifyMcpError } from "../errors.js";
 import { TokenStore } from "../auth/token-store.js";
 import type {
+  ArchivePlaylistResult,
   MutationResult,
   PlaylistItem,
   PlaylistItemsResult,
@@ -230,6 +231,45 @@ export class SpotifyClient {
     return {
       playlist_id: playlistId,
       unfollowed: true
+    };
+  }
+
+  /**
+   * Archives a playlist in place for the current user.
+   *
+   * This is an opinionated cleanup workflow: it makes the playlist private,
+   * disables collaboration, prefixes the name once, and can optionally clear
+   * every playlist item.
+   */
+  async archivePlaylist(input: {
+    playlistId: string;
+    clearItems?: boolean;
+    prefix?: string;
+  }): Promise<ArchivePlaylistResult> {
+    const current = await this.getPlaylist(input.playlistId);
+    const prefix = input.prefix ?? "[Archived] ";
+    const archivedName = current.name.startsWith(prefix) ? current.name : `${prefix}${current.name}`;
+
+    const archivedPlaylist = await this.changePlaylistDetails({
+      playlistId: input.playlistId,
+      name: archivedName,
+      public: false,
+      collaborative: false
+    });
+
+    let clearedCount: number | undefined;
+
+    if (input.clearItems) {
+      clearedCount = current.tracks_total;
+      await this.replacePlaylistItems({
+        playlistId: input.playlistId,
+        uris: []
+      });
+    }
+
+    return {
+      playlist: input.clearItems ? await this.getPlaylist(input.playlistId) : archivedPlaylist,
+      ...(typeof clearedCount === "number" ? { cleared_count: clearedCount } : {})
     };
   }
 

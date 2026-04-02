@@ -257,6 +257,226 @@ describe("SpotifyClient", () => {
     );
   });
 
+  it("archives a playlist by making it private, prefixing its name, and clearing items", async () => {
+    const store = createTokenStore();
+    const getPlaylistMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 2,
+            name: "Existing",
+            public: true,
+            collaborative: true
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 2,
+            name: "Existing",
+            public: true,
+            collaborative: true
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 2,
+            name: "Existing",
+            public: true,
+            collaborative: true
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 2,
+            name: "[Archived] Existing",
+            public: false,
+            collaborative: false
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 0,
+            name: "[Archived] Existing",
+            public: false,
+            collaborative: false
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            tracksTotal: 0,
+            name: "[Archived] Existing",
+            public: false,
+            collaborative: false
+          })
+        )
+      );
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": getPlaylistMock,
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      "PUT https://api.spotify.com/v1/playlists/playlist": (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            name: "[Archived] Existing",
+            description: undefined,
+            public: false,
+            collaborative: false
+          })
+        );
+        return new Response(null, { status: 200 });
+      },
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            uris: []
+          })
+        );
+        return jsonResponse({ snapshot_id: "snap-cleared" });
+      }
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.archivePlaylist({
+      playlistId: "playlist",
+      clearItems: true
+    });
+
+    expect(result).toEqual({
+      playlist: {
+        id: "playlist",
+        uri: "spotify:playlist:playlist",
+        name: "[Archived] Existing",
+        description: "desc",
+        public: false,
+        collaborative: false,
+        owner: {
+          id: "me",
+          display_name: "Owner"
+        },
+        tracks_total: 0,
+        snapshot_id: "playlist-snapshot"
+      },
+      cleared_count: 2
+    });
+  });
+
+  it("does not double-prefix an already archived playlist name", async () => {
+    const store = createTokenStore();
+    const getPlaylistMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            name: "[Archived] Existing",
+            public: false,
+            collaborative: false
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            name: "[Archived] Existing",
+            public: false,
+            collaborative: false
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            name: "[Archived] Existing",
+            public: false,
+            collaborative: false
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          playlistResponse({
+            id: "playlist",
+            ownerId: "me",
+            description: "desc",
+            name: "[Archived] Existing",
+            public: false,
+            collaborative: false
+          })
+        )
+      );
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": getPlaylistMock,
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      "PUT https://api.spotify.com/v1/playlists/playlist": (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            name: "[Archived] Existing",
+            description: undefined,
+            public: false,
+            collaborative: false
+          })
+        );
+        return new Response(null, { status: 200 });
+      }
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.archivePlaylist({
+      playlistId: "playlist"
+    });
+
+    expect(result.cleared_count).toBeUndefined();
+    expect(result.playlist.name).toBe("[Archived] Existing");
+  });
+
   it("replaces playlist items exactly and appends overflow batches in order", async () => {
     const store = createTokenStore();
     const uris = Array.from({ length: 101 }, (_, index) => `spotify:track:${index}`);
@@ -753,14 +973,17 @@ function playlistResponse(input: {
   ownerId: string;
   description?: string;
   tracksTotal?: number;
+  name?: string;
+  public?: boolean | null;
+  collaborative?: boolean;
 }) {
   return {
     id: input.id,
     uri: `spotify:playlist:${input.id}`,
-    name: input.id === "source" ? "Source" : "Existing",
+    name: input.name ?? (input.id === "source" ? "Source" : "Existing"),
     description: input.description ?? null,
-    public: false,
-    collaborative: false,
+    public: input.public ?? false,
+    collaborative: input.collaborative ?? false,
     owner: { id: input.ownerId, display_name: "Owner" },
     tracks: { total: input.tracksTotal ?? 2 },
     snapshot_id: `${input.id}-snapshot`

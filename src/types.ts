@@ -109,6 +109,18 @@ export type UnfollowPlaylistResult = {
 };
 
 /**
+ * Result for archiving a playlist in-place.
+ *
+ * Archiving is an opinionated workflow on top of Spotify primitives: the
+ * playlist is renamed with a prefix, made private, collaboration is disabled,
+ * and its items may optionally be cleared.
+ */
+export type ArchivePlaylistResult = {
+  playlist: PlaylistSummary;
+  cleared_count?: number;
+};
+
+/**
  * Persisted OAuth token state shared by the auth CLI and runtime server.
  *
  * `expiresAt` is stored as epoch milliseconds so expiration checks do not need

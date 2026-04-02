@@ -14,6 +14,7 @@ This MVP exposes a small playlist-oriented tool surface over Spotify's Web API:
 - `spotify_create_playlist`
 - `spotify_change_playlist_details`
 - `spotify_unfollow_playlist`
+- `spotify_archive_playlist`
 - `spotify_add_playlist_items`
 - `spotify_replace_playlist_items`
 - `spotify_merge_playlists`
@@ -108,6 +109,7 @@ args = ["--env-file=/Users/ethanmillstein/GitHub/spotify-mcp/.env", "/Users/etha
 
 - New playlists default to `public: false`.
 - `spotify_unfollow_playlist` removes a playlist from the current user's library. It does not delete the playlist from Spotify.
+- `spotify_archive_playlist` makes a playlist private, disables collaboration, prefixes its name with `[Archived] ` by default, and can optionally clear all items.
 - `spotify_replace_playlist_items` requires `confirm: true` and treats the input URI list as the exact final playlist order.
 - `spotify_merge_playlists` keeps the target playlist first, then appends source playlists in the order you provide.
 - `spotify_dedupe_playlist` keeps the first occurrence of each track URI and removes later duplicates.
@@ -143,6 +145,16 @@ Unfollow a playlist from your library:
 ```json
 {
   "playlistId": "37i9dQZF1DX...",
+  "confirm": true
+}
+```
+
+Archive a playlist you own:
+
+```json
+{
+  "playlistId": "37i9dQZF1DX...",
+  "clearItems": true,
   "confirm": true
 }
 ```

@@ -14,6 +14,7 @@ describe("tool handlers", () => {
       createPlaylist: vi.fn(),
       changePlaylistDetails: vi.fn(),
       unfollowPlaylist: vi.fn(),
+      archivePlaylist: vi.fn(),
       addPlaylistItems: vi.fn(),
       mergePlaylists: vi.fn(),
       dedupePlaylist: vi.fn(),
@@ -130,6 +131,56 @@ describe("tool handlers", () => {
 
     expect(result.isError).toBeUndefined();
     expect(unfollowPlaylist).toHaveBeenCalledWith("playlist");
+  });
+
+  it("requires confirm=true when archiving a playlist", async () => {
+    const handlers = createToolHandlers({
+      archivePlaylist: vi.fn()
+    } as never);
+
+    const result = await handlers.archivePlaylist({
+      playlistId: "playlist"
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("Invalid literal value");
+  });
+
+  it("passes archive options through when confirm=true", async () => {
+    const archivePlaylist = vi.fn(async () => ({
+      playlist: {
+        id: "playlist",
+        uri: "spotify:playlist:playlist",
+        name: "[Archived] Existing",
+        description: "desc",
+        public: false,
+        collaborative: false,
+        owner: {
+          id: "me",
+          display_name: "Ethan"
+        },
+        tracks_total: 0,
+        snapshot_id: "snap"
+      },
+      cleared_count: 2
+    }));
+    const handlers = createToolHandlers({
+      archivePlaylist
+    } as never);
+
+    const result = await handlers.archivePlaylist({
+      playlistId: "playlist",
+      clearItems: true,
+      prefix: "[Archived] ",
+      confirm: true
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(archivePlaylist).toHaveBeenCalledWith({
+      playlistId: "playlist",
+      clearItems: true,
+      prefix: "[Archived] "
+    });
   });
 
   it("allows replacing a playlist with an empty list when confirm=true", async () => {

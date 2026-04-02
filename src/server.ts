@@ -8,6 +8,7 @@ import { getTokenFilePath } from "./config.js";
 import { SpotifyClient } from "./lib/spotify.js";
 import {
   addPlaylistItemsSchema,
+  archivePlaylistSchema,
   changePlaylistDetailsSchema,
   changePlaylistDetailsInputSchema,
   clonePlaylistSchema,
@@ -116,6 +117,16 @@ server.registerTool(
     inputSchema: unfollowPlaylistSchema.shape
   },
   handlers.unfollowPlaylist
+);
+
+server.registerTool(
+  "spotify_archive_playlist",
+  {
+    title: "Archive Spotify Playlist",
+    description: "Makes a playlist private, prefixes its name, and can optionally clear items. Requires confirm=true.",
+    inputSchema: archivePlaylistSchema.shape
+  },
+  handlers.archivePlaylist
 );
 
 server.registerTool(
