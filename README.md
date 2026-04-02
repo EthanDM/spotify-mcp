@@ -15,6 +15,8 @@ This MVP exposes a small playlist-oriented tool surface over Spotify's Web API:
 - `spotify_change_playlist_details`
 - `spotify_add_playlist_items`
 - `spotify_replace_playlist_items`
+- `spotify_merge_playlists`
+- `spotify_dedupe_playlist`
 - `spotify_remove_playlist_items`
 - `spotify_reorder_playlist_items`
 - `spotify_clone_playlist`
@@ -105,6 +107,8 @@ args = ["--env-file=/Users/ethanmillstein/GitHub/spotify-mcp/.env", "/Users/etha
 
 - New playlists default to `public: false`.
 - `spotify_replace_playlist_items` requires `confirm: true` and treats the input URI list as the exact final playlist order.
+- `spotify_merge_playlists` keeps the target playlist first, then appends source playlists in the order you provide.
+- `spotify_dedupe_playlist` keeps the first occurrence of each track URI and removes later duplicates.
 - `spotify_remove_playlist_items` and `spotify_reorder_playlist_items` require `confirm: true`.
 - Remove and reorder fetch the latest playlist snapshot before mutating.
 - Clone copies items in batches and creates the destination playlist as private unless you explicitly opt into `public: true`.
@@ -141,6 +145,29 @@ Replace the full playlist body:
     "spotify:track:4iV5W9uYEdYUVa79Axb7Rh",
     "spotify:track:1301WleyT98MSxVHPZCA6M"
   ],
+  "confirm": true
+}
+```
+
+Merge playlists into a target:
+
+```json
+{
+  "targetPlaylistId": "37i9dQZF1DXTARGET",
+  "sourcePlaylistIds": [
+    "37i9dQZF1DXSOURCEA",
+    "37i9dQZF1DXSOURCEB"
+  ],
+  "dedupe": true,
+  "confirm": true
+}
+```
+
+Dedupe a playlist:
+
+```json
+{
+  "playlistId": "37i9dQZF1DX...",
   "confirm": true
 }
 ```
@@ -186,8 +213,11 @@ Run these once after setup to verify the local server against your real account:
 4. `spotify_search_tracks` with a simple query like `ODESZA`
 5. `spotify_add_playlist_items` with one returned track URI
 6. `spotify_replace_playlist_items` with two known track URIs and `confirm: true`
-7. `spotify_remove_playlist_items` with one URI and `confirm: true`
-8. `spotify_reorder_playlist_items` with `confirm: true`
-9. `spotify_clone_playlist` on a small source playlist
+7. `spotify_replace_playlist_items` with an empty `uris` array and `confirm: true` to verify playlist clear
+8. `spotify_merge_playlists` into a temporary target playlist with `confirm: true`
+9. `spotify_dedupe_playlist` on a playlist that contains a duplicate track
+10. `spotify_remove_playlist_items` with one URI and `confirm: true`
+11. `spotify_reorder_playlist_items` with `confirm: true`
+12. `spotify_clone_playlist` on a small source playlist
 
 If those pass, the personal local workflow is in good shape end to end.

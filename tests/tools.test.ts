@@ -97,4 +97,54 @@ describe("tool handlers", () => {
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("Invalid literal value");
   });
+
+  it("allows replacing a playlist with an empty list when confirm=true", async () => {
+    const replacePlaylistItems = vi.fn(async () => ({
+      playlist_id: "playlist",
+      snapshot_id: "snap",
+      replaced_count: 0
+    }));
+    const handlers = createToolHandlers({
+      replacePlaylistItems
+    } as never);
+
+    const result = await handlers.replacePlaylistItems({
+      playlistId: "playlist",
+      uris: [],
+      confirm: true
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(replacePlaylistItems).toHaveBeenCalledWith({
+      playlistId: "playlist",
+      uris: []
+    });
+  });
+
+  it("requires confirm=true when merging playlists", async () => {
+    const handlers = createToolHandlers({
+      mergePlaylists: vi.fn()
+    } as never);
+
+    const result = await handlers.mergePlaylists({
+      targetPlaylistId: "target",
+      sourcePlaylistIds: ["source-a"]
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("Invalid literal value");
+  });
+
+  it("requires confirm=true when deduping a playlist", async () => {
+    const handlers = createToolHandlers({
+      dedupePlaylist: vi.fn()
+    } as never);
+
+    const result = await handlers.dedupePlaylist({
+      playlistId: "playlist"
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("Invalid literal value");
+  });
 });

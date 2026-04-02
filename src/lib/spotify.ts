@@ -277,17 +277,12 @@ export class SpotifyClient {
 
     const chunks = chunkUris(input.uris, SPOTIFY_PLAYLIST_MUTATION_BATCH_LIMIT);
     const firstChunk = chunks[0];
-
-    if (!firstChunk) {
-      throw new SpotifyMcpError("Replace requires at least one track URI.", "playlist_replace_empty");
-    }
-
     const response = await this.requests.request<{ snapshot_id: string }>(
       `/playlists/${encodeURIComponent(input.playlistId)}/items`,
       {
         method: "PUT",
         body: JSON.stringify({
-          uris: firstChunk
+          uris: firstChunk ?? []
         })
       }
     );
@@ -307,6 +302,49 @@ export class SpotifyClient {
       snapshot_id: snapshotId,
       replaced_count: input.uris.length
     };
+  }
+
+  /**
+   * Merges one or more source playlists into a target playlist.
+   *
+   * The target's current contents stay first, then each source contributes its
+   * items in order. Optional dedupe removes later duplicates by URI.
+   */
+  async mergePlaylists(input: {
+    targetPlaylistId: string;
+    sourcePlaylistIds: string[];
+    dedupe?: boolean;
+  }): Promise<MutationResult> {
+    const mergedUris = await this.collectPlaylistUris(input.targetPlaylistId, {
+      localAction: "replace"
+    });
+
+    for (const sourcePlaylistId of input.sourcePlaylistIds) {
+      const sourceUris = await this.collectPlaylistUris(sourcePlaylistId, {
+        localAction: "replace"
+      });
+      mergedUris.push(...sourceUris);
+    }
+
+    return this.replacePlaylistItems({
+      playlistId: input.targetPlaylistId,
+      uris: input.dedupe ? dedupeUris(mergedUris) : mergedUris
+    });
+  }
+
+  /**
+   * Removes duplicate track URIs from a playlist while preserving the first
+   * occurrence of each URI.
+   */
+  async dedupePlaylist(input: { playlistId: string }): Promise<MutationResult> {
+    const uris = await this.collectPlaylistUris(input.playlistId, {
+      localAction: "replace"
+    });
+
+    return this.replacePlaylistItems({
+      playlistId: input.playlistId,
+      uris: dedupeUris(uris)
+    });
   }
 
   /**
@@ -450,15 +488,30 @@ export class SpotifyClient {
    * destination playlist when the source contains unsupported local-file items.
    */
   private async collectCloneablePlaylistUris(sourcePlaylistId: string): Promise<string[]> {
+    return this.collectPlaylistUris(sourcePlaylistId, {
+      localAction: "clone"
+    });
+  }
+
+  /**
+   * Reads the full URI list for a playlist so higher-level workflows can reuse
+   * one page traversal path.
+   */
+  private async collectPlaylistUris(
+    playlistId: string,
+    options: {
+      localAction: "clone" | "replace";
+    }
+  ): Promise<string[]> {
     const uris: string[] = [];
     let offset = 0;
     const limit = SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT;
 
     while (true) {
-      const page = await this.getPlaylistItems(sourcePlaylistId, limit, offset);
+      const page = await this.getPlaylistItems(playlistId, limit, offset);
       const pageUris = page.items.flatMap((item) => (item.track ? [item.track.uri] : []));
 
-      rejectLocalPlaylistUris(pageUris, "clone");
+      rejectLocalPlaylistUris(pageUris, options.localAction);
       uris.push(...pageUris);
 
       if (page.next_offset === null) {
@@ -522,4 +575,20 @@ export class SpotifyClient {
       );
     }
   }
+}
+
+function dedupeUris(uris: string[]): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const uri of uris) {
+    if (seen.has(uri)) {
+      continue;
+    }
+
+    seen.add(uri);
+    deduped.push(uri);
+  }
+
+  return deduped;
 }

@@ -274,6 +274,158 @@ describe("SpotifyClient", () => {
     });
   });
 
+  it("clears a playlist when replacing with an empty URI list", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc", tracksTotal: 3 })),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.uris).toEqual([]);
+        return jsonResponse({ snapshot_id: "snap-clear" });
+      }
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.replacePlaylistItems({
+      playlistId: "playlist",
+      uris: []
+    });
+
+    expect(result).toEqual({
+      playlist_id: "playlist",
+      snapshot_id: "snap-clear",
+      replaced_count: 0
+    });
+  });
+
+  it("merges source playlists into the target in order", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/target": () =>
+        jsonResponse(playlistResponse({ id: "target", ownerId: "me", description: "desc", tracksTotal: 2 })),
+      "GET https://api.spotify.com/v1/playlists/source-a": () =>
+        jsonResponse(playlistResponse({ id: "source-a", ownerId: "owner", description: "desc", tracksTotal: 2 })),
+      "GET https://api.spotify.com/v1/playlists/source-b": () =>
+        jsonResponse(playlistResponse({ id: "source-b", ownerId: "owner", description: "desc", tracksTotal: 1 })),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      [`GET https://api.spotify.com/v1/playlists/target/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
+        jsonResponse({
+          items: [
+            playlistItemResponse("spotify:track:1"),
+            playlistItemResponse("spotify:track:2")
+          ],
+          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+          offset: 0,
+          total: 2,
+          next: null
+        }),
+      [`GET https://api.spotify.com/v1/playlists/source-a/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
+        jsonResponse({
+          items: [
+            playlistItemResponse("spotify:track:3"),
+            playlistItemResponse("spotify:track:4")
+          ],
+          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+          offset: 0,
+          total: 2,
+          next: null
+        }),
+      [`GET https://api.spotify.com/v1/playlists/source-b/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
+        jsonResponse({
+          items: [playlistItemResponse("spotify:track:5")],
+          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+          offset: 0,
+          total: 1,
+          next: null
+        }),
+      "PUT https://api.spotify.com/v1/playlists/target/items": (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.uris).toEqual([
+          "spotify:track:1",
+          "spotify:track:2",
+          "spotify:track:3",
+          "spotify:track:4",
+          "spotify:track:5"
+        ]);
+        return jsonResponse({ snapshot_id: "snap-merge" });
+      }
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.mergePlaylists({
+      targetPlaylistId: "target",
+      sourcePlaylistIds: ["source-a", "source-b"]
+    });
+
+    expect(result).toEqual({
+      playlist_id: "target",
+      snapshot_id: "snap-merge",
+      replaced_count: 5
+    });
+  });
+
+  it("dedupes a playlist while preserving the first occurrence order", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc", tracksTotal: 4 })),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      [`GET https://api.spotify.com/v1/playlists/playlist/items?limit=${SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT}&offset=0`]: () =>
+        jsonResponse({
+          items: [
+            playlistItemResponse("spotify:track:1"),
+            playlistItemResponse("spotify:track:2"),
+            playlistItemResponse("spotify:track:1"),
+            playlistItemResponse("spotify:track:3")
+          ],
+          limit: SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT,
+          offset: 0,
+          total: 4,
+          next: null
+        }),
+      "PUT https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+        const body = JSON.parse(String(init?.body));
+        expect(body.uris).toEqual([
+          "spotify:track:1",
+          "spotify:track:2",
+          "spotify:track:3"
+        ]);
+        return jsonResponse({ snapshot_id: "snap-dedupe" });
+      }
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.dedupePlaylist({
+      playlistId: "playlist"
+    });
+
+    expect(result).toEqual({
+      playlist_id: "playlist",
+      snapshot_id: "snap-dedupe",
+      replaced_count: 3
+    });
+  });
+
   it("rejects metadata changes for collaborative playlists not owned by the current user", async () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({

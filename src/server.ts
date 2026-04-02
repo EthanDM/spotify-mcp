@@ -14,7 +14,9 @@ import {
   createPlaylistSchema,
   createPlaylistInputSchema,
   createToolHandlers,
+  dedupePlaylistSchema,
   listPlaylistsSchema,
+  mergePlaylistsSchema,
   playlistIdSchema,
   playlistItemsSchema,
   replacePlaylistItemsSchema,
@@ -123,6 +125,26 @@ server.registerTool(
     inputSchema: replacePlaylistItemsSchema.shape
   },
   handlers.replacePlaylistItems
+);
+
+server.registerTool(
+  "spotify_merge_playlists",
+  {
+    title: "Merge Spotify Playlists",
+    description: "Merges source playlists into a target playlist. Requires confirm=true.",
+    inputSchema: mergePlaylistsSchema.shape
+  },
+  handlers.mergePlaylists
+);
+
+server.registerTool(
+  "spotify_dedupe_playlist",
+  {
+    title: "Dedupe Spotify Playlist",
+    description: "Removes duplicate track URIs while preserving first occurrence order. Requires confirm=true.",
+    inputSchema: dedupePlaylistSchema.shape
+  },
+  handlers.dedupePlaylist
 );
 
 server.registerTool(

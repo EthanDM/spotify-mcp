@@ -87,7 +87,25 @@ export const addPlaylistItemsSchema = z.object({
  */
 export const replacePlaylistItemsSchema = z.object({
   playlistId: z.string().min(1),
-  uris: z.array(z.string().startsWith("spotify:")).min(1),
+  uris: z.array(z.string().startsWith("spotify:")),
+  confirm: z.literal(true)
+});
+
+/**
+ * Merge one or more source playlists into a target playlist, preserving order.
+ */
+export const mergePlaylistsSchema = z.object({
+  targetPlaylistId: z.string().min(1),
+  sourcePlaylistIds: z.array(z.string().min(1)).min(1),
+  dedupe: z.boolean().optional(),
+  confirm: z.literal(true)
+});
+
+/**
+ * Remove duplicate track URIs from a playlist while preserving first occurrence order.
+ */
+export const dedupePlaylistSchema = z.object({
+  playlistId: z.string().min(1),
   confirm: z.literal(true)
 });
 
@@ -176,6 +194,24 @@ export function createToolHandlers(spotify: SpotifyClient) {
         spotify.replacePlaylistItems({
           playlistId: input.playlistId,
           uris: input.uris
+        })
+      );
+    },
+
+    async mergePlaylists(args: unknown) {
+      return withParsedArgs(mergePlaylistsSchema, args, (input) =>
+        spotify.mergePlaylists({
+          targetPlaylistId: input.targetPlaylistId,
+          sourcePlaylistIds: input.sourcePlaylistIds,
+          dedupe: input.dedupe
+        })
+      );
+    },
+
+    async dedupePlaylist(args: unknown) {
+      return withParsedArgs(dedupePlaylistSchema, args, (input) =>
+        spotify.dedupePlaylist({
+          playlistId: input.playlistId
         })
       );
     },
