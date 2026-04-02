@@ -414,6 +414,16 @@ function buildPersonalizationContext(input: {
   preferences: PersonalizationPreferences;
   events: PersonalizationEvent[];
 }): string {
+  const eventStats = summarizeBehavior(input.events);
+  const snapshotCoverage = input.snapshot
+    ? calculateCoverageRatio(
+        input.snapshot.saved_tracks.items.length,
+        input.snapshot.saved_tracks.total_available
+      )
+    : null;
+  const inferredArtists = input.snapshot
+    ? inferArtists(input.snapshot, input.preferences)
+    : [];
   const lines = [
     "# Spotify Personalization Context",
     "",
@@ -428,7 +438,7 @@ function buildPersonalizationContext(input: {
       ? stablePreferences
       : ["- None recorded yet."])
   );
-  lines.push("", "## Library Snapshot");
+  lines.push("", "## Weighted Signals");
 
   if (!input.snapshot) {
     lines.push("- No Spotify-derived snapshot has been refreshed yet.");
@@ -441,20 +451,6 @@ function buildPersonalizationContext(input: {
       `- Owned playlists: ${input.snapshot.playlists.owned_count}. Followed playlists: ${input.snapshot.playlists.followed_count}.`,
       `- Followed artists captured: ${input.snapshot.followed_artists.items.length}${input.snapshot.followed_artists.has_more ? "+" : ""}.`
     );
-
-    const topTrackArtists = formatNamedCounts(
-      input.snapshot.saved_tracks.top_artists
-    );
-    if (topTrackArtists) {
-      lines.push(`- Top artists across saved tracks: ${topTrackArtists}.`);
-    }
-
-    const topAlbumArtists = formatNamedCounts(
-      input.snapshot.saved_albums.top_artists
-    );
-    if (topAlbumArtists) {
-      lines.push(`- Top artists across saved albums: ${topAlbumArtists}.`);
-    }
 
     const topGenres = formatNamedCounts(
       input.snapshot.followed_artists.top_genres
@@ -470,6 +466,28 @@ function buildPersonalizationContext(input: {
         )}%.`
       );
     }
+
+    if (snapshotCoverage !== null) {
+      lines.push(
+        `- Saved-track sample coverage: ${Math.round(snapshotCoverage * 100)}% of the total liked-song library.`
+      );
+
+      if (snapshotCoverage < 0.5) {
+        lines.push(
+          "- Treat saved-track artist frequencies as weak evidence until a larger refresh sample or stronger behavioral feedback exists."
+        );
+      }
+    }
+
+    if (inferredArtists.length > 0) {
+      lines.push(
+        `- Stronger inferred artist signals: ${formatWeightedSignals(inferredArtists)}.`
+      );
+    } else {
+      lines.push(
+        "- No strong inferred artist signals yet beyond explicit preferences and recent behavior."
+      );
+    }
   }
 
   lines.push("", "## Recent MCP Interaction Patterns");
@@ -480,8 +498,17 @@ function buildPersonalizationContext(input: {
       : ["- No recorded MCP interaction history yet."])
   );
 
+  lines.push("", "## Behavior-Derived Signals");
+  lines.push(
+    ...(eventStats.length > 0
+      ? eventStats
+      : [
+          "- Not enough repeated MCP behavior yet to infer stable workflow preferences."
+        ])
+  );
+
   lines.push("", "## Guidance For Future Agents");
-  lines.push(...buildGuidance(input));
+  lines.push(...buildGuidance(input, inferredArtists, snapshotCoverage));
 
   return lines.join("\n");
 }
@@ -544,11 +571,15 @@ function summarizeEvents(events: PersonalizationEvent[]): string[] {
     });
 }
 
-function buildGuidance(input: {
-  snapshot: PersonalizationSnapshot | null;
-  preferences: PersonalizationPreferences;
-  events: PersonalizationEvent[];
-}): string[] {
+function buildGuidance(
+  input: {
+    snapshot: PersonalizationSnapshot | null;
+    preferences: PersonalizationPreferences;
+    events: PersonalizationEvent[];
+  },
+  inferredArtists: WeightedSignal[],
+  snapshotCoverage: number | null
+): string[] {
   const lines: string[] = [];
 
   if (input.preferences.discovery_level) {
@@ -574,27 +605,146 @@ function buildGuidance(input: {
   }
 
   if (
-    input.snapshot &&
-    input.snapshot.saved_tracks.top_artists.length > 0 &&
+    inferredArtists.length > 0 &&
     input.preferences.preferred_artists.length === 0
   ) {
     lines.push(
-      `- Saved-track history suggests recurring affinity for ${input.snapshot.saved_tracks.top_artists
+      `- Use ${inferredArtists
         .slice(0, 3)
         .map((artist) => artist.name)
-        .join(", ")}.`
+        .join(
+          ", "
+        )} as optional seed artists, but keep them below explicit user feedback in priority.`
     );
   }
 
-  if (input.events.some((event) => event.type === "playlist_deduped")) {
+  if (countEventsOfType(input.events, "playlist_deduped") >= 2) {
     lines.push(
-      "- Recent usage suggests low tolerance for duplicates or repetitive sequencing."
+      "- Repeated dedupe behavior suggests low tolerance for duplicates or repetitive sequencing."
     );
   }
 
-  if (input.events.some((event) => event.type === "playlist_archived")) {
+  if (countEventsOfType(input.events, "playlist_items_removed") >= 2) {
+    lines.push(
+      "- Frequent remove actions suggest the user prefers iterative pruning after a first pass."
+    );
+  }
+
+  if (countEventsOfType(input.events, "playlist_archived") >= 1) {
     lines.push(
       "- Recent archive actions suggest stale playlists should not be extended blindly."
+    );
+  }
+
+  if (snapshotCoverage !== null && snapshotCoverage < 0.5) {
+    lines.push(
+      "- Because the liked-track snapshot is partial, prefer explicit feedback and observed MCP behavior over raw library artist counts."
+    );
+  }
+
+  return lines;
+}
+
+type WeightedSignal = {
+  name: string;
+  score: number;
+  reasons: string[];
+};
+
+function inferArtists(
+  snapshot: PersonalizationSnapshot,
+  preferences: PersonalizationPreferences
+): WeightedSignal[] {
+  const artistSignals = new Map<string, WeightedSignal>();
+  const trackCoverage = calculateCoverageRatio(
+    snapshot.saved_tracks.items.length,
+    snapshot.saved_tracks.total_available
+  );
+  const safeCoverage = clamp(trackCoverage, 0.15, 1);
+
+  for (const artist of preferences.preferred_artists) {
+    upsertSignal(artistSignals, artist, 100, "explicit preferred artist");
+  }
+
+  for (const artist of preferences.avoided_artists) {
+    upsertSignal(artistSignals, artist, -100, "explicit avoided artist");
+  }
+
+  for (const artist of snapshot.saved_tracks.top_artists) {
+    if (artist.count < 4) {
+      continue;
+    }
+
+    upsertSignal(
+      artistSignals,
+      artist.name,
+      artist.count * safeCoverage * 1.5,
+      `saved tracks (${artist.count})`
+    );
+  }
+
+  for (const artist of snapshot.saved_albums.top_artists) {
+    if (artist.count < 2) {
+      continue;
+    }
+
+    upsertSignal(
+      artistSignals,
+      artist.name,
+      artist.count * 1.25,
+      `saved albums (${artist.count})`
+    );
+  }
+
+  for (const artist of snapshot.followed_artists.items) {
+    upsertSignal(artistSignals, artist.name, 2, "followed artist");
+  }
+
+  return Array.from(artistSignals.values())
+    .filter((signal) => signal.score >= 4)
+    .sort(
+      (left, right) =>
+        right.score - left.score || left.name.localeCompare(right.name)
+    )
+    .slice(0, 5);
+}
+
+function summarizeBehavior(events: PersonalizationEvent[]): string[] {
+  const lines: string[] = [];
+  const dedupeCount = countEventsOfType(events, "playlist_deduped");
+  const removeCount = countEventsOfType(events, "playlist_items_removed");
+  const mergeCount = countEventsOfType(events, "playlist_merged");
+  const archiveCount = countEventsOfType(events, "playlist_archived");
+  const feedbackCount = countEventsOfType(
+    events,
+    "personalization_feedback_recorded"
+  );
+
+  if (feedbackCount > 0) {
+    lines.push(`- Explicit feedback events recorded: ${feedbackCount}.`);
+  }
+
+  if (dedupeCount > 0) {
+    lines.push(
+      `- Playlist dedupe actions: ${dedupeCount}${dedupeCount >= 2 ? " (strong repetition-avoidance signal)" : ""}.`
+    );
+  }
+
+  if (removeCount > 0) {
+    lines.push(
+      `- Playlist remove actions: ${removeCount}${removeCount >= 2 ? " (suggests iterative pruning)" : ""}.`
+    );
+  }
+
+  if (mergeCount > 0) {
+    lines.push(
+      `- Playlist merge actions: ${mergeCount}${mergeCount >= 2 ? " (user likely values recombining existing libraries)" : ""}.`
+    );
+  }
+
+  if (archiveCount > 0) {
+    lines.push(
+      `- Playlist archive actions: ${archiveCount}${archiveCount >= 1 ? " (stale playlists are not sacred)" : ""}.`
     );
   }
 
@@ -630,6 +780,12 @@ function formatNamedCounts(items: NamedCount[]): string | null {
     .join(", ");
 }
 
+function formatWeightedSignals(items: WeightedSignal[]): string {
+  return items
+    .map((item) => `${item.name} [${formatSignalStrength(item.score)}]`)
+    .join(", ");
+}
+
 function calculateExplicitRatio(tracks: TrackResult[]): number | null {
   if (tracks.length === 0) {
     return null;
@@ -637,6 +793,60 @@ function calculateExplicitRatio(tracks: TrackResult[]): number | null {
 
   const explicitCount = tracks.filter((track) => track.explicit).length;
   return explicitCount / tracks.length;
+}
+
+function calculateCoverageRatio(captured: number, total: number): number {
+  if (total <= 0) {
+    return captured > 0 ? 1 : 0;
+  }
+
+  return captured / total;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function upsertSignal(
+  signals: Map<string, WeightedSignal>,
+  name: string,
+  scoreDelta: number,
+  reason: string
+): void {
+  const existing = signals.get(name);
+
+  if (existing) {
+    existing.score += scoreDelta;
+    if (!existing.reasons.includes(reason)) {
+      existing.reasons.push(reason);
+    }
+    return;
+  }
+
+  signals.set(name, {
+    name,
+    score: scoreDelta,
+    reasons: [reason]
+  });
+}
+
+function formatSignalStrength(score: number): string {
+  if (score >= 20) {
+    return "strong";
+  }
+
+  if (score >= 8) {
+    return "medium";
+  }
+
+  return "light";
+}
+
+function countEventsOfType(
+  events: PersonalizationEvent[],
+  type: string
+): number {
+  return events.filter((event) => event.type === type).length;
 }
 
 function pushUnique(items: string[], value: string): void {

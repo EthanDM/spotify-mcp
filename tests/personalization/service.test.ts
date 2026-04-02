@@ -116,7 +116,9 @@ describe("PersonalizationService", () => {
     expect(result.playlist_count).toBe(1);
     expect(result.saved_track_count).toBe(2);
     expect(result.followed_artist_count).toBe(1);
-    expect(context).toContain("Artist A");
+    expect(context).toContain(
+      "No strong inferred artist signals yet beyond explicit preferences and recent behavior"
+    );
     expect(context).toContain("Saved-track explicit ratio");
   });
 
@@ -149,5 +151,80 @@ describe("PersonalizationService", () => {
     expect(state.preferences.discovery_level).toBe("medium");
     expect(state.context).toContain("Preferred artists: Artist A.");
     expect(state.interaction_event_count).toBe(2);
+  });
+
+  it("downweights partial library snapshots and prefers repeated behavior signals", async () => {
+    const store = new PersonalizationStore(
+      await mkdtemp(path.join(os.tmpdir(), "spotify-mcp-personalization-"))
+    );
+    const spotify = {
+      getMyProfile: vi.fn(async () => ({
+        id: "me",
+        display_name: "Ethan",
+        uri: "spotify:user:me",
+        product: "premium"
+      })),
+      listPlaylists: vi.fn(async () => ({
+        items: [],
+        limit: 1,
+        offset: 0,
+        total: 0,
+        next_offset: null
+      })),
+      getSavedTracks: vi.fn(async () => ({
+        items: Array.from({ length: 2 }, (_, index) => ({
+          added_at: `2026-04-02T00:00:0${index}.000Z`,
+          track: {
+            id: `track-${index}`,
+            uri: `spotify:track:${index}`,
+            name: `Track ${index}`,
+            artists: ["Artist A"],
+            album: "Album",
+            duration_ms: 1000,
+            explicit: false
+          }
+        })),
+        limit: 2,
+        offset: 0,
+        total: 100,
+        next_offset: null
+      })),
+      getSavedAlbums: vi.fn(async () => ({
+        items: [],
+        limit: 0,
+        offset: 0,
+        total: 0,
+        next_offset: null
+      })),
+      getFollowedArtists: vi.fn(async () => ({
+        items: [],
+        limit: 0,
+        next_after: null
+      }))
+    } as never;
+    const service = new PersonalizationService(spotify, store);
+
+    await service.refreshState({
+      playlistLimit: 10,
+      savedTracksLimit: 10,
+      savedAlbumsLimit: 10,
+      followedArtistsLimit: 10
+    });
+    await service.recordEvent("playlist_deduped", { playlistId: "a" });
+    await service.recordEvent("playlist_deduped", { playlistId: "b" });
+    await service.recordEvent("playlist_items_removed", {
+      playlistId: "a",
+      removedCount: 3
+    });
+    await service.recordEvent("playlist_items_removed", {
+      playlistId: "b",
+      removedCount: 2
+    });
+
+    const state = await service.getState({ recentEventLimit: 10 });
+
+    expect(state.context).toContain("weak evidence");
+    expect(state.context).toContain("Repeated dedupe behavior");
+    expect(state.context).toContain("iterative pruning");
   });
 });
