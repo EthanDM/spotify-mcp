@@ -108,6 +108,38 @@ describe("SpotifyClient", () => {
     );
   });
 
+  it("surfaces revoked refresh tokens as a re-authentication error", async () => {
+    const store = createTokenStore(
+      createTokens({
+        expiresAt: Date.now() - 1_000
+      })
+    );
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://accounts.spotify.com/api/token") {
+        return new Response(
+          JSON.stringify({
+            error: "invalid_grant",
+            error_description: "Refresh token revoked"
+          }),
+          {
+            status: 400,
+            headers: {
+              "content-type": "application/json"
+            }
+          }
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    await expect(client.getMyProfile()).rejects.toThrow(
+      "Run `pnpm auth` again"
+    );
+    expect(store.write).not.toHaveBeenCalled();
+  });
+
   it("retries after a 429 response", async () => {
     const store = createTokenStore();
     const fetchMock = vi

@@ -134,10 +134,34 @@ export class SpotifyRequestClient {
    * Refreshes and persists tokens so the next request path sees the same state.
    */
   private async refreshTokens(tokens: StoredTokens): Promise<StoredTokens> {
-    const refreshed = await this.oauthClient.refreshAccessToken(tokens);
-    await this.tokenStore.write(refreshed);
-    return refreshed;
+    try {
+      const refreshed = await this.oauthClient.refreshAccessToken(tokens);
+      await this.tokenStore.write(refreshed);
+      return refreshed;
+    } catch (error) {
+      if (isRevokedRefreshTokenError(error)) {
+        throw new SpotifyMcpError(
+          "Spotify refresh token is no longer valid. Run `pnpm auth` again to re-authenticate.",
+          "auth_refresh_token_revoked"
+        );
+      }
+
+      throw error;
+    }
   }
+}
+
+/**
+ * Spotify uses `invalid_grant` when a stored refresh token has been revoked or
+ * otherwise invalidated. Higher layers should surface that as a re-auth action,
+ * not as a raw OAuth transport failure.
+ */
+function isRevokedRefreshTokenError(error: unknown): boolean {
+  return (
+    error instanceof SpotifyApiError &&
+    error.status === 400 &&
+    error.message.toLowerCase().includes("invalid_grant")
+  );
 }
 
 /**
