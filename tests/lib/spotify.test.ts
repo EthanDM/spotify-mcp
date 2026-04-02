@@ -523,6 +523,42 @@ describe("SpotifyClient", () => {
     );
   });
 
+  it("sends current remove-item payloads using items arrays", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/playlists/playlist": () =>
+        jsonResponse(playlistResponse({ id: "playlist", ownerId: "me", description: "desc" })),
+      "GET https://api.spotify.com/v1/me": () =>
+        jsonResponse({
+          id: "me",
+          display_name: "Ethan",
+          uri: "spotify:user:me",
+          product: "premium"
+        }),
+      "DELETE https://api.spotify.com/v1/playlists/playlist/items": (_url, init) => {
+        expect(init?.body).toBe(
+          JSON.stringify({
+            items: [{ uri: "spotify:track:1" }],
+            snapshot_id: "playlist-snapshot"
+          })
+        );
+        return jsonResponse({ snapshot_id: "snap-remove" });
+      }
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.removePlaylistItems({
+      playlistId: "playlist",
+      uris: ["spotify:track:1"]
+    });
+
+    expect(result).toEqual({
+      playlist_id: "playlist",
+      snapshot_id: "snap-remove",
+      removed_count: 1
+    });
+  });
+
   it("fails clone before creating a playlist when source contains local files", async () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
@@ -712,7 +748,7 @@ function playlistResponse(input: {
 function playlistItemResponse(uri: string) {
   return {
     added_at: null,
-    track: {
+    item: {
       id: uri.split(":").at(-1),
       uri,
       name: `Track ${uri}`,
@@ -720,7 +756,8 @@ function playlistItemResponse(uri: string) {
       explicit: false,
       album: { name: "Album" },
       artists: [{ name: "Artist" }]
-    }
+    },
+    track: null
   };
 }
 

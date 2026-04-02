@@ -48,6 +48,7 @@ export type SpotifyTrackObject = {
 
 export type SpotifyPlaylistItemObject = {
   added_at: string | null;
+  item?: SpotifyTrackObject | null;
   track: SpotifyTrackObject | null;
 };
 

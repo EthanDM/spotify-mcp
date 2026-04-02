@@ -123,7 +123,7 @@ export class SpotifyClient {
     const items: PlaylistItem[] = page.items.map((item, index) => ({
       position: page.offset + index,
       added_at: item.added_at,
-      track: item.track ? normalizeTrack(item.track) : null
+      track: item.item ? normalizeTrack(item.item) : item.track ? normalizeTrack(item.track) : null
     }));
 
     return {
@@ -374,7 +374,7 @@ export class SpotifyClient {
           {
             method: "DELETE",
             body: JSON.stringify({
-              tracks: chunk.map((uri) => ({ uri })),
+              items: chunk.map((uri) => ({ uri })),
               snapshot_id: snapshotId
             })
           }
@@ -503,19 +503,70 @@ export class SpotifyClient {
       localAction: "clone" | "replace";
     }
   ): Promise<string[]> {
+    let lastAttempt: { uris: string[]; unresolvedCount: number; totalCount: number } | null = null;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const result = await this.readPlaylistUris(playlistId, options);
+      lastAttempt = result;
+
+      if (result.unresolvedCount === 0 || result.uris.length === result.totalCount) {
+        return result.uris;
+      }
+
+      await delay(500);
+    }
+
+    if (lastAttempt && lastAttempt.unresolvedCount > 0) {
+      throw new SpotifyMcpError(
+        "Spotify playlist items are not fully materialized yet. Retry in a moment.",
+        "playlist_items_not_ready"
+      );
+    }
+
+    return lastAttempt?.uris ?? [];
+  }
+
+  /**
+   * Reads one full playlist traversal and keeps track of rows whose track data
+   * has not materialized yet.
+   */
+  private async readPlaylistUris(
+    playlistId: string,
+    options: {
+      localAction: "clone" | "replace";
+    }
+  ): Promise<{
+    uris: string[];
+    unresolvedCount: number;
+    totalCount: number;
+  }> {
     const uris: string[] = [];
+    let unresolvedCount = 0;
+    let totalCount = 0;
     let offset = 0;
     const limit = SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT;
 
     while (true) {
       const page = await this.getPlaylistItems(playlistId, limit, offset);
-      const pageUris = page.items.flatMap((item) => (item.track ? [item.track.uri] : []));
+      totalCount = page.total;
+      const pageUris = page.items.flatMap((item) => {
+        if (!item.track?.uri) {
+          unresolvedCount += 1;
+          return [];
+        }
+
+        return [item.track.uri];
+      });
 
       rejectLocalPlaylistUris(pageUris, options.localAction);
       uris.push(...pageUris);
 
       if (page.next_offset === null) {
-        return uris;
+        return {
+          uris,
+          unresolvedCount,
+          totalCount
+        };
       }
 
       offset = page.next_offset;
@@ -591,4 +642,10 @@ function dedupeUris(uris: string[]): string[] {
   }
 
   return deduped;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
