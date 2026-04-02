@@ -9,10 +9,8 @@ import { SpotifyClient } from "./lib/spotify.js";
 import {
   addPlaylistItemsSchema,
   archivePlaylistSchema,
-  changePlaylistDetailsSchema,
   changePlaylistDetailsInputSchema,
   clonePlaylistSchema,
-  createPlaylistSchema,
   createPlaylistInputSchema,
   createToolHandlers,
   dedupePlaylistSchema,
