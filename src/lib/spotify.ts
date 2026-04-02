@@ -7,7 +7,8 @@ import type {
   PlaylistListResult,
   PlaylistSummary,
   SpotifyProfile,
-  TrackSearchResult
+  TrackSearchResult,
+  UnfollowPlaylistResult
 } from "../types.js";
 import { SpotifyRequestClient } from "./spotify-request-client.js";
 import {
@@ -213,6 +214,23 @@ export class SpotifyClient {
     });
 
     return this.getPlaylist(input.playlistId);
+  }
+
+  /**
+   * Removes a playlist from the current user's library.
+   *
+   * Spotify does not support true playlist deletion through the Web API. This
+   * endpoint only unfollows the playlist for the current user.
+   */
+  async unfollowPlaylist(playlistId: string): Promise<UnfollowPlaylistResult> {
+    await this.requests.requestEmpty(`/playlists/${encodeURIComponent(playlistId)}/followers`, {
+      method: "DELETE"
+    });
+
+    return {
+      playlist_id: playlistId,
+      unfollowed: true
+    };
   }
 
   /**

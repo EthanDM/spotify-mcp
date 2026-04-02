@@ -98,6 +98,17 @@ export type MutationResult = {
 };
 
 /**
+ * Result for removing a playlist from the current user's library.
+ *
+ * Spotify does not expose true playlist deletion in the Web API, so the
+ * closest supported behavior is unfollowing the playlist for the current user.
+ */
+export type UnfollowPlaylistResult = {
+  playlist_id: string;
+  unfollowed: true;
+};
+
+/**
  * Persisted OAuth token state shared by the auth CLI and runtime server.
  *
  * `expiresAt` is stored as epoch milliseconds so expiration checks do not need

@@ -235,6 +235,28 @@ describe("SpotifyClient", () => {
     );
   });
 
+  it("unfollows a playlist through Spotify's playlist followers endpoint", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "DELETE https://api.spotify.com/v1/playlists/playlist/followers": () =>
+        new Response(null, { status: 200 })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const result = await client.unfollowPlaylist("playlist");
+
+    expect(result).toEqual({
+      playlist_id: "playlist",
+      unfollowed: true
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.spotify.com/v1/playlists/playlist/followers",
+      expect.objectContaining({
+        method: "DELETE"
+      })
+    );
+  });
+
   it("replaces playlist items exactly and appends overflow batches in order", async () => {
     const store = createTokenStore();
     const uris = Array.from({ length: 101 }, (_, index) => `spotify:track:${index}`);

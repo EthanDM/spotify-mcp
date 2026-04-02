@@ -20,6 +20,7 @@ import {
   playlistIdSchema,
   playlistItemsSchema,
   replacePlaylistItemsSchema,
+  unfollowPlaylistSchema,
   removePlaylistItemsSchema,
   reorderPlaylistItemsSchema,
   searchTracksSchema
@@ -105,6 +106,16 @@ server.registerTool(
     inputSchema: changePlaylistDetailsInputSchema
   },
   handlers.changePlaylistDetails
+);
+
+server.registerTool(
+  "spotify_unfollow_playlist",
+  {
+    title: "Unfollow Spotify Playlist",
+    description: "Removes a playlist from the current user's library. Requires confirm=true.",
+    inputSchema: unfollowPlaylistSchema.shape
+  },
+  handlers.unfollowPlaylist
 );
 
 server.registerTool(

@@ -140,6 +140,15 @@ export const clonePlaylistSchema = z.object({
   public: z.boolean().optional()
 });
 
+/**
+ * Destructive playlist-library removal input. This unfollows the playlist for
+ * the current user; it does not delete the playlist itself.
+ */
+export const unfollowPlaylistSchema = z.object({
+  playlistId: z.string().min(1),
+  confirm: z.literal(true)
+});
+
 export const createPlaylistInputSchema = createPlaylistFields;
 export const changePlaylistDetailsInputSchema = changePlaylistDetailsFields;
 
@@ -182,6 +191,12 @@ export function createToolHandlers(spotify: SpotifyClient) {
     async changePlaylistDetails(args: unknown) {
       return withParsedArgs(changePlaylistDetailsSchema, args, (input) =>
         spotify.changePlaylistDetails(input)
+      );
+    },
+
+    async unfollowPlaylist(args: unknown) {
+      return withParsedArgs(unfollowPlaylistSchema, args, (input) =>
+        spotify.unfollowPlaylist(input.playlistId)
       );
     },
 

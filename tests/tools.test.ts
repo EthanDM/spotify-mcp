@@ -13,7 +13,10 @@ describe("tool handlers", () => {
       searchTracks: vi.fn(),
       createPlaylist: vi.fn(),
       changePlaylistDetails: vi.fn(),
+      unfollowPlaylist: vi.fn(),
       addPlaylistItems: vi.fn(),
+      mergePlaylists: vi.fn(),
+      dedupePlaylist: vi.fn(),
       replacePlaylistItems: vi.fn(),
       removePlaylistItems: vi.fn(),
       reorderPlaylistItems: vi.fn(),
@@ -96,6 +99,37 @@ describe("tool handlers", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("Invalid literal value");
+  });
+
+  it("requires confirm=true when unfollowing a playlist", async () => {
+    const handlers = createToolHandlers({
+      unfollowPlaylist: vi.fn()
+    } as never);
+
+    const result = await handlers.unfollowPlaylist({
+      playlistId: "playlist"
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("Invalid literal value");
+  });
+
+  it("calls unfollow with the playlist id when confirm=true", async () => {
+    const unfollowPlaylist = vi.fn(async () => ({
+      playlist_id: "playlist",
+      unfollowed: true as const
+    }));
+    const handlers = createToolHandlers({
+      unfollowPlaylist
+    } as never);
+
+    const result = await handlers.unfollowPlaylist({
+      playlistId: "playlist",
+      confirm: true
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(unfollowPlaylist).toHaveBeenCalledWith("playlist");
   });
 
   it("allows replacing a playlist with an empty list when confirm=true", async () => {
