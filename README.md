@@ -2,40 +2,11 @@
 
 Local Spotify MCP server for Codex focused on personal playlist management.
 
-## Happy Path
-
-1. Create a Spotify app in the developer dashboard.
-2. Add `http://127.0.0.1:8787/callback` as an allowed redirect URI.
-3. Copy `.env.example` to `.env` and set `SPOTIFY_CLIENT_ID`.
-4. Install dependencies:
-
-```bash
-pnpm install
-```
-
-5. Authenticate once:
-
-```bash
-pnpm auth
-```
-
-6. Configure Codex to run the server locally:
-
-```toml
-[mcp_servers.spotify]
-command = "pnpm"
-args = ["--dir", "/Users/ethanmillstein/GitHub/spotify-mcp", "dev"]
-```
-
-7. Run a live smoke pass against your Spotify account:
-
-```bash
-pnpm smoke
-```
+This project wraps Spotify's Web API in a small MCP tool surface for managing playlists from Codex. It is designed for local, authenticated use on a single Spotify account.
 
 ## What It Does
 
-The server exposes a small playlist-oriented tool surface:
+The server exposes these tools:
 
 - `spotify_get_my_profile`
 - `spotify_list_playlists`
@@ -54,15 +25,49 @@ The server exposes a small playlist-oriented tool surface:
 - `spotify_reorder_playlist_items`
 - `spotify_clone_playlist`
 
-## Setup
+## What It Does Not Do
 
-Requirements:
+- It does not support true playlist deletion. Spotify's Web API does not expose a delete-playlist endpoint.
+- It does not support local-file playlist items for clone, replace, or URI-based remove flows.
+- It is not intended to be a hosted multi-user service in its current form.
+
+## Requirements
 
 - Node.js 22+
 - `pnpm`
-- Spotify app credentials
+- A Spotify app in the Spotify Developer Dashboard
 
-Auth uses PKCE and requests:
+## Quick Start
+
+1. Create a Spotify app in the Spotify Developer Dashboard.
+2. Add `http://127.0.0.1:8787/callback` as an allowed redirect URI.
+3. Copy `.env.example` to `.env`.
+4. Set `SPOTIFY_CLIENT_ID` in `.env`.
+5. Install dependencies:
+
+```bash
+pnpm install
+```
+
+6. Authenticate once:
+
+```bash
+pnpm auth
+```
+
+7. Build the server:
+
+```bash
+pnpm build
+```
+
+8. Point Codex at the built server.
+
+Most users should use the built server path above. Use `pnpm dev` only when actively developing on this repository.
+
+## Spotify App Setup
+
+This project uses PKCE and requests these scopes:
 
 - `playlist-read-private`
 - `playlist-read-collaborative`
@@ -77,31 +82,47 @@ The auth command:
 - exchanges the returned code for tokens
 - stores tokens in `~/.config/spotify-mcp/auth.json`
 
-Copy the printed URL into your browser to complete the login.
+Copy the printed URL into your browser to complete login.
 
 ## Running
 
-For local iteration:
+### Stable built-server setup
 
-```bash
-pnpm dev
-```
-
-This runs `tsx watch src/server.ts`, so source edits hot reload automatically.
-
-For a built server:
+Recommended for normal use:
 
 ```bash
 pnpm build
 pnpm start
 ```
 
-Stable built-server Codex config:
+`dist/` is build output. Do not assume a fresh clone already has the right compiled files. Run `pnpm build` after cloning and whenever source changes need to be picked up by the built server.
+
+Example Codex config:
 
 ```toml
 [mcp_servers.spotify]
 command = "node"
-args = ["--env-file=/Users/ethanmillstein/GitHub/spotify-mcp/.env", "/Users/ethanmillstein/GitHub/spotify-mcp/dist/server.js"]
+args = ["--env-file=/absolute/path/to/spotify-mcp/.env", "/absolute/path/to/spotify-mcp/dist/server.js"]
+```
+
+Replace `/absolute/path/to/spotify-mcp` with your local clone path.
+
+### Contributor setup
+
+Useful only when editing this repo:
+
+```bash
+pnpm dev
+```
+
+This runs `tsx watch src/server.ts` so source edits hot reload automatically.
+
+Example Codex config for contributor mode:
+
+```toml
+[mcp_servers.spotify]
+command = "pnpm"
+args = ["--dir", "/absolute/path/to/spotify-mcp", "dev"]
 ```
 
 ## Tool Notes
@@ -112,7 +133,6 @@ args = ["--env-file=/Users/ethanmillstein/GitHub/spotify-mcp/.env", "/Users/etha
 - `spotify_replace_playlist_items`, `spotify_remove_playlist_items`, `spotify_reorder_playlist_items`, `spotify_merge_playlists`, `spotify_dedupe_playlist`, `spotify_unfollow_playlist`, and `spotify_archive_playlist` require `confirm: true`.
 - Remove and reorder fetch the latest playlist snapshot before mutating.
 - Clone copies items in batches and creates the destination playlist as private unless you explicitly opt into `public: true`.
-- Spotify does not expose true playlist deletion in the Web API.
 
 ## Example Calls
 
@@ -120,8 +140,8 @@ Create a playlist:
 
 ```json
 {
-  "name": "Scottsdale Run",
-  "description": "Mid-tempo spring running playlist"
+  "name": "Morning Focus",
+  "description": "Low-distraction electronic and ambient tracks"
 }
 ```
 
@@ -176,6 +196,7 @@ Merge playlists into a target:
 Local verification:
 
 ```bash
+pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
