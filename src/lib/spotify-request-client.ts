@@ -4,7 +4,7 @@ import {
   getSpotifyRedirectUri
 } from "../config.js";
 import { SpotifyOAuthClient } from "../auth/oauth.js";
-import { TokenStore } from "../auth/token-store.js";
+import type { TokenStoreLike } from "../auth/token-store.js";
 import { SpotifyApiError, SpotifyMcpError } from "../errors.js";
 import type { StoredTokens } from "../types.js";
 import type { FetchLike } from "./spotify-shared.js";
@@ -19,7 +19,7 @@ export class SpotifyRequestClient {
   private readonly oauthClient: SpotifyOAuthClient;
 
   constructor(
-    private readonly tokenStore: TokenStore,
+    private readonly tokenStore: TokenStoreLike,
     private readonly fetchImpl: FetchLike = fetch
   ) {
     this.oauthClient = new SpotifyOAuthClient(

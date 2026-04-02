@@ -3,11 +3,16 @@ import path from "node:path";
 
 import type { StoredTokens } from "../types.js";
 
+export type TokenStoreLike = {
+  read(): Promise<StoredTokens | null>;
+  write(tokens: StoredTokens): Promise<void>;
+};
+
 /**
  * Persists Spotify tokens with restrictive permissions so the MCP server and
  * auth CLI can share a single user-scoped credential cache.
  */
-export class TokenStore {
+export class TokenStore implements TokenStoreLike {
   /**
    * The store is path-based so tests can redirect persistence without mocking
    * the filesystem API itself.

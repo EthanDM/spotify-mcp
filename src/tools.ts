@@ -302,6 +302,7 @@ async function withParsedArgs<TSchema extends z.ZodTypeAny, TResult>(
  */
 function toolSuccess(result: unknown) {
   const response: {
+    isError?: false;
     content: Array<{ type: "text"; text: string }>;
     structuredContent?: Record<string, unknown>;
   } = {

@@ -1,5 +1,5 @@
 import { SpotifyMcpError } from "../errors.js";
-import { TokenStore } from "../auth/token-store.js";
+import type { TokenStoreLike } from "../auth/token-store.js";
 import type {
   ArchivePlaylistResult,
   MutationResult,
@@ -42,7 +42,7 @@ export class SpotifyClient {
    * `fetchImpl` stays injectable so request behavior can be verified without
    * live Spotify calls.
    */
-  constructor(tokenStore: TokenStore, fetchImpl: FetchLike = fetch) {
+  constructor(tokenStore: TokenStoreLike, fetchImpl: FetchLike = fetch) {
     this.requests = new SpotifyRequestClient(tokenStore, fetchImpl);
   }
 
