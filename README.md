@@ -203,6 +203,23 @@ Run:
 pnpm test
 ```
 
+## Smoke Test
+
+Run:
+
+```bash
+pnpm smoke
+```
+
+This command uses your real authenticated Spotify account and will:
+
+- list a few of your playlists
+- create temporary private playlists
+- exercise create, change-details, add, replace, clear, dedupe, merge, reorder, remove, and clone
+- print the created playlist IDs so you can clean them up manually afterward
+
+It is intentionally a live-account regression check, not a CI test.
+
 ## Smoke Checklist
 
 Run these once after setup to verify the local server against your real account:
