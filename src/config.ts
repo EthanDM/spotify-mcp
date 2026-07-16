@@ -60,3 +60,33 @@ export function getTokenFilePath(): string {
 export function getPersonalizationDirectoryPath(): string {
   return path.join(homedir(), ".config", "spotify-mcp", "personalization");
 }
+
+/**
+ * Returns the directory used for saved friend/family listener profiles.
+ *
+ * These profiles are separate from the authenticated account's own Spotify
+ * personalization because they describe other people, not the current user.
+ */
+export function getPeopleDirectoryPath(): string {
+  return path.join(homedir(), ".config", "spotify-mcp", "people");
+}
+
+/**
+ * Returns the directory used for generated user-specific artifacts.
+ *
+ * Playlist writeups and similar outputs are useful to keep around, but they are
+ * runtime artifacts for one account, not source-controlled project files.
+ */
+export function getArtifactsDirectoryPath(): string {
+  return path.join(homedir(), ".config", "spotify-mcp", "artifacts");
+}
+
+/**
+ * Returns the recommended artifact directory for one saved listener profile.
+ *
+ * Profile artifacts stay outside canonical structured state so future agents
+ * can preserve writeups and review notes without turning them into source data.
+ */
+export function getPersonArtifactsDirectoryPath(profileId: string): string {
+  return path.join(getArtifactsDirectoryPath(), "people", profileId);
+}

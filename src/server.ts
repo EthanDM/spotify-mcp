@@ -4,8 +4,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { TokenStore } from "./auth/token-store.js";
-import { getPersonalizationDirectoryPath, getTokenFilePath } from "./config.js";
+import {
+  getPeopleDirectoryPath,
+  getPersonalizationDirectoryPath,
+  getTokenFilePath
+} from "./config.js";
 import { SpotifyClient } from "./lib/spotify.js";
+import { PeopleProfileService } from "./people/service.js";
+import { PeopleStore } from "./people/store.js";
 import { PersonalizationService } from "./personalization/service.js";
 import { PersonalizationStore } from "./personalization/store.js";
 import {
@@ -13,21 +19,28 @@ import {
   archivePlaylistSchema,
   changePlaylistDetailsInputSchema,
   clonePlaylistSchema,
+  createPersonProfileInputSchema,
   createPlaylistInputSchema,
   createToolHandlers,
   dedupePlaylistSchema,
   getPersonalizationStateSchema,
+  listPersonProfilesSchema,
   listPlaylistsSchema,
   mergePlaylistsSchema,
+  personProfileIdSchema,
   playlistIdSchema,
   playlistItemsSchema,
+  recordPersonFeedbackInputSchema,
+  recordPersonPlaylistInputSchema,
   recordPersonalizationFeedbackInputSchema,
+  recordPlaylistEvaluationInputSchema,
   refreshPersonalizationStateSchema,
   replacePlaylistItemsSchema,
   unfollowPlaylistSchema,
   removePlaylistItemsSchema,
   reorderPlaylistItemsSchema,
-  searchTracksSchema
+  searchTracksSchema,
+  updatePersonProfileInputSchema
 } from "./tools.js";
 
 /**
@@ -44,7 +57,10 @@ const personalization = new PersonalizationService(
   spotify,
   new PersonalizationStore(getPersonalizationDirectoryPath())
 );
-const handlers = createToolHandlers(spotify, personalization);
+const people = new PeopleProfileService(
+  new PeopleStore(getPeopleDirectoryPath())
+);
+const handlers = createToolHandlers(spotify, personalization, people);
 
 server.registerTool(
   "spotify_get_my_profile",
@@ -257,6 +273,94 @@ server.registerTool(
     inputSchema: recordPersonalizationFeedbackInputSchema
   },
   handlers.recordPersonalizationFeedback
+);
+
+server.registerTool(
+  "spotify_record_playlist_evaluation",
+  {
+    title: "Record Spotify Playlist Evaluation",
+    description:
+      "Records a structured evaluation of a specific playlist for a specific use case.",
+    inputSchema: recordPlaylistEvaluationInputSchema
+  },
+  handlers.recordPlaylistEvaluation
+);
+
+server.registerTool(
+  "spotify_create_person_profile",
+  {
+    title: "Create Spotify Person Profile",
+    description:
+      "Creates a saved friend or family listener profile for future playlist work.",
+    inputSchema: createPersonProfileInputSchema
+  },
+  handlers.createPersonProfile
+);
+
+server.registerTool(
+  "spotify_update_person_profile",
+  {
+    title: "Update Spotify Person Profile",
+    description:
+      "Updates one saved friend or family listener profile while preserving omitted fields.",
+    inputSchema: updatePersonProfileInputSchema
+  },
+  handlers.updatePersonProfile
+);
+
+server.registerTool(
+  "spotify_list_person_profiles",
+  {
+    title: "List Spotify Person Profiles",
+    description:
+      "Lists the saved friend and family listener profiles available for playlist workflows.",
+    inputSchema: listPersonProfilesSchema.shape
+  },
+  handlers.listPersonProfiles
+);
+
+server.registerTool(
+  "spotify_get_person_profile",
+  {
+    title: "Get Spotify Person Profile",
+    description:
+      "Returns one saved friend or family listener profile plus its local state paths.",
+    inputSchema: personProfileIdSchema.shape
+  },
+  handlers.getPersonProfile
+);
+
+server.registerTool(
+  "spotify_get_person_profile_context",
+  {
+    title: "Get Spotify Person Profile Context",
+    description:
+      "Returns the compact generated summary for one saved friend or family listener profile.",
+    inputSchema: personProfileIdSchema.shape
+  },
+  handlers.getPersonProfileContext
+);
+
+server.registerTool(
+  "spotify_record_person_playlist",
+  {
+    title: "Record Spotify Person Playlist",
+    description:
+      "Records a playlist and its outcome against a saved friend or family listener profile.",
+    inputSchema: recordPersonPlaylistInputSchema
+  },
+  handlers.recordPersonPlaylist
+);
+
+server.registerTool(
+  "spotify_record_person_feedback",
+  {
+    title: "Record Spotify Person Feedback",
+    description:
+      "Records one durable taste or context learning for a saved friend or family listener profile.",
+    inputSchema: recordPersonFeedbackInputSchema
+  },
+  handlers.recordPersonFeedback
 );
 
 const transport = new StdioServerTransport();

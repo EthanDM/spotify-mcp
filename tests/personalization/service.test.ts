@@ -153,6 +153,82 @@ describe("PersonalizationService", () => {
     expect(state.interaction_event_count).toBe(2);
   });
 
+  it("persists scoped use-case learnings into preferences and context", async () => {
+    const store = new PersonalizationStore(
+      await mkdtemp(path.join(os.tmpdir(), "spotify-mcp-personalization-"))
+    );
+    const spotify = {
+      getMyProfile: vi.fn(),
+      listPlaylists: vi.fn(),
+      getSavedTracks: vi.fn(),
+      getSavedAlbums: vi.fn(),
+      getFollowedArtists: vi.fn()
+    } as never;
+    const service = new PersonalizationService(spotify, store);
+
+    await service.recordFeedback({
+      kind: "trait",
+      sentiment: "prefer",
+      value: "steady instrumental electronic",
+      use_case: "focused work"
+    });
+    await service.recordFeedback({
+      kind: "trait",
+      sentiment: "avoid",
+      value: "abrupt vocals",
+      use_case: "focused work"
+    });
+    await service.recordFeedback({
+      kind: "note",
+      value: "Prefer a broad draft followed by a focused trim",
+      use_case: "focused work"
+    });
+    await service.recordFeedback({
+      kind: "playback_mode",
+      playback_mode: "shuffle",
+      use_case: "focused work"
+    });
+    await service.recordFeedback({
+      kind: "ideal_track_count_range",
+      min_count: 55,
+      max_count: 65,
+      use_case: "focused work"
+    });
+    await service.recordPlaylistEvaluation({
+      playlistId: "playlist-1",
+      use_case: "focused work",
+      verdict: "default",
+      score: 9.2,
+      winning_traits: ["steady instrumental electronic", "consistent tempo"],
+      losing_traits: ["abrupt vocals"],
+      workflow_learning:
+        "A broad draft followed by a focused trim improves consistency"
+    });
+
+    const state = await service.getState({ recentEventLimit: 10 });
+    const useCase = state.preferences.use_cases["focused work"];
+
+    expect(useCase?.preferred_traits).toEqual([
+      "steady instrumental electronic"
+    ]);
+    expect(useCase?.avoided_traits).toEqual(["abrupt vocals"]);
+    expect(useCase?.notes).toEqual([
+      "Prefer a broad draft followed by a focused trim"
+    ]);
+    expect(useCase?.playback_mode).toBe("shuffle");
+    expect(useCase?.ideal_track_count_range).toEqual({
+      min: 55,
+      max: 65
+    });
+    expect(state.context).toContain("## Use-Case Preferences");
+    expect(state.context).toContain("focused work");
+    expect(state.context).toContain("steady instrumental electronic");
+    expect(state.context).toContain("abrupt vocals");
+    expect(state.context).toContain("playback=shuffle");
+    expect(state.context).toContain("track_count=55-65");
+    expect(state.context).toContain("Playlist evaluations recorded: 1.");
+  });
+
   it("downweights partial library snapshots and prefers repeated behavior signals", async () => {
     const store = new PersonalizationStore(
       await mkdtemp(path.join(os.tmpdir(), "spotify-mcp-personalization-"))

@@ -66,6 +66,8 @@ The smoke test uses a real Spotify account and creates temporary playlists. Clea
 - Prefer small, direct changes over new abstraction layers.
 - Keep the public MCP surface narrow unless there is a clear real-world need.
 - Reuse existing playlist primitives when adding higher-level workflows.
+- Keep generated user artifacts out of the repo. Store them under `~/.config/spotify-mcp/artifacts/` unless they are intentional docs or fixtures.
+- Keep friend/family listener profiles separate from account personalization state. Canonical profile data belongs under `~/.config/spotify-mcp/people/`, while optional writeups still belong under `~/.config/spotify-mcp/artifacts/people/`.
 - Update tests alongside behavior changes.
 - If Spotify behavior changes, prefer adjusting normalization and request handling over spreading special cases through call sites.
 

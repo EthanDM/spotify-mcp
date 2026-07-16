@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { formatErrorMessage } from "./errors.js";
 import type { SpotifyClient } from "./lib/spotify.js";
+import type { PeopleProfileService } from "./people/service.js";
 import { SPOTIFY_PLAYLIST_ITEMS_PAGE_LIMIT } from "./lib/spotify-shared.js";
 import type { PersonalizationService } from "./personalization/service.js";
 
@@ -184,28 +185,58 @@ export const getPersonalizationStateSchema = z.object({
  * Explicit taste feedback that should survive future Spotify refreshes.
  */
 const recordPersonalizationFeedbackFields = {
-  kind: z.enum(["artist", "genre", "note", "discovery_level"]),
+  kind: z.enum([
+    "artist",
+    "genre",
+    "trait",
+    "note",
+    "discovery_level",
+    "playback_mode",
+    "ideal_track_count_range"
+  ]),
   sentiment: z.enum(["prefer", "avoid"]).optional(),
-  value: z.string().min(1),
-  context: z.string().optional()
+  value: z.string().min(1).optional(),
+  context: z.string().optional(),
+  use_case: z.string().min(1).optional(),
+  playback_mode: z.enum(["shuffle", "ordered", "either"]).optional(),
+  min_count: z.number().int().min(1).optional(),
+  max_count: z.number().int().min(1).optional()
 };
 
 export const recordPersonalizationFeedbackSchema = z
   .object(recordPersonalizationFeedbackFields)
   .superRefine((input, refinement) => {
     if (
-      (input.kind === "artist" || input.kind === "genre") &&
+      (input.kind === "artist" ||
+        input.kind === "genre" ||
+        input.kind === "trait") &&
       !input.sentiment
     ) {
       refinement.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Artist and genre feedback require a sentiment.",
+        message: "Artist, genre, and trait feedback require a sentiment.",
         path: ["sentiment"]
       });
     }
 
     if (
+      (input.kind === "artist" ||
+        input.kind === "genre" ||
+        input.kind === "trait" ||
+        input.kind === "note" ||
+        input.kind === "discovery_level") &&
+      !input.value
+    ) {
+      refinement.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "This feedback kind requires a value.",
+        path: ["value"]
+      });
+    }
+
+    if (
       input.kind === "discovery_level" &&
+      input.value &&
       !["low", "medium", "high"].includes(input.value)
     ) {
       refinement.addIssue({
@@ -214,12 +245,200 @@ export const recordPersonalizationFeedbackSchema = z
         path: ["value"]
       });
     }
+
+    if (input.kind === "playback_mode") {
+      if (!input.use_case) {
+        refinement.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Playback mode feedback requires a use_case.",
+          path: ["use_case"]
+        });
+      }
+
+      if (!input.playback_mode) {
+        refinement.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Playback mode feedback requires playback_mode.",
+          path: ["playback_mode"]
+        });
+      }
+    }
+
+    if (input.kind === "ideal_track_count_range") {
+      if (!input.use_case) {
+        refinement.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Ideal track count range feedback requires a use_case.",
+          path: ["use_case"]
+        });
+      }
+
+      if (
+        typeof input.min_count !== "number" ||
+        typeof input.max_count !== "number"
+      ) {
+        refinement.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Ideal track count range feedback requires min_count and max_count.",
+          path: ["min_count"]
+        });
+      } else if (input.min_count > input.max_count) {
+        refinement.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "min_count must be less than or equal to max_count.",
+          path: ["min_count"]
+        });
+      }
+    }
+  });
+
+export const recordPlaylistEvaluationSchema = z.object({
+  playlistId: z.string().min(1),
+  use_case: z.string().min(1),
+  verdict: z.enum(["default", "secondary", "reject"]),
+  score: z.number().min(0).max(10).optional(),
+  winning_traits: z.array(z.string().min(1)).min(1),
+  losing_traits: z.array(z.string().min(1)).optional(),
+  workflow_learning: z.string().min(1).optional()
+});
+
+/**
+ * Minimal manual-context-first reference used on saved people profiles.
+ */
+const personTasteReferenceSchema = z.object({
+  name: z.string().min(1),
+  spotify_id: z.string().min(1).optional(),
+  spotify_uri: z.string().min(1).optional(),
+  url: z.string().min(1).optional(),
+  note: z.string().min(1).optional()
+});
+
+/**
+ * Shared fields used for creating and updating saved people profiles.
+ */
+const personProfileFields = {
+  name: z.string().min(1).optional(),
+  relationship: z.string().min(1).optional(),
+  age: z.number().int().min(0).optional(),
+  age_range: z.string().min(1).optional(),
+  life_context: z.array(z.string().min(1)).optional(),
+  preferred_artists: z.array(z.string().min(1)).optional(),
+  avoided_artists: z.array(z.string().min(1)).optional(),
+  preferred_genres: z.array(z.string().min(1)).optional(),
+  avoided_genres: z.array(z.string().min(1)).optional(),
+  preferred_traits: z.array(z.string().min(1)).optional(),
+  avoided_traits: z.array(z.string().min(1)).optional(),
+  reference_playlists: z.array(personTasteReferenceSchema).optional(),
+  reference_tracks: z.array(personTasteReferenceSchema).optional(),
+  reference_artists: z.array(personTasteReferenceSchema).optional(),
+  playlist_goals: z.array(z.string().min(1)).optional(),
+  notes: z.array(z.string().min(1)).optional()
+};
+
+/**
+ * Creates one durable friend/family playlist profile.
+ */
+export const createPersonProfileSchema = z.object({
+  ...personProfileFields,
+  name: z.string().min(1)
+});
+
+/**
+ * Updates one saved people profile while preserving omitted fields.
+ */
+export const updatePersonProfileSchema = z.object({
+  profileId: z.string().min(1),
+  ...personProfileFields
+});
+
+/**
+ * Lists all saved people profiles.
+ */
+export const listPersonProfilesSchema = z.object({});
+
+/**
+ * Reads one saved people profile.
+ */
+export const personProfileIdSchema = z.object({
+  profileId: z.string().min(1)
+});
+
+/**
+ * Records one playlist outcome against a saved people profile.
+ */
+export const recordPersonPlaylistSchema = z.object({
+  profileId: z.string().min(1),
+  playlist_id: z.string().min(1).optional(),
+  playlist_name: z.string().min(1),
+  playlist_url: z.string().min(1).optional(),
+  brief: z.string().min(1).optional(),
+  use_case: z.string().min(1).optional(),
+  track_count: z.number().int().min(1).optional(),
+  runtime_minutes: z.number().int().min(1).optional(),
+  score: z.number().min(0).max(10).optional(),
+  verdict: z.enum(["success", "mixed", "reject"]).optional(),
+  winning_traits: z.array(z.string().min(1)).optional(),
+  losing_traits: z.array(z.string().min(1)).optional(),
+  workflow_learning: z.string().min(1).optional(),
+  artifact_paths: z.array(z.string().min(1)).optional(),
+  notes: z.array(z.string().min(1)).optional()
+});
+
+/**
+ * Records one small durable learning for a saved people profile.
+ */
+export const recordPersonFeedbackSchema = z
+  .object({
+    profileId: z.string().min(1),
+    kind: z.enum([
+      "artist",
+      "genre",
+      "trait",
+      "note",
+      "life_context",
+      "playlist_goal"
+    ]),
+    sentiment: z.enum(["prefer", "avoid"]).optional(),
+    value: z.string().min(1)
+  })
+  .superRefine((input, refinement) => {
+    if (
+      (input.kind === "artist" ||
+        input.kind === "genre" ||
+        input.kind === "trait") &&
+      !input.sentiment
+    ) {
+      refinement.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Artist, genre, and trait feedback require a sentiment.",
+        path: ["sentiment"]
+      });
+    }
   });
 
 export const createPlaylistInputSchema = createPlaylistFields;
 export const changePlaylistDetailsInputSchema = changePlaylistDetailsFields;
 export const recordPersonalizationFeedbackInputSchema =
   recordPersonalizationFeedbackFields;
+export const recordPlaylistEvaluationInputSchema =
+  recordPlaylistEvaluationSchema.shape;
+export const createPersonProfileInputSchema = createPersonProfileSchema.shape;
+export const updatePersonProfileInputSchema = updatePersonProfileSchema.shape;
+export const recordPersonPlaylistInputSchema = recordPersonPlaylistSchema.shape;
+export const recordPersonFeedbackInputSchema = {
+  profileId: z.string().min(1),
+  kind: z.enum([
+    "artist",
+    "genre",
+    "trait",
+    "note",
+    "life_context",
+    "playlist_goal"
+  ]),
+  sentiment: z.enum(["prefer", "avoid"]).optional(),
+  value: z.string().min(1)
+};
 
 /**
  * Produces testable handler functions so validation, normalization, and error
@@ -227,7 +446,8 @@ export const recordPersonalizationFeedbackInputSchema =
  */
 export function createToolHandlers(
   spotify: SpotifyClient,
-  personalization?: PersonalizationService
+  personalization?: PersonalizationService,
+  people?: PeopleProfileService
 ) {
   return {
     async getMyProfile() {
@@ -477,8 +697,116 @@ export function createToolHandlers(
         args,
         (input) => personalization.recordFeedback(input)
       );
+    },
+
+    async recordPlaylistEvaluation(args: unknown) {
+      if (!personalization) {
+        return toolError(
+          new Error("Personalization service is not configured.")
+        );
+      }
+
+      return withParsedArgs(recordPlaylistEvaluationSchema, args, (input) =>
+        personalization.recordPlaylistEvaluation(input)
+      );
+    },
+
+    async createPersonProfile(args: unknown) {
+      if (!people) {
+        return toolError(
+          new Error("People profile service is not configured.")
+        );
+      }
+
+      return withParsedArgs(createPersonProfileSchema, args, (input) =>
+        people.createProfile(input)
+      );
+    },
+
+    async updatePersonProfile(args: unknown) {
+      if (!people) {
+        return toolError(
+          new Error("People profile service is not configured.")
+        );
+      }
+
+      return withParsedArgs(updatePersonProfileSchema, args, (input) =>
+        people.updateProfile(input.profileId, omitProfileId(input))
+      );
+    },
+
+    async listPersonProfiles(args: unknown) {
+      if (!people) {
+        return toolError(
+          new Error("People profile service is not configured.")
+        );
+      }
+
+      return withParsedArgs(listPersonProfilesSchema, args, () =>
+        people.listProfiles()
+      );
+    },
+
+    async getPersonProfile(args: unknown) {
+      if (!people) {
+        return toolError(
+          new Error("People profile service is not configured.")
+        );
+      }
+
+      return withParsedArgs(personProfileIdSchema, args, (input) =>
+        people.getProfile(input.profileId)
+      );
+    },
+
+    async getPersonProfileContext(args: unknown) {
+      if (!people) {
+        return toolError(
+          new Error("People profile service is not configured.")
+        );
+      }
+
+      return withParsedArgs(personProfileIdSchema, args, (input) =>
+        people.getProfileContext(input.profileId)
+      );
+    },
+
+    async recordPersonPlaylist(args: unknown) {
+      if (!people) {
+        return toolError(
+          new Error("People profile service is not configured.")
+        );
+      }
+
+      return withParsedArgs(recordPersonPlaylistSchema, args, (input) =>
+        people.recordPlaylist(input)
+      );
+    },
+
+    async recordPersonFeedback(args: unknown) {
+      if (!people) {
+        return toolError(
+          new Error("People profile service is not configured.")
+        );
+      }
+
+      return withParsedArgs(recordPersonFeedbackSchema, args, (input) =>
+        people.recordFeedback(input)
+      );
     }
   };
+}
+
+function omitProfileId(
+  input: z.infer<typeof updatePersonProfileSchema>
+): Omit<z.infer<typeof updatePersonProfileSchema>, "profileId"> {
+  const profile = {
+    ...input
+  } as Omit<z.infer<typeof updatePersonProfileSchema>, "profileId"> & {
+    profileId?: string;
+  };
+  delete profile.profileId;
+  return profile;
 }
 
 async function logPersonalizationEvent(

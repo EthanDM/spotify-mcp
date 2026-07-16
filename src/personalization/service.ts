@@ -1,12 +1,17 @@
 import type { SpotifyClient } from "../lib/spotify.js";
 import type { PlaylistSummary, TrackResult } from "../types.js";
-import { PersonalizationStore } from "./store.js";
+import {
+  createEmptyUseCasePreferences,
+  PersonalizationStore
+} from "./store.js";
 import type {
   NamedCount,
+  PlaylistEvaluationDetails,
   PersonalizationArtist,
   PersonalizationContextResult,
   PersonalizationEvent,
   PersonalizationFeedbackResult,
+  PersonalizationPlaylistEvaluationResult,
   PersonalizationPreferences,
   PersonalizationRefreshResult,
   PersonalizationSavedAlbum,
@@ -173,10 +178,21 @@ export class PersonalizationService {
    * Records explicit taste feedback and rebuilds the compact context summary.
    */
   async recordFeedback(input: {
-    kind: "artist" | "genre" | "note" | "discovery_level";
+    kind:
+      | "artist"
+      | "genre"
+      | "trait"
+      | "note"
+      | "discovery_level"
+      | "playback_mode"
+      | "ideal_track_count_range";
     sentiment?: "prefer" | "avoid";
-    value: string;
+    value?: string;
     context?: string;
+    use_case?: string;
+    playback_mode?: "shuffle" | "ordered" | "either";
+    min_count?: number;
+    max_count?: number;
   }): Promise<PersonalizationFeedbackResult> {
     const preferences = await this.store.readPreferences();
     const updated = applyFeedback(preferences, input);
@@ -188,8 +204,12 @@ export class PersonalizationService {
       details: {
         kind: input.kind,
         sentiment: input.sentiment ?? null,
-        value: input.value,
-        context: input.context ?? null
+        value: input.value ?? null,
+        context: input.context ?? null,
+        use_case: input.use_case ?? null,
+        playback_mode: input.playback_mode ?? null,
+        min_count: input.min_count ?? null,
+        max_count: input.max_count ?? null
       }
     });
 
@@ -197,6 +217,34 @@ export class PersonalizationService {
 
     return {
       preferences: updated,
+      context_path: this.store.contextPath,
+      rebuilt_at: rebuilt?.rebuilt_at ?? null
+    };
+  }
+
+  /**
+   * Records a structured evaluation of a concrete playlist for a specific use case.
+   */
+  async recordPlaylistEvaluation(
+    input: PlaylistEvaluationDetails
+  ): Promise<PersonalizationPlaylistEvaluationResult> {
+    await this.store.appendEvent({
+      ts: new Date().toISOString(),
+      type: "playlist_evaluation",
+      details: {
+        playlistId: input.playlistId,
+        use_case: input.use_case,
+        verdict: input.verdict,
+        score: input.score ?? null,
+        winning_traits: input.winning_traits,
+        losing_traits: input.losing_traits ?? [],
+        workflow_learning: input.workflow_learning ?? null
+      }
+    });
+
+    const rebuilt = await this.rebuildContextFromStoredState();
+
+    return {
       context_path: this.store.contextPath,
       rebuilt_at: rebuilt?.rebuilt_at ?? null
     };
@@ -369,9 +417,20 @@ export class PersonalizationService {
 function applyFeedback(
   preferences: PersonalizationPreferences,
   input: {
-    kind: "artist" | "genre" | "note" | "discovery_level";
+    kind:
+      | "artist"
+      | "genre"
+      | "trait"
+      | "note"
+      | "discovery_level"
+      | "playback_mode"
+      | "ideal_track_count_range";
     sentiment?: "prefer" | "avoid";
-    value: string;
+    value?: string;
+    use_case?: string;
+    playback_mode?: "shuffle" | "ordered" | "either";
+    min_count?: number;
+    max_count?: number;
   }
 ): PersonalizationPreferences {
   const updated: PersonalizationPreferences = {
@@ -380,30 +439,85 @@ function applyFeedback(
     avoided_artists: [...preferences.avoided_artists],
     preferred_genres: [...preferences.preferred_genres],
     avoided_genres: [...preferences.avoided_genres],
+    preferred_traits: [...preferences.preferred_traits],
+    avoided_traits: [...preferences.avoided_traits],
     notes: [...preferences.notes],
+    use_cases: Object.fromEntries(
+      Object.entries(preferences.use_cases).map(([name, useCase]) => [
+        name,
+        {
+          ...useCase,
+          preferred_artists: [...useCase.preferred_artists],
+          avoided_artists: [...useCase.avoided_artists],
+          preferred_genres: [...useCase.preferred_genres],
+          avoided_genres: [...useCase.avoided_genres],
+          preferred_traits: [...useCase.preferred_traits],
+          avoided_traits: [...useCase.avoided_traits],
+          playback_mode: useCase.playback_mode,
+          ideal_track_count_range: useCase.ideal_track_count_range
+            ? { ...useCase.ideal_track_count_range }
+            : null,
+          notes: [...useCase.notes]
+        }
+      ])
+    ),
     updated_at: new Date().toISOString()
   };
+  const target = input.use_case
+    ? (updated.use_cases[input.use_case] ??= {
+        ...createEmptyUseCasePreferences(),
+        updated_at: updated.updated_at
+      })
+    : updated;
 
   if (input.kind === "artist") {
     if (input.sentiment === "prefer") {
-      pushUnique(updated.preferred_artists, input.value);
-      removeValue(updated.avoided_artists, input.value);
+      pushUnique(target.preferred_artists, input.value ?? "");
+      removeValue(target.avoided_artists, input.value ?? "");
     } else {
-      pushUnique(updated.avoided_artists, input.value);
-      removeValue(updated.preferred_artists, input.value);
+      pushUnique(target.avoided_artists, input.value ?? "");
+      removeValue(target.preferred_artists, input.value ?? "");
     }
   } else if (input.kind === "genre") {
     if (input.sentiment === "prefer") {
-      pushUnique(updated.preferred_genres, input.value);
-      removeValue(updated.avoided_genres, input.value);
+      pushUnique(target.preferred_genres, input.value ?? "");
+      removeValue(target.avoided_genres, input.value ?? "");
     } else {
-      pushUnique(updated.avoided_genres, input.value);
-      removeValue(updated.preferred_genres, input.value);
+      pushUnique(target.avoided_genres, input.value ?? "");
+      removeValue(target.preferred_genres, input.value ?? "");
+    }
+  } else if (input.kind === "trait") {
+    if (input.sentiment === "prefer") {
+      pushUnique(target.preferred_traits, input.value ?? "");
+      removeValue(target.avoided_traits, input.value ?? "");
+    } else {
+      pushUnique(target.avoided_traits, input.value ?? "");
+      removeValue(target.preferred_traits, input.value ?? "");
     }
   } else if (input.kind === "discovery_level") {
-    updated.discovery_level = input.value as "low" | "medium" | "high";
+    target.discovery_level = input.value as "low" | "medium" | "high";
+  } else if (input.kind === "playback_mode") {
+    if (input.use_case) {
+      updated.use_cases[input.use_case].playback_mode =
+        input.playback_mode ?? null;
+    }
+  } else if (input.kind === "ideal_track_count_range") {
+    if (input.use_case) {
+      updated.use_cases[input.use_case].ideal_track_count_range =
+        typeof input.min_count === "number" &&
+        typeof input.max_count === "number"
+          ? {
+              min: input.min_count,
+              max: input.max_count
+            }
+          : null;
+    }
   } else {
-    pushUnique(updated.notes, input.value);
+    pushUnique(target.notes, input.value ?? "");
+  }
+
+  if (input.use_case) {
+    target.updated_at = updated.updated_at;
   }
 
   return updated;
@@ -438,6 +552,10 @@ function buildPersonalizationContext(input: {
       ? stablePreferences
       : ["- None recorded yet."])
   );
+  const useCasePreferences = summarizeUseCasePreferences(input.preferences);
+  if (useCasePreferences.length > 0) {
+    lines.push("", "## Use-Case Preferences", ...useCasePreferences);
+  }
   lines.push("", "## Weighted Signals");
 
   if (!input.snapshot) {
@@ -542,11 +660,77 @@ function summarizePreferences(
     lines.push(`- Avoid genres: ${preferences.avoided_genres.join(", ")}.`);
   }
 
+  if (preferences.preferred_traits.length > 0) {
+    lines.push(
+      `- Preferred traits: ${preferences.preferred_traits.join(", ")}.`
+    );
+  }
+
+  if (preferences.avoided_traits.length > 0) {
+    lines.push(`- Avoid traits: ${preferences.avoided_traits.join(", ")}.`);
+  }
+
   if (preferences.notes.length > 0) {
     lines.push(...preferences.notes.map((note) => `- Note: ${note}.`));
   }
 
   return lines;
+}
+
+function summarizeUseCasePreferences(
+  preferences: PersonalizationPreferences
+): string[] {
+  return Object.entries(preferences.use_cases)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([useCase, scoped]) => {
+      const parts: string[] = [];
+
+      if (scoped.preferred_artists.length > 0) {
+        parts.push(`prefer artists=${scoped.preferred_artists.join(", ")}`);
+      }
+
+      if (scoped.avoided_artists.length > 0) {
+        parts.push(`avoid artists=${scoped.avoided_artists.join(", ")}`);
+      }
+
+      if (scoped.preferred_genres.length > 0) {
+        parts.push(`prefer genres=${scoped.preferred_genres.join(", ")}`);
+      }
+
+      if (scoped.avoided_genres.length > 0) {
+        parts.push(`avoid genres=${scoped.avoided_genres.join(", ")}`);
+      }
+
+      if (scoped.preferred_traits.length > 0) {
+        parts.push(`prefer traits=${scoped.preferred_traits.join(", ")}`);
+      }
+
+      if (scoped.avoided_traits.length > 0) {
+        parts.push(`avoid traits=${scoped.avoided_traits.join(", ")}`);
+      }
+
+      if (scoped.discovery_level) {
+        parts.push(`discovery=${scoped.discovery_level}`);
+      }
+
+      if (scoped.playback_mode) {
+        parts.push(`playback=${scoped.playback_mode}`);
+      }
+
+      if (scoped.ideal_track_count_range) {
+        parts.push(
+          `track_count=${scoped.ideal_track_count_range.min}-${scoped.ideal_track_count_range.max}`
+        );
+      }
+
+      if (scoped.notes.length > 0) {
+        parts.push(`notes=${scoped.notes.join(" | ")}`);
+      }
+
+      return `- ${useCase}: ${
+        parts.length > 0 ? parts.join("; ") : "no scoped preferences yet"
+      }.`;
+    });
 }
 
 function summarizeEvents(events: PersonalizationEvent[]): string[] {
@@ -602,6 +786,42 @@ function buildGuidance(
     lines.push(
       `- Avoid artists with explicit negative preference signals: ${input.preferences.avoided_artists.join(", ")}.`
     );
+  }
+
+  if (input.preferences.preferred_traits.length > 0) {
+    lines.push(
+      `- Prefer global listening traits such as: ${input.preferences.preferred_traits.join(", ")}.`
+    );
+  }
+
+  if (input.preferences.avoided_traits.length > 0) {
+    lines.push(
+      `- Avoid global listening traits such as: ${input.preferences.avoided_traits.join(", ")}.`
+    );
+  }
+
+  for (const [useCase, scoped] of Object.entries(input.preferences.use_cases)) {
+    const preferredTraits = scoped.preferred_traits.join(", ");
+    const avoidedTraits = scoped.avoided_traits.join(", ");
+    const scopedNotes = scoped.notes.join(" | ");
+    const clauses = [
+      preferredTraits ? `prefer ${preferredTraits}` : null,
+      avoidedTraits ? `avoid ${avoidedTraits}` : null,
+      scoped.playback_mode
+        ? `default to ${scoped.playback_mode} playback`
+        : null,
+      scoped.ideal_track_count_range
+        ? `target ${scoped.ideal_track_count_range.min}-${scoped.ideal_track_count_range.max} tracks`
+        : null,
+      scoped.discovery_level
+        ? `start at ${scoped.discovery_level} discovery`
+        : null,
+      scopedNotes ? `remember ${scopedNotes}` : null
+    ].filter(Boolean);
+
+    if (clauses.length > 0) {
+      lines.push(`- For use cases like "${useCase}", ${clauses.join("; ")}.`);
+    }
   }
 
   if (
@@ -719,6 +939,9 @@ function summarizeBehavior(events: PersonalizationEvent[]): string[] {
     events,
     "personalization_feedback_recorded"
   );
+  const playlistEvaluations = events.filter(
+    (event) => event.type === "playlist_evaluation"
+  );
 
   if (feedbackCount > 0) {
     lines.push(`- Explicit feedback events recorded: ${feedbackCount}.`);
@@ -746,6 +969,35 @@ function summarizeBehavior(events: PersonalizationEvent[]): string[] {
     lines.push(
       `- Playlist archive actions: ${archiveCount}${archiveCount >= 1 ? " (stale playlists are not sacred)" : ""}.`
     );
+  }
+
+  if (playlistEvaluations.length > 0) {
+    lines.push(
+      `- Playlist evaluations recorded: ${playlistEvaluations.length}.`
+    );
+
+    const latestDefault = [...playlistEvaluations]
+      .reverse()
+      .find((event) => event.details.verdict === "default");
+
+    if (latestDefault) {
+      const useCase = String(latestDefault.details.use_case);
+      const winningTraits = Array.isArray(latestDefault.details.winning_traits)
+        ? latestDefault.details.winning_traits.join(", ")
+        : "";
+      const workflowLearning =
+        typeof latestDefault.details.workflow_learning === "string"
+          ? latestDefault.details.workflow_learning
+          : "";
+      const parts = [
+        winningTraits ? `winning traits: ${winningTraits}` : null,
+        workflowLearning ? `workflow: ${workflowLearning}` : null
+      ].filter(Boolean);
+
+      lines.push(
+        `- Latest default playlist evaluation for "${useCase}"${parts.length > 0 ? ` (${parts.join("; ")})` : ""}.`
+      );
+    }
   }
 
   return lines;
@@ -869,7 +1121,10 @@ function isPreferencesEmpty(preferences: PersonalizationPreferences): boolean {
     preferences.avoided_artists.length === 0 &&
     preferences.preferred_genres.length === 0 &&
     preferences.avoided_genres.length === 0 &&
+    preferences.preferred_traits.length === 0 &&
+    preferences.avoided_traits.length === 0 &&
     preferences.discovery_level === null &&
-    preferences.notes.length === 0
+    preferences.notes.length === 0 &&
+    Object.keys(preferences.use_cases).length === 0
   );
 }

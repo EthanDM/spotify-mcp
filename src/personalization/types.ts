@@ -83,9 +83,45 @@ export type PersonalizationPreferences = {
   avoided_artists: string[];
   preferred_genres: string[];
   avoided_genres: string[];
+  preferred_traits: string[];
+  avoided_traits: string[];
+  discovery_level: "low" | "medium" | "high" | null;
+  notes: string[];
+  use_cases: Record<string, PersonalizationUseCasePreferences>;
+  updated_at: string | null;
+};
+
+/**
+ * Scoped preferences for a specific listening job, mood, or environment.
+ */
+export type PersonalizationUseCasePreferences = {
+  preferred_artists: string[];
+  avoided_artists: string[];
+  preferred_genres: string[];
+  avoided_genres: string[];
+  preferred_traits: string[];
+  avoided_traits: string[];
+  playback_mode: "shuffle" | "ordered" | "either" | null;
+  ideal_track_count_range: {
+    min: number;
+    max: number;
+  } | null;
   discovery_level: "low" | "medium" | "high" | null;
   notes: string[];
   updated_at: string | null;
+};
+
+/**
+ * Structured evaluation of a concrete playlist for a specific use case.
+ */
+export type PlaylistEvaluationDetails = {
+  playlistId: string;
+  use_case: string;
+  verdict: "default" | "secondary" | "reject";
+  score?: number | null;
+  winning_traits: string[];
+  losing_traits?: string[];
+  workflow_learning?: string;
 };
 
 /**
@@ -146,6 +182,14 @@ export type PersonalizationStateResult = {
  */
 export type PersonalizationFeedbackResult = {
   preferences: PersonalizationPreferences;
+  context_path: string;
+  rebuilt_at: string | null;
+};
+
+/**
+ * Result returned after recording a playlist evaluation artifact.
+ */
+export type PersonalizationPlaylistEvaluationResult = {
   context_path: string;
   rebuilt_at: string | null;
 };

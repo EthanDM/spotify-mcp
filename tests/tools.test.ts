@@ -60,6 +60,96 @@ describe("tool handlers", () => {
     expect(result.content[0]?.text).toContain("require a sentiment");
   });
 
+  it("rejects incomplete trait feedback before recording personalization state", async () => {
+    const handlers = createToolHandlers(
+      {} as never,
+      {
+        recordFeedback: vi.fn()
+      } as never
+    );
+
+    const result = await handlers.recordPersonalizationFeedback({
+      kind: "trait",
+      value: "steady instrumental electronic",
+      use_case: "focused work"
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("require a sentiment");
+  });
+
+  it("rejects playback mode feedback without a use case", async () => {
+    const handlers = createToolHandlers(
+      {} as never,
+      {
+        recordFeedback: vi.fn()
+      } as never
+    );
+
+    const result = await handlers.recordPersonalizationFeedback({
+      kind: "playback_mode",
+      playback_mode: "shuffle"
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("requires a use_case");
+  });
+
+  it("rejects invalid ideal track count ranges", async () => {
+    const handlers = createToolHandlers(
+      {} as never,
+      {
+        recordFeedback: vi.fn()
+      } as never
+    );
+
+    const result = await handlers.recordPersonalizationFeedback({
+      kind: "ideal_track_count_range",
+      use_case: "focused work",
+      min_count: 70,
+      max_count: 60
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain(
+      "less than or equal to max_count"
+    );
+  });
+
+  it("passes valid playlist evaluations through to the service", async () => {
+    const recordPlaylistEvaluation = vi.fn(async () => ({
+      context_path: "/tmp/context.md",
+      rebuilt_at: "2026-04-02T00:00:00.000Z"
+    }));
+    const handlers = createToolHandlers(
+      {} as never,
+      {
+        recordPlaylistEvaluation
+      } as never
+    );
+
+    const result = await handlers.recordPlaylistEvaluation({
+      playlistId: "playlist-1",
+      use_case: "focused work",
+      verdict: "default",
+      score: 9.2,
+      winning_traits: ["steady instrumental electronic"],
+      workflow_learning:
+        "A broad draft followed by a focused trim improves consistency"
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(recordPlaylistEvaluation).toHaveBeenCalledWith({
+      playlistId: "playlist-1",
+      use_case: "focused work",
+      verdict: "default",
+      score: 9.2,
+      winning_traits: ["steady instrumental electronic"],
+      workflow_learning:
+        "A broad draft followed by a focused trim improves consistency"
+    });
+  });
+
   it("passes valid personalization refresh input through to the service", async () => {
     const refreshState = vi.fn(async () => ({
       refreshed_at: "2026-04-02T00:00:00.000Z",
@@ -282,5 +372,91 @@ describe("tool handlers", () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0]?.text).toContain("Invalid literal value");
+  });
+
+  it("rejects incomplete person trait feedback before recording profile state", async () => {
+    const handlers = createToolHandlers({} as never, undefined, {
+      recordFeedback: vi.fn()
+    } as never);
+
+    const result = await handlers.recordPersonFeedback({
+      profileId: "sample-listener",
+      kind: "trait",
+      value: "bright"
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("require a sentiment");
+  });
+
+  it("passes valid person playlist history input through to the service", async () => {
+    const recordPlaylist = vi.fn(async () => ({
+      profile_id: "sample-listener",
+      entry: {
+        entry_id: "entry-1"
+      },
+      playlist_history_count: 1,
+      playlist_history_path: "/tmp/playlist-history.ndjson",
+      context_path: "/tmp/profile-context.md",
+      artifacts_directory_path: "/tmp/artifacts/sample-listener",
+      rebuilt_at: "2026-04-02T00:00:00.000Z"
+    }));
+    const handlers = createToolHandlers({} as never, undefined, {
+      recordPlaylist
+    } as never);
+
+    const result = await handlers.recordPersonPlaylist({
+      profileId: "sample-listener",
+      playlist_name: "Sample Listener - Upbeat Background",
+      use_case: "upbeat background music",
+      track_count: 22,
+      score: 9
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(recordPlaylist).toHaveBeenCalledWith({
+      profileId: "sample-listener",
+      playlist_name: "Sample Listener - Upbeat Background",
+      use_case: "upbeat background music",
+      track_count: 22,
+      score: 9
+    });
+  });
+
+  it("creates and updates people profiles through the people service", async () => {
+    const createProfile = vi.fn(async () => ({
+      profile: {
+        id: "sample-listener"
+      }
+    }));
+    const updateProfile = vi.fn(async () => ({
+      profile: {
+        id: "sample-listener",
+        age: 30
+      }
+    }));
+    const handlers = createToolHandlers({} as never, undefined, {
+      createProfile,
+      updateProfile
+    } as never);
+
+    const createResult = await handlers.createPersonProfile({
+      name: "Sample Listener",
+      relationship: "friend"
+    });
+    const updateResult = await handlers.updatePersonProfile({
+      profileId: "sample-listener",
+      age: 30
+    });
+
+    expect(createResult.isError).toBeUndefined();
+    expect(updateResult.isError).toBeUndefined();
+    expect(createProfile).toHaveBeenCalledWith({
+      name: "Sample Listener",
+      relationship: "friend"
+    });
+    expect(updateProfile).toHaveBeenCalledWith("sample-listener", {
+      age: 30
+    });
   });
 });

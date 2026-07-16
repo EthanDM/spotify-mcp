@@ -28,6 +28,14 @@ The server exposes these tools:
 - `spotify_get_personalization_context`
 - `spotify_get_personalization_state`
 - `spotify_record_personalization_feedback`
+- `spotify_record_playlist_evaluation`
+- `spotify_create_person_profile`
+- `spotify_update_person_profile`
+- `spotify_list_person_profiles`
+- `spotify_get_person_profile`
+- `spotify_get_person_profile_context`
+- `spotify_record_person_playlist`
+- `spotify_record_person_feedback`
 
 ## What It Does Not Do
 
@@ -142,11 +150,23 @@ args = ["--dir", "/absolute/path/to/spotify-mcp", "dev"]
 - Remove and reorder fetch the latest playlist snapshot before mutating.
 - Clone copies items in batches and creates the destination playlist as private unless you explicitly opt into `public: true`.
 - Personalization state is stored outside the repo in `~/.config/spotify-mcp/personalization/`.
+- Friend/family listener profiles are stored separately in `~/.config/spotify-mcp/people/`.
+- Generated user-specific artifacts should also stay outside the repo in `~/.config/spotify-mcp/artifacts/`.
 - The personalization layer keeps four files separate on purpose:
   - `profile-snapshot.json` for refreshable Spotify-derived state
   - `user-preferences.json` for durable explicit preferences
   - `interaction-log.ndjson` for append-only MCP history
   - `personalization-context.md` for future-agent context
+- The people-profile layer keeps one directory per saved listener under `~/.config/spotify-mcp/people/<profile-id>/`:
+  - `profile.json` for canonical listener context and taste cues
+  - `playlist-history.ndjson` for structured playlist history and outcomes
+  - `profile-context.md` for the compact future-agent summary for that person
+- Human-readable playlist writeups are optional sidecar artifacts, not canonical personalization memory. Keep the reusable learning in personalization state and store the writeups under the artifacts directory when you want to preserve them.
+- Human-readable writeups for people profiles are also optional sidecars. Keep canonical listener state in `profile.json` and structured playlist outcomes in `playlist-history.ndjson`, then store review notes under `~/.config/spotify-mcp/artifacts/people/<profile-id>/`.
+- `spotify_record_personalization_feedback` also supports scoped `use_case` feedback so future agents can retain lessons like "focused work prefers steady instrumental music and avoids abrupt vocals."
+- Scoped use-case preferences can also store playback mode and ideal track-count range.
+- `spotify_record_playlist_evaluation` captures evidence about specific playlist outputs, including score, verdict, winning traits, losing traits, and workflow learnings.
+- Friend/family profiles are manual-context-first in v1. Create or update the person profile, read their generated context, build the playlist with the normal Spotify tools, then record the resulting playlist back against the profile.
 
 ## Example Calls
 
@@ -222,8 +242,116 @@ Record explicit personalization feedback:
 {
   "kind": "artist",
   "sentiment": "prefer",
-  "value": "Fred again..",
-  "context": "Repeatedly keep this artist in late-night playlists"
+  "value": "Artist A",
+  "context": "Example durable artist preference"
+}
+```
+
+Record use-case-specific trait feedback:
+
+```json
+{
+  "kind": "trait",
+  "sentiment": "prefer",
+  "value": "steady instrumental electronic",
+  "use_case": "focused work",
+  "context": "Keeps attention steady during focused work"
+}
+```
+
+Record a use-case playback preference:
+
+```json
+{
+  "kind": "playback_mode",
+  "use_case": "focused work",
+  "playback_mode": "shuffle",
+  "context": "Shuffle works for long background sessions"
+}
+```
+
+Record an ideal use-case track-count range:
+
+```json
+{
+  "kind": "ideal_track_count_range",
+  "use_case": "focused work",
+  "min_count": 55,
+  "max_count": 65,
+  "context": "This range balances variety and repeatability"
+}
+```
+
+Record a playlist evaluation:
+
+```json
+{
+  "playlistId": "37i9dQZF1DX...",
+  "use_case": "focused work",
+  "verdict": "default",
+  "score": 9.2,
+  "winning_traits": [
+    "steady instrumental electronic",
+    "consistent tempo",
+    "low distraction"
+  ],
+  "losing_traits": ["abrupt vocals", "redundant texture"],
+  "workflow_learning": "A broad draft followed by a focused trim improves consistency"
+}
+```
+
+Create a saved listener profile:
+
+```json
+{
+  "name": "Sample Listener",
+  "relationship": "friend",
+  "age": 30,
+  "life_context": ["prefers morning listening", "often listens while cooking"],
+  "preferred_traits": ["bright", "warm", "upbeat indie-pop"],
+  "avoided_traits": ["harsh drops", "abrasive bass"],
+  "playlist_goals": ["upbeat background music"],
+  "notes": ["Keep recommendations easy and replayable"]
+}
+```
+
+Read the generated context for one saved listener:
+
+```json
+{
+  "profileId": "sample-listener"
+}
+```
+
+Record a playlist made for one saved listener:
+
+```json
+{
+  "profileId": "sample-listener",
+  "playlist_id": "37i9dQZF1DX...",
+  "playlist_name": "Sample Listener - Upbeat Background",
+  "playlist_url": "https://open.spotify.com/playlist/37i9dQZF1DX...",
+  "use_case": "upbeat background music",
+  "track_count": 22,
+  "runtime_minutes": 78,
+  "score": 9,
+  "verdict": "success",
+  "winning_traits": ["bright", "warm", "comforting"],
+  "workflow_learning": "Tightening to roughly 22 tracks improved hit rate and replayability",
+  "artifact_paths": [
+    "~/.config/spotify-mcp/artifacts/people/sample-listener/review.md"
+  ]
+}
+```
+
+Record one new durable learning for a saved listener:
+
+```json
+{
+  "profileId": "sample-listener",
+  "kind": "trait",
+  "sentiment": "avoid",
+  "value": "festival emotional"
 }
 ```
 

@@ -5,7 +5,8 @@ import type {
   PersonalizationContextResult,
   PersonalizationEvent,
   PersonalizationPreferences,
-  PersonalizationSnapshot
+  PersonalizationSnapshot,
+  PersonalizationUseCasePreferences
 } from "./types.js";
 
 const SNAPSHOT_FILE = "profile-snapshot.json";
@@ -67,19 +68,11 @@ export class PersonalizationStore {
    * Preferences default to a valid empty state so callers do not need a first-run branch.
    */
   async readPreferences(): Promise<PersonalizationPreferences> {
-    return (
-      (await this.readJsonFile<PersonalizationPreferences>(
-        this.preferencesPath
-      )) ?? {
-        preferred_artists: [],
-        avoided_artists: [],
-        preferred_genres: [],
-        avoided_genres: [],
-        discovery_level: null,
-        notes: [],
-        updated_at: null
-      }
+    const stored = await this.readJsonFile<PersonalizationPreferences>(
+      this.preferencesPath
     );
+
+    return normalizePreferences(stored);
   }
 
   async writePreferences(
@@ -187,6 +180,49 @@ export class PersonalizationStore {
     const match = context.match(/^Rebuilt: (.+)$/m);
     return match?.[1] ?? null;
   }
+}
+
+export function createEmptyUseCasePreferences(): PersonalizationUseCasePreferences {
+  return {
+    preferred_artists: [],
+    avoided_artists: [],
+    preferred_genres: [],
+    avoided_genres: [],
+    preferred_traits: [],
+    avoided_traits: [],
+    playback_mode: null,
+    ideal_track_count_range: null,
+    discovery_level: null,
+    notes: [],
+    updated_at: null
+  };
+}
+
+function normalizePreferences(
+  preferences: PersonalizationPreferences | null
+): PersonalizationPreferences {
+  const useCases = Object.fromEntries(
+    Object.entries(preferences?.use_cases ?? {}).map(([name, useCase]) => [
+      name,
+      {
+        ...createEmptyUseCasePreferences(),
+        ...useCase
+      }
+    ])
+  );
+
+  return {
+    preferred_artists: preferences?.preferred_artists ?? [],
+    avoided_artists: preferences?.avoided_artists ?? [],
+    preferred_genres: preferences?.preferred_genres ?? [],
+    avoided_genres: preferences?.avoided_genres ?? [],
+    preferred_traits: preferences?.preferred_traits ?? [],
+    avoided_traits: preferences?.avoided_traits ?? [],
+    discovery_level: preferences?.discovery_level ?? null,
+    notes: preferences?.notes ?? [],
+    use_cases: useCases,
+    updated_at: preferences?.updated_at ?? null
+  };
 }
 
 function isMissingFile(error: unknown): boolean {
