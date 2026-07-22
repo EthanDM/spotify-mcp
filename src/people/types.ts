@@ -94,6 +94,7 @@ export type PersonProfileResult = {
   profile: PersonProfile;
   profile_path: string;
   playlist_history_path: string;
+  playlist_history_paths: string[];
   context_path: string;
   artifacts_directory_path: string;
   playlist_history_count: number;
@@ -117,6 +118,7 @@ export type PersonPlaylistRecordResult = {
   entry: PersonPlaylistRecord;
   playlist_history_count: number;
   playlist_history_path: string;
+  playlist_history_paths: string[];
   context_path: string;
   artifacts_directory_path: string;
   rebuilt_at: string | null;

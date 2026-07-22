@@ -120,12 +120,6 @@ export class PersonalizationService {
    * Returns the current agent-facing summary, rebuilding it on demand when possible.
    */
   async getContext(): Promise<PersonalizationContextResult> {
-    const existing = await this.store.readContext();
-
-    if (existing) {
-      return existing;
-    }
-
     const rebuilt = await this.rebuildContextFromStoredState();
 
     if (rebuilt) {
@@ -152,25 +146,27 @@ export class PersonalizationService {
   async getState(input: {
     recentEventLimit: number;
   }): Promise<PersonalizationStateResult> {
-    const [snapshot, preferences, recentEvents, eventCount, context] =
-      await Promise.all([
+    const currentContext = await this.getContext();
+    const [snapshot, preferences, recentEvents, eventCount] = await Promise.all(
+      [
         this.store.readSnapshot(),
         this.store.readPreferences(),
         this.store.readRecentEvents(input.recentEventLimit),
-        this.store.countEvents(),
-        this.store.readContext()
-      ]);
+        this.store.countEvents()
+      ]
+    );
 
     return {
       snapshot_path: this.store.snapshotPath,
-      preferences_path: this.store.preferencesPath,
+      preferences_path: await this.store.getPreferencesDocumentPath(),
       interaction_log_path: this.store.interactionLogPath,
+      interaction_log_paths: await this.store.getInteractionLogPaths(),
       context_path: this.store.contextPath,
       snapshot,
       preferences,
       interaction_event_count: eventCount,
       recent_events: recentEvents,
-      context: context?.context ?? null
+      context: currentContext.context
     };
   }
 
@@ -194,10 +190,10 @@ export class PersonalizationService {
     min_count?: number;
     max_count?: number;
   }): Promise<PersonalizationFeedbackResult> {
-    const preferences = await this.store.readPreferences();
-    const updated = applyFeedback(preferences, input);
+    const preferences = await this.store.readPreferencesVersioned();
+    const updated = applyFeedback(preferences.value, input);
 
-    await this.store.writePreferences(updated);
+    await this.store.writePreferences(updated, preferences.revisionId);
     await this.store.appendEvent({
       ts: new Date().toISOString(),
       type: "personalization_feedback_recorded",

@@ -131,6 +131,9 @@ export type PlaylistEvaluationDetails = {
  * without a migration every time the tool surface grows.
  */
 export type PersonalizationEvent = {
+  event_id?: string;
+  machine_id?: string;
+  schema_version?: 1;
   ts: string;
   type: string;
   details: Record<
@@ -169,6 +172,7 @@ export type PersonalizationStateResult = {
   snapshot_path: string;
   preferences_path: string;
   interaction_log_path: string;
+  interaction_log_paths: string[];
   context_path: string;
   snapshot: PersonalizationSnapshot | null;
   preferences: PersonalizationPreferences;

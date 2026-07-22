@@ -1,10 +1,7 @@
 import "dotenv/config";
 
 import { TokenStore } from "../auth/token-store.js";
-import {
-  getPersonalizationDirectoryPath,
-  getTokenFilePath
-} from "../config.js";
+import { getStorageConfig } from "../config.js";
 import { SpotifyClient } from "../lib/spotify.js";
 import { PersonalizationService } from "./service.js";
 import { PersonalizationStore } from "./store.js";
@@ -21,10 +18,18 @@ async function main(): Promise<void> {
     );
   }
 
-  const spotify = new SpotifyClient(new TokenStore(getTokenFilePath()));
+  const storage = getStorageConfig();
+  const spotify = new SpotifyClient(new TokenStore(storage.tokenFile));
   const personalization = new PersonalizationService(
     spotify,
-    new PersonalizationStore(getPersonalizationDirectoryPath())
+    storage.sharedMode
+      ? new PersonalizationStore({
+          localDirectory: storage.localPersonalizationDirectory,
+          sharedDirectory: storage.sharedPersonalizationDirectory,
+          machineId: storage.machineId!,
+          sharedMode: true
+        })
+      : new PersonalizationStore(storage.localPersonalizationDirectory)
   );
 
   const result = await personalization.refreshState({

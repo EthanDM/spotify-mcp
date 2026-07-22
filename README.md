@@ -168,6 +168,37 @@ args = ["--dir", "/absolute/path/to/spotify-mcp", "dev"]
 - `spotify_record_playlist_evaluation` captures evidence about specific playlist outputs, including score, verdict, winning traits, losing traits, and workflow learnings.
 - Friend/family profiles are manual-context-first in v1. Create or update the person profile, read their generated context, build the playlist with the normal Spotify tools, then record the resulting playlist back against the profile.
 
+### Sharing durable state between Macs
+
+Shared mode is opt-in. Keep authentication and generated state local while putting durable preferences, people profiles, history, and artifacts in iCloud:
+
+```dotenv
+SPOTIFY_MCP_DATA_DIR=~/.config/spotify-mcp
+SPOTIFY_MCP_SHARED_DATA_DIR=~/Library/Mobile Documents/com~apple~CloudDocs/App Data/spotify-mcp
+SPOTIFY_MCP_MACHINE_ID=desktop
+```
+
+Use a different stable lowercase id such as `neo` on the other Mac. Never move or symlink the entire `~/.config/spotify-mcp` directory: `auth.json`, Spotify snapshots, generated contexts, `.env`, and Codex configuration must remain machine-local. Shared writes fail when the configured iCloud directory is unavailable; they never fall back to local storage.
+
+Migrate the desktop first after iCloud is available:
+
+```bash
+pnpm data:migrate
+pnpm data:migrate -- --apply
+```
+
+The first command is read-only. The applied migration preserves the original local files, excludes credentials and generated state, and can be rerun without duplicating records. Allow iCloud to finish syncing before configuring or migrating Neo. If Neo has different preferences or profiles, migration imports them as explicit revision forks while still migrating its histories and artifacts; resolve those forks afterward.
+
+Preferences and person profiles retain immutable revisions. If offline edits create multiple tips, normal access refuses to choose one. Inspect and resolve the conflict explicitly:
+
+```bash
+pnpm data:resolve -- --document preferences
+pnpm data:resolve -- --document preferences --from-revision <revision-id> --apply
+pnpm data:resolve -- --document people/<profile-id> --from-file /absolute/path/to/merged-profile.json --apply
+```
+
+Resolution preserves all earlier revisions. Removing the shared variables restores legacy local behavior using the untouched local files; newer shared activity is not copied back automatically. Give shared artifacts unique or timestamped names because differing files at the same relative path are treated as collisions during migration.
+
 ## Example Calls
 
 Create a playlist:

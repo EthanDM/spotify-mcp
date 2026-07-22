@@ -11,6 +11,8 @@
     "format:check": "prettier . --check",
     "lint": "eslint . --max-warnings=0",
     "personalize:refresh": "tsx src/personalization/cli.ts refresh",
+    "data:migrate": "tsx src/data/migrate.ts",
+    "data:resolve": "tsx src/data/resolve.ts",
     "smoke": "tsx src/smoke.ts",
     "start": "node dist/server.js",
     "test": "vitest run",

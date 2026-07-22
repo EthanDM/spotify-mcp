@@ -14,79 +14,129 @@ export const DEFAULT_SCOPES = [
   "user-follow-read"
 ];
 
-/**
- * Returns the Spotify OAuth client ID from the local environment.
- *
- * The auth CLI and MCP server share this single source of truth so both paths
- * fail with the same actionable setup error instead of drifting into separate
- * setup contracts.
- */
+export type StorageConfig = {
+  localRoot: string;
+  sharedRoot: string | null;
+  machineId: string | null;
+  tokenFile: string;
+  localPersonalizationDirectory: string;
+  sharedPersonalizationDirectory: string;
+  localPeopleDirectory: string;
+  sharedPeopleDirectory: string;
+  artifactsDirectory: string;
+  sharedMode: boolean;
+};
+
 export function getSpotifyClientId(): string {
   const clientId = process.env.SPOTIFY_CLIENT_ID?.trim();
-
-  if (!clientId) {
+  if (!clientId)
     throw new Error("Missing SPOTIFY_CLIENT_ID in the environment.");
-  }
-
   return clientId;
 }
 
-/**
- * Returns the redirect URI used for the local PKCE callback server.
- *
- * Keeping this in config allows the auth CLI and OAuth refresh path to agree on
- * the same redirect URI without threading it through every call site.
- */
 export function getSpotifyRedirectUri(): string {
   return process.env.SPOTIFY_REDIRECT_URI?.trim() || DEFAULT_REDIRECT_URI;
 }
 
-/**
- * Returns the on-disk token location.
- *
- * Token material lives outside the repo so a normal development workflow cannot
- * accidentally commit Spotify credentials.
- */
+export function getStorageConfig(
+  environment: NodeJS.ProcessEnv = process.env
+): StorageConfig {
+  rejectExplicitEmpty(environment, "SPOTIFY_MCP_DATA_DIR");
+  rejectExplicitEmpty(environment, "SPOTIFY_MCP_SHARED_DATA_DIR");
+  const localRoot = resolveConfiguredPath(
+    environment.SPOTIFY_MCP_DATA_DIR,
+    path.join(homedir(), ".config", "spotify-mcp"),
+    "SPOTIFY_MCP_DATA_DIR"
+  );
+  const configuredSharedRoot = environment.SPOTIFY_MCP_SHARED_DATA_DIR?.trim();
+  const sharedRoot = configuredSharedRoot
+    ? resolveConfiguredPath(
+        configuredSharedRoot,
+        undefined,
+        "SPOTIFY_MCP_SHARED_DATA_DIR"
+      )
+    : null;
+  const machineId = environment.SPOTIFY_MCP_MACHINE_ID?.trim() || null;
+
+  if (sharedRoot && sharedRoot === localRoot) {
+    throw new Error(
+      "SPOTIFY_MCP_SHARED_DATA_DIR must differ from SPOTIFY_MCP_DATA_DIR."
+    );
+  }
+  if (sharedRoot && !machineId) {
+    throw new Error(
+      "SPOTIFY_MCP_MACHINE_ID is required when SPOTIFY_MCP_SHARED_DATA_DIR is set."
+    );
+  }
+  if (machineId && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(machineId)) {
+    throw new Error(
+      "SPOTIFY_MCP_MACHINE_ID must be a lowercase slug using letters, numbers, underscores, or hyphens."
+    );
+  }
+
+  return {
+    localRoot,
+    sharedRoot,
+    machineId,
+    tokenFile: path.join(localRoot, "auth.json"),
+    localPersonalizationDirectory: path.join(localRoot, "personalization"),
+    sharedPersonalizationDirectory: path.join(
+      sharedRoot ?? localRoot,
+      "personalization"
+    ),
+    localPeopleDirectory: path.join(localRoot, "people"),
+    sharedPeopleDirectory: path.join(sharedRoot ?? localRoot, "people"),
+    artifactsDirectory: path.join(sharedRoot ?? localRoot, "artifacts"),
+    sharedMode: sharedRoot !== null
+  };
+}
+
+function rejectExplicitEmpty(
+  environment: NodeJS.ProcessEnv,
+  name: "SPOTIFY_MCP_DATA_DIR" | "SPOTIFY_MCP_SHARED_DATA_DIR"
+): void {
+  if (environment[name] !== undefined && !environment[name]?.trim()) {
+    throw new Error(`${name} must not be empty.`);
+  }
+}
+
 export function getTokenFilePath(): string {
-  return path.join(homedir(), ".config", "spotify-mcp", "auth.json");
+  return getStorageConfig().tokenFile;
 }
 
-/**
- * Returns the directory used for personalization state files.
- *
- * Personalization data stays outside the repo because it is user-specific
- * runtime state, not source-controlled application data.
- */
 export function getPersonalizationDirectoryPath(): string {
-  return path.join(homedir(), ".config", "spotify-mcp", "personalization");
+  return getStorageConfig().localPersonalizationDirectory;
 }
 
-/**
- * Returns the directory used for saved friend/family listener profiles.
- *
- * These profiles are separate from the authenticated account's own Spotify
- * personalization because they describe other people, not the current user.
- */
 export function getPeopleDirectoryPath(): string {
-  return path.join(homedir(), ".config", "spotify-mcp", "people");
+  return getStorageConfig().sharedPeopleDirectory;
 }
 
-/**
- * Returns the directory used for generated user-specific artifacts.
- *
- * Playlist writeups and similar outputs are useful to keep around, but they are
- * runtime artifacts for one account, not source-controlled project files.
- */
 export function getArtifactsDirectoryPath(): string {
-  return path.join(homedir(), ".config", "spotify-mcp", "artifacts");
+  return getStorageConfig().artifactsDirectory;
 }
 
-/**
- * Returns the recommended artifact directory for one saved listener profile.
- *
- * Profile artifacts stay outside canonical structured state so future agents
- * can preserve writeups and review notes without turning them into source data.
- */
 export function getPersonArtifactsDirectoryPath(profileId: string): string {
   return path.join(getArtifactsDirectoryPath(), "people", profileId);
+}
+
+function resolveConfiguredPath(
+  value: string | undefined,
+  fallback: string | undefined,
+  name: string
+): string {
+  const raw = value?.trim() || fallback;
+  if (!raw) throw new Error(`${name} must not be empty.`);
+  const expanded =
+    raw === "~"
+      ? homedir()
+      : raw.startsWith("~/")
+        ? path.join(homedir(), raw.slice(2))
+        : raw;
+  if (!path.isAbsolute(expanded))
+    throw new Error(`${name} must be an absolute path or start with ~/.`);
+  const resolved = path.resolve(expanded);
+  if (resolved === path.parse(resolved).root)
+    throw new Error(`${name} must not be a filesystem root.`);
+  return resolved;
 }
