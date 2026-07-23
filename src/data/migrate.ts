@@ -215,12 +215,14 @@ async function collectHashes(
     if (isMissing(error)) return;
     throw error;
   }
+  const targetRelative = path.relative(root, target);
+  if (targetRelative) hashes[`${targetRelative}${path.sep}`] = "directory";
   for (const entry of entries) {
     const child = path.join(target, entry.name);
     const relative = path.relative(root, child);
     if (entry.isDirectory()) await collectHashes(child, root, hashes);
     else if (entry.isFile() && !isGeneratedLocalState(relative))
-      hashes[relative] = hash(await fs.readFile(child));
+      hashes[relative] = hash(await readBytesNoFollow(child));
   }
 }
 

@@ -140,6 +140,9 @@ describe("shared data migration", () => {
       manifest.source_hashes["personalization/user-preferences.json"]
     ).toBeTruthy();
     expect(manifest.source_hashes["artifacts/profile-context.md"]).toBeTruthy();
+    expect(manifest.source_hashes[`artifacts${path.sep}empty${path.sep}`]).toBe(
+      "directory"
+    );
     expect(Object.keys(manifest.source_hashes)).not.toContain("auth.json");
     expect(manifest.source_root).toBeUndefined();
     expect(manifest.destination_root).toBeUndefined();
