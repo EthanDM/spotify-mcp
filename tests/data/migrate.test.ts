@@ -425,6 +425,23 @@ describe("shared data migration", () => {
     await expect(runMigration(local, shared, "desktop")).rejects.toBeTruthy();
   });
 
+  it("rejects file destinations for empty artifact directories during preflight", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-empty-artifact-destination-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(path.join(local, "artifacts", "empty"), { recursive: true });
+    await mkdir(path.join(shared, "artifacts"), { recursive: true });
+    await writeFile(path.join(shared, "artifacts", "empty"), "not a directory");
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "Shared artifact destination is not a directory"
+      )
+    });
+  });
+
   it("rejects symlinked legacy artifacts during preflight", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-artifact-link-")

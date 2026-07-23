@@ -12,6 +12,7 @@ import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
+  readFileNoFollow,
   SharedStorageGuard
 } from "../storage/shared.js";
 import {
@@ -458,6 +459,14 @@ async function validateArtifactCollisions(
   if (!(await exists(source))) return;
   if ((await fs.lstat(source)).isSymbolicLink())
     throw new Error(`Artifact migration does not allow symlinks: ${source}`);
+  try {
+    if (!(await fs.lstat(destination)).isDirectory())
+      throw new Error(
+        `Shared artifact destination is not a directory: ${destination}`
+      );
+  } catch (error) {
+    if (!hasCode(error, "ENOENT")) throw error;
+  }
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
@@ -662,7 +671,7 @@ async function addDestinationRecords(
 ): Promise<void> {
   const files = await ndjsonFiles(path.dirname(destination));
   for (const file of files) {
-    const lines = (await fs.readFile(file, "utf8"))
+    const lines = (await readFileNoFollow(file))
       .split("\n")
       .filter((line) => line.trim());
     for (const [index, line] of lines.entries())

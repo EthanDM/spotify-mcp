@@ -1,11 +1,16 @@
+import { execFile } from "node:child_process";
+import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
 import { TokenStore } from "../../src/auth/token-store.js";
 import type { StoredTokens } from "../../src/types.js";
+
+const execute = promisify(execFile);
 
 describe("TokenStore", () => {
   it("writes and reads tokens from disk", async () => {
@@ -66,5 +71,32 @@ describe("TokenStore", () => {
       })
     ).rejects.toThrow("must not contain symlinks");
     await expect(fs.readFile(outside, "utf8")).resolves.toBe("outside");
+  });
+
+  it("rejects FIFO token destinations without blocking", async () => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "spotify-mcp-token-fifo-")
+    );
+    const tokenFile = path.join(tempDir, "auth.json");
+    await execute("mkfifo", [tokenFile]);
+    const reader = await fs.open(
+      tokenFile,
+      constants.O_RDONLY | constants.O_NONBLOCK
+    );
+    const store = new TokenStore(tokenFile);
+
+    try {
+      await expect(
+        store.write({
+          accessToken: "access",
+          refreshToken: "refresh",
+          expiresAt: 123,
+          scope: "playlist-read-private",
+          tokenType: "Bearer"
+        })
+      ).rejects.toThrow("must be a regular file");
+    } finally {
+      await reader.close();
+    }
   });
 });

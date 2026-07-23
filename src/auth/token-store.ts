@@ -71,11 +71,16 @@ export class TokenStore implements TokenStoreLike {
       this.filePath,
       constants.O_CREAT |
         constants.O_TRUNC |
+        constants.O_NONBLOCK |
         constants.O_WRONLY |
         constants.O_NOFOLLOW,
       0o600
     );
     try {
+      if (!(await handle.stat()).isFile())
+        throw new Error(
+          `Token storage path must be a regular file: ${this.filePath}`
+        );
       await handle.writeFile(JSON.stringify(tokens, null, 2), "utf8");
       await handle.chmod(0o600);
     } finally {
