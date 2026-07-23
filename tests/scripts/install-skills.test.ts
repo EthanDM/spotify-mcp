@@ -372,18 +372,20 @@ describe("skill installer", () => {
   });
 
   it("rejects credential-store paths", async () => {
-    for (const [directoryName, fileName] of [
+    for (const pathSegments of [
       [".docker", "config.json"],
       [".kube", "config"],
       [".cargo", "credentials"],
-      [".cargo", "credentials.toml"]
+      [".cargo", "credentials.toml"],
+      [".config", "pip", "pip.conf"],
+      ["pip", "pip.ini"]
     ]) {
-      const fixtureDirectory = path.resolve(
+      const fixture = path.resolve(
         "skills",
         "playlist-review",
-        directoryName
+        ...pathSegments
       );
-      const fixture = path.join(fixtureDirectory, fileName);
+      const fixtureDirectory = path.dirname(fixture);
       try {
         await mkdir(fixtureDirectory, { recursive: true });
         await writeFile(fixture, "credential: secret");

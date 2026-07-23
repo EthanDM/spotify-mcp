@@ -148,7 +148,8 @@ function isForbiddenRuntimePath(relativePath) {
     (parentDirectory === ".docker" && fileName === "config.json") ||
     (parentDirectory === ".kube" && fileName === "config") ||
     (parentDirectory === ".cargo" &&
-      ["credentials", "credentials.toml"].includes(fileName))
+      ["credentials", "credentials.toml"].includes(fileName)) ||
+    (parentDirectory === "pip" && ["pip.conf", "pip.ini"].includes(fileName))
   );
 }
 

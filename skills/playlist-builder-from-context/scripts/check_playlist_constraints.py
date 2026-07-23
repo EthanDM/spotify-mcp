@@ -63,7 +63,8 @@ def normalized_title_family(title: str) -> str:
     parts = re.split(r"\s+-\s+", value)
     if len(parts) > 1 and VERSION_TERMS.search(" - ".join(parts[1:])):
         value = parts[0]
-    value = re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+    value = unicodedata.normalize("NFC", value).casefold()
+    value = re.sub(r"[\W_]+", " ", value).strip()
     return value
 
 

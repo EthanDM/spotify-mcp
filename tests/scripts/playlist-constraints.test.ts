@@ -115,6 +115,32 @@ describe("playlist constraint checker", () => {
     expect(report.passes_applicable_hard_checks).toBe(false);
   });
 
+  it("preserves non-ASCII titles in version-family checks", async () => {
+    const tracks = [
+      {
+        ...track("spotify:track:0000000000000000000001", "development"),
+        name: "夜に駆ける"
+      },
+      {
+        ...track("spotify:track:0000000000000000000002", "close"),
+        name: "夜に駆ける (Live)"
+      }
+    ];
+    const manifest = await writeManifest({
+      target_track_count: 2,
+      tracks,
+      playback_mode: "ordered"
+    });
+    const result = await execute("python3", [checker, manifest]);
+    const report = JSON.parse(result.stdout) as {
+      potential_version_families: Array<{ normalized_title: string }>;
+    };
+
+    expect(report.potential_version_families).toEqual([
+      expect.objectContaining({ normalized_title: "夜に駆ける" })
+    ]);
+  });
+
   it("accepts an ordered build that starts after the opening phase", async () => {
     const tracks = [
       track("spotify:track:0000000000000000000001", "development"),
