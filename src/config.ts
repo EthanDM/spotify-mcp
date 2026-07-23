@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { constants } from "node:fs";
+import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -58,9 +60,13 @@ export function getStorageConfig(
     : null;
   const machineId = environment.SPOTIFY_MCP_MACHINE_ID?.trim() || null;
 
-  if (sharedRoot && sharedRoot === localRoot) {
+  if (
+    sharedRoot &&
+    (isSameOrNested(localRoot, sharedRoot) ||
+      isSameOrNested(sharedRoot, localRoot))
+  ) {
     throw new Error(
-      "SPOTIFY_MCP_SHARED_DATA_DIR must differ from SPOTIFY_MCP_DATA_DIR."
+      "SPOTIFY_MCP_SHARED_DATA_DIR and SPOTIFY_MCP_DATA_DIR must be separate, non-nested directories."
     );
   }
   if (sharedRoot && !machineId) {
@@ -89,6 +95,22 @@ export function getStorageConfig(
     artifactsDirectory: path.join(sharedRoot ?? localRoot, "artifacts"),
     sharedMode: sharedRoot !== null
   };
+}
+
+export async function assertSharedStorageAvailable(
+  config: StorageConfig
+): Promise<void> {
+  if (!config.sharedRoot) return;
+  try {
+    const stats = await fs.stat(config.sharedRoot);
+    if (!stats.isDirectory()) throw new Error("not a directory");
+    await fs.access(config.sharedRoot, constants.R_OK | constants.W_OK);
+  } catch (error) {
+    const detail = error instanceof Error ? ` (${error.message})` : "";
+    throw new Error(
+      `Configured shared storage is unavailable: ${config.sharedRoot}${detail}. Ensure iCloud is mounted and the directory exists before starting Spotify MCP.`
+    );
+  }
 }
 
 function rejectExplicitEmpty(
@@ -139,4 +161,14 @@ function resolveConfiguredPath(
   if (resolved === path.parse(resolved).root)
     throw new Error(`${name} must not be a filesystem root.`);
   return resolved;
+}
+
+function isSameOrNested(parent: string, candidate: string): boolean {
+  const relative = path.relative(parent, candidate);
+  return (
+    relative === "" ||
+    (!relative.startsWith(`..${path.sep}`) &&
+      relative !== ".." &&
+      !path.isAbsolute(relative))
+  );
 }

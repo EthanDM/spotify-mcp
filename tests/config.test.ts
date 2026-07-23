@@ -1,9 +1,13 @@
+import { mkdtemp, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { getStorageConfig } from "../src/config.js";
+import {
+  assertSharedStorageAvailable,
+  getStorageConfig
+} from "../src/config.js";
 
 describe("storage configuration", () => {
   it("preserves the legacy local-only paths by default", () => {
@@ -50,6 +54,35 @@ describe("storage configuration", () => {
         SPOTIFY_MCP_SHARED_DATA_DIR: "/tmp/same",
         SPOTIFY_MCP_MACHINE_ID: "neo"
       })
-    ).toThrow("must differ");
+    ).toThrow("non-nested");
+    expect(() =>
+      getStorageConfig({
+        SPOTIFY_MCP_DATA_DIR: "/tmp/local",
+        SPOTIFY_MCP_SHARED_DATA_DIR: "/tmp/local/shared",
+        SPOTIFY_MCP_MACHINE_ID: "neo"
+      })
+    ).toThrow("non-nested");
+    expect(() =>
+      getStorageConfig({
+        SPOTIFY_MCP_DATA_DIR: "/tmp/shared/local",
+        SPOTIFY_MCP_SHARED_DATA_DIR: "/tmp/shared",
+        SPOTIFY_MCP_MACHINE_ID: "neo"
+      })
+    ).toThrow("non-nested");
+  });
+
+  it("requires the configured shared root to be available", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-config-"));
+    const shared = path.join(root, "shared");
+    const config = getStorageConfig({
+      SPOTIFY_MCP_DATA_DIR: path.join(root, "local"),
+      SPOTIFY_MCP_SHARED_DATA_DIR: shared,
+      SPOTIFY_MCP_MACHINE_ID: "neo"
+    });
+    await expect(assertSharedStorageAvailable(config)).rejects.toThrow(
+      "shared storage is unavailable"
+    );
+    await mkdir(shared);
+    await expect(assertSharedStorageAvailable(config)).resolves.toBeUndefined();
   });
 });

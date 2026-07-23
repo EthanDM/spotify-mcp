@@ -55,7 +55,7 @@ async function main(): Promise<void> {
     "user-preferences.json"
   );
   const preferencesDocument = await readJson<unknown>(preferencesSource);
-  if (preferencesDocument) {
+  if (preferencesDocument !== undefined) {
     const preferences = validatePreferencesDocument(preferencesDocument);
     const store = new RevisionStore(
       path.join(
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
       "profile.json"
     );
     const profileDocument = await readJson<unknown>(source);
-    if (profileDocument) {
+    if (profileDocument !== undefined) {
       const profile = validatePersonProfileDocument(profileDocument, profileId);
       const store = new RevisionStore(
         path.join(config.sharedRoot, "people", profileId, "revisions"),
@@ -210,7 +210,7 @@ async function validateMigration(
   const preferencesDocument = await readJson<unknown>(
     path.join(localRoot, "personalization", "user-preferences.json")
   );
-  if (preferencesDocument) {
+  if (preferencesDocument !== undefined) {
     const preferences = validatePreferencesDocument(preferencesDocument);
     const normalized = normalizePreferences(preferences);
     const store = new RevisionStore(
@@ -231,7 +231,7 @@ async function validateMigration(
     const profileDocument = await readJson<unknown>(
       path.join(localRoot, "people", profileId, "profile.json")
     );
-    if (profileDocument) {
+    if (profileDocument !== undefined) {
       const profile = validatePersonProfileDocument(profileDocument, profileId);
       const store = new RevisionStore(
         path.join(sharedRoot, "people", profileId, "revisions"),
@@ -315,7 +315,7 @@ async function validateNdjson(
         event_id:
           typeof value.event_id === "string"
             ? value.event_id
-            : deterministicId(source, index + 1, line),
+            : deterministicId(value),
         machine_id:
           typeof value.machine_id === "string" ? value.machine_id : machineId,
         schema_version: 1
@@ -344,7 +344,7 @@ async function validateArtifactCollisions(
     const to = path.join(destination, entry.name);
     if (entry.isDirectory()) await validateArtifactCollisions(from, to);
     else if (entry.isFile()) {
-      const target = await fs.readFile(to).catch(() => null);
+      const target = await readBytes(to);
       if (target && hash(target) !== hash(await fs.readFile(from)))
         throw new Error(`Artifact collision with different content: ${to}`);
     }
@@ -403,7 +403,7 @@ async function migrateNdjson(
         event_id:
           typeof value.event_id === "string"
             ? value.event_id
-            : deterministicId(source, index + 1, line),
+            : deterministicId(value),
         machine_id:
           typeof value.machine_id === "string" ? value.machine_id : machineId,
         schema_version: 1
@@ -469,7 +469,7 @@ async function copyArtifacts(
     if (entry.isDirectory()) copied += await copyArtifacts(from, to);
     else if (entry.isFile()) {
       const sourceBytes = await fs.readFile(from);
-      const target = await fs.readFile(to).catch(() => null);
+      const target = await readBytes(to);
       if (target && hash(target) !== hash(sourceBytes))
         throw new Error(`Artifact collision with different content: ${to}`);
       if (!target) {
@@ -487,13 +487,25 @@ function validateRecord(value: unknown, idField: string): void {
   if (idField === "event_id") validatePersonalizationEventDocument(value);
   else if (idField === "entry_id") validatePersonPlaylistRecordDocument(value);
 }
-function deterministicId(file: string, line: number, content: string): string {
-  return `legacy-${createHash("sha256").update(`${file}\0${line}\0${content}`).digest("hex").slice(0, 32)}`;
+function deterministicId(value: Record<string, unknown>): string {
+  const { event_id, machine_id, schema_version, ...content } = value;
+  void event_id;
+  void machine_id;
+  void schema_version;
+  return `legacy-${createHash("sha256").update(stable(content)).digest("hex").slice(0, 32)}`;
 }
 function hash(value: Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");
 }
 function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stable(object[key])}`)
+      .join(",")}}`;
+  }
   return JSON.stringify(value);
 }
 async function directoryNames(directory: string): Promise<string[]> {
@@ -507,9 +519,17 @@ async function directoryNames(directory: string): Promise<string[]> {
     throw error;
   }
 }
-async function readJson<T>(file: string): Promise<T | null> {
+async function readJson<T>(file: string): Promise<T | undefined> {
   const raw = await readText(file);
-  return raw === null ? null : (JSON.parse(raw) as T);
+  return raw === null ? undefined : (JSON.parse(raw) as T);
+}
+async function readBytes(file: string): Promise<Buffer | null> {
+  try {
+    return await fs.readFile(file);
+  } catch (error) {
+    if (isMissing(error)) return null;
+    throw error;
+  }
 }
 async function readText(file: string): Promise<string | null> {
   try {

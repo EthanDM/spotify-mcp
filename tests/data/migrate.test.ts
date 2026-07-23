@@ -175,7 +175,118 @@ describe("shared data migration", () => {
       })
     ).rejects.toMatchObject({ stderr: expect.stringContaining("created_at") });
   });
+
+  it("rejects present falsy JSON documents", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-falsy-"));
+    const local = path.join(root, "local");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await writeFile(
+      path.join(local, "personalization", "user-preferences.json"),
+      "null"
+    );
+    await expect(
+      runMigration(local, path.join(root, "shared"), "desktop")
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("must be an object")
+    });
+  });
+
+  it("uses content-stable event IDs across local roots", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-ids-"));
+    const shared = path.join(root, "shared");
+    const event = JSON.stringify({
+      ts: "2026-01-01T00:00:00.000Z",
+      type: "test",
+      details: { source: "legacy" }
+    });
+    for (const machineId of ["desktop", "neo"]) {
+      const local = path.join(root, `${machineId}-local`);
+      await mkdir(path.join(local, "personalization"), { recursive: true });
+      await writeFile(
+        path.join(local, "personalization", "interaction-log.ndjson"),
+        `${event}\n`
+      );
+      await runMigration(local, shared, machineId, true);
+    }
+    const ids = await Promise.all(
+      ["desktop", "neo"].map(async (machineId) => {
+        const record = JSON.parse(
+          await readFile(
+            path.join(
+              shared,
+              "personalization",
+              "events",
+              `${machineId}.ndjson`
+            ),
+            "utf8"
+          )
+        ) as { event_id: string };
+        return record.event_id;
+      })
+    );
+    expect(new Set(ids)).toHaveLength(1);
+  });
+
+  it("compares equivalent revision values independent of object key order", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-order-"));
+    const shared = path.join(root, "shared");
+    const first = preferences("Artist");
+    first.use_cases = {
+      focus: useCase("steady"),
+      workout: useCase("driving")
+    };
+    const second = preferences("Artist");
+    second.use_cases = {
+      workout: useCase("driving"),
+      focus: useCase("steady")
+    };
+    for (const [machineId, document] of [
+      ["desktop", first],
+      ["neo", second]
+    ] as const) {
+      const local = path.join(root, `${machineId}-local`);
+      await mkdir(path.join(local, "personalization"), { recursive: true });
+      await writeFile(
+        path.join(local, "personalization", "user-preferences.json"),
+        JSON.stringify(document)
+      );
+      const result = await runMigration(local, shared, machineId, true);
+      expect(result.stdout).not.toContain("WILL CREATE CONFLICT");
+    }
+  });
+
+  it("propagates artifact destination read errors during preflight", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-artifact-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(path.join(local, "artifacts"), { recursive: true });
+    await writeFile(path.join(local, "artifacts", "note.md"), "artifact");
+    await mkdir(path.join(shared, "artifacts", "note.md"), {
+      recursive: true
+    });
+    await expect(runMigration(local, shared, "desktop")).rejects.toBeTruthy();
+  });
 });
+
+function runMigration(
+  local: string,
+  shared: string,
+  machineId: string,
+  apply = false
+) {
+  return execute(
+    path.resolve("node_modules/.bin/tsx"),
+    ["src/data/migrate.ts", ...(apply ? ["--apply"] : [])],
+    {
+      env: {
+        ...process.env,
+        SPOTIFY_MCP_DATA_DIR: local,
+        SPOTIFY_MCP_SHARED_DATA_DIR: shared,
+        SPOTIFY_MCP_MACHINE_ID: machineId
+      }
+    }
+  );
+}
 
 function preferences(artist: string) {
   return {
@@ -188,6 +299,22 @@ function preferences(artist: string) {
     discovery_level: null,
     notes: [],
     use_cases: {},
+    updated_at: null
+  };
+}
+
+function useCase(trait: string) {
+  return {
+    preferred_artists: [],
+    avoided_artists: [],
+    preferred_genres: [],
+    avoided_genres: [],
+    preferred_traits: [trait],
+    avoided_traits: [],
+    playback_mode: null,
+    ideal_track_count_range: null,
+    discovery_level: null,
+    notes: [],
     updated_at: null
   };
 }

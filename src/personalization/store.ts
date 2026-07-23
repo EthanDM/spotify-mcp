@@ -187,11 +187,13 @@ export class PersonalizationStore {
             `Invalid personalization event at ${file}:${index + 1}.`
           );
         const id = event.event_id ?? `legacy:${file}:${index + 1}`;
-        const canonical = canonicalJson(event);
+        const { machine_id: ignoredMachineId, ...semanticEvent } = event;
+        void ignoredMachineId;
+        const canonical = canonicalJson(semanticEvent);
         const existing = byId.get(id);
         if (existing && existing.raw !== canonical)
           throw new Error(`Conflicting personalization event ID ${id}.`);
-        byId.set(id, { event, raw: canonical });
+        if (!existing) byId.set(id, { event, raw: canonical });
       }
     }
     return [...byId.values()]

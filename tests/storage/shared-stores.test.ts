@@ -32,6 +32,22 @@ describe("shared stores", () => {
     expect(await desktop.getInteractionLogPaths()).toHaveLength(2);
   });
 
+  it("deduplicates migrated events whose only difference is machine provenance", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-deduped-"));
+    const desktop = personalization(root, "desktop");
+    const neo = personalization(root, "neo");
+    const event = {
+      event_id: "legacy-event",
+      schema_version: 1 as const,
+      ts: "2026-01-01T00:00:00.000Z",
+      type: "legacy",
+      details: {}
+    };
+    await desktop.appendEvent(event);
+    await neo.appendEvent(event);
+    expect(await desktop.countEvents()).toBe(1);
+  });
+
   it("rejects stale updates made through the same store instance", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-stale-"));
     const store = personalization(root, "desktop");

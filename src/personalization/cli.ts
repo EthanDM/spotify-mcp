@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import { TokenStore } from "../auth/token-store.js";
-import { getStorageConfig } from "../config.js";
+import { assertSharedStorageAvailable, getStorageConfig } from "../config.js";
 import { SpotifyClient } from "../lib/spotify.js";
 import { PersonalizationService } from "./service.js";
 import { PersonalizationStore } from "./store.js";
@@ -19,6 +19,7 @@ async function main(): Promise<void> {
   }
 
   const storage = getStorageConfig();
+  await assertSharedStorageAvailable(storage);
   const spotify = new SpotifyClient(new TokenStore(storage.tokenFile));
   const personalization = new PersonalizationService(
     spotify,
