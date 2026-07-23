@@ -18,7 +18,7 @@ type StoreOptions = {
   machineId: string;
   sharedMode: true;
   sharedRoot: string;
-  assertSharedWriteAvailable: () => Promise<void>;
+  assertSharedStorageAvailable: () => Promise<void>;
 };
 
 export class PersonalizationStore {
@@ -27,7 +27,7 @@ export class PersonalizationStore {
   private readonly machineId: string;
   private readonly sharedMode: boolean;
   private readonly sharedRoot: string | null;
-  private readonly assertSharedWriteAvailable: (() => Promise<void>) | null;
+  private readonly assertSharedStorageAvailable: (() => Promise<void>) | null;
 
   constructor(options: string | StoreOptions) {
     this.localDirectory =
@@ -37,8 +37,8 @@ export class PersonalizationStore {
     this.machineId = typeof options === "string" ? "local" : options.machineId;
     this.sharedMode = typeof options !== "string";
     this.sharedRoot = typeof options === "string" ? null : options.sharedRoot;
-    this.assertSharedWriteAvailable =
-      typeof options === "string" ? null : options.assertSharedWriteAvailable;
+    this.assertSharedStorageAvailable =
+      typeof options === "string" ? null : options.assertSharedStorageAvailable;
   }
 
   get snapshotPath(): string {
@@ -60,7 +60,12 @@ export class PersonalizationStore {
 
   async getInteractionLogPaths(): Promise<string[]> {
     if (!this.sharedMode) return [this.interactionLogPath];
-    return listFiles(path.join(this.sharedDirectory, "events"), ".ndjson");
+    await this.assertSharedStorageAvailable!();
+    return listFiles(
+      path.join(this.sharedDirectory, "events"),
+      ".ndjson",
+      this.assertSharedStorageAvailable!
+    );
   }
 
   async getPreferencesDocumentPath(): Promise<string> {
@@ -118,7 +123,7 @@ export class PersonalizationStore {
         }
       : event;
     if (this.sharedMode) {
-      await this.assertSharedWriteAvailable!();
+      await this.assertSharedStorageAvailable!();
       await ensureDirectoryWithinRoot(
         this.sharedRoot!,
         path.dirname(this.interactionLogPath)
@@ -170,7 +175,7 @@ export class PersonalizationStore {
       this.sharedMode
         ? {
             root: this.sharedRoot!,
-            assertWritable: this.assertSharedWriteAvailable!
+            assertAvailable: this.assertSharedStorageAvailable!
           }
         : null
     );
@@ -187,7 +192,10 @@ export class PersonalizationStore {
       try {
         raw = await fs.readFile(file, "utf8");
       } catch (error) {
-        if (isMissing(error)) continue;
+        if (isMissing(error)) {
+          await this.assertSharedStorageAvailable?.();
+          continue;
+        }
         throw error;
       }
       for (const [index, line] of raw.split("\n").entries()) {
@@ -267,14 +275,21 @@ export function normalizePreferences(
   };
 }
 
-async function listFiles(directory: string, suffix: string): Promise<string[]> {
+async function listFiles(
+  directory: string,
+  suffix: string,
+  assertSharedStorageAvailable?: () => Promise<void>
+): Promise<string[]> {
   try {
     return (await fs.readdir(directory))
       .filter((name) => name.endsWith(suffix))
       .sort()
       .map((name) => path.join(directory, name));
   } catch (error) {
-    if (isMissing(error)) return [];
+    if (isMissing(error)) {
+      await assertSharedStorageAvailable?.();
+      return [];
+    }
     throw error;
   }
 }

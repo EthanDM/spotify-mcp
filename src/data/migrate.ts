@@ -50,7 +50,7 @@ async function main(): Promise<void> {
   await sharedStorage.claimMachineId();
   const revisionGuard = {
     root: sharedStorage.sharedRoot,
-    assertWritable: () => sharedStorage.assertWritable()
+    assertAvailable: () => sharedStorage.assertWritable()
   };
   const counts = {
     preferences: 0,
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   );
   const preferencesDocument = await readJson<unknown>(preferencesSource);
   if (preferencesDocument !== undefined) {
-    const preferences = validatePreferencesDocument(preferencesDocument);
+    const preferences = normalizeMigratedPreferences(preferencesDocument);
     const store = new RevisionStore(
       path.join(
         config.sharedRoot,
@@ -76,10 +76,10 @@ async function main(): Promise<void> {
       ),
       "personalization preferences",
       config.machineId,
-      (value) => normalizePreferences(validatePreferencesDocument(value)),
+      (value) => validatePreferencesDocument(value),
       revisionGuard
     );
-    await seedRevision(store, normalizePreferences(preferences), "preferences");
+    await seedRevision(store, preferences, "preferences");
     counts.preferences = 1;
   }
 
@@ -231,13 +231,12 @@ async function validateMigration(
     path.join(localRoot, "personalization", "user-preferences.json")
   );
   if (preferencesDocument !== undefined) {
-    const preferences = validatePreferencesDocument(preferencesDocument);
-    const normalized = normalizePreferences(preferences);
+    const normalized = normalizeMigratedPreferences(preferencesDocument);
     const store = new RevisionStore(
       path.join(sharedRoot, "personalization", "preferences", "revisions"),
       "personalization preferences",
       machineId,
-      (value) => normalizePreferences(validatePreferencesDocument(value))
+      (value) => validatePreferencesDocument(value)
     );
     if (await validateSeed(store, normalized, "preferences"))
       warnings.push(
@@ -296,9 +295,11 @@ async function validateSeed<T>(
   value: T,
   name: string
 ): Promise<boolean> {
+  const revisions = await store.readAll();
+  if (revisions.some((revision) => stable(revision.value) === stable(value)))
+    return false;
   const tips = await store.readTips();
   if (tips.length === 0) return false;
-  if (tips.some((tip) => stable(tip.value) === stable(value))) return false;
   if (tips.length === 1) return true;
   throw new Error(
     `Shared ${name} already has unresolved conflicts that do not include this machine's value. Resolve them before migrating.`
@@ -376,18 +377,30 @@ async function seedRevision<T>(
   value: T,
   name: string
 ): Promise<void> {
+  const revisions = await store.readAll();
+  if (revisions.some((revision) => stable(revision.value) === stable(value)))
+    return;
   const tips = await store.readTips();
   if (tips.length === 0) {
     await store.write(value, null);
     return;
   }
-  if (tips.some((tip) => stable(tip.value) === stable(value))) return;
   if (tips.length === 1) {
     await store.importRoot(value);
     return;
   }
   throw new Error(
     `Shared ${name} already has unresolved conflicts that do not include this machine's value. Resolve them before migrating.`
+  );
+}
+
+function normalizeMigratedPreferences(
+  value: unknown
+): ReturnType<typeof normalizePreferences> {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return validatePreferencesDocument(value);
+  return validatePreferencesDocument(
+    normalizePreferences(value as ReturnType<typeof normalizePreferences>)
   );
 }
 

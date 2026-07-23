@@ -3,6 +3,7 @@ import {
   appendFile,
   mkdtemp,
   mkdir,
+  readdir,
   readFile,
   writeFile
 } from "node:fs/promises";
@@ -152,6 +153,61 @@ describe("shared data migration", () => {
     );
     await execute(command, ["src/data/migrate.ts", "--apply"], {
       env: neoEnvironment
+    });
+    const afterRerun = await execute(
+      command,
+      ["src/data/resolve.ts", "--document", "preferences"],
+      { env: neoEnvironment }
+    );
+    const resolvedInspection = JSON.parse(
+      afterRerun.stdout.slice(
+        0,
+        afterRerun.stdout.indexOf("\nNo files changed")
+      )
+    ) as { tips: Array<{ revision_id: string }> };
+    expect(resolvedInspection.tips).toHaveLength(1);
+  });
+
+  it("normalizes legacy preference documents before migrating", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-legacy-preferences-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await writeFile(
+      path.join(local, "personalization", "user-preferences.json"),
+      JSON.stringify({
+        preferred_artists: ["Artist"],
+        avoided_artists: [],
+        preferred_genres: [],
+        avoided_genres: [],
+        discovery_level: null,
+        notes: [],
+        updated_at: null
+      })
+    );
+
+    await runMigration(local, shared, "desktop", true);
+    const revisionNames = await readdir(
+      path.join(shared, "personalization", "preferences", "revisions")
+    );
+    const revision = JSON.parse(
+      await readFile(
+        path.join(
+          shared,
+          "personalization",
+          "preferences",
+          "revisions",
+          revisionNames[0]
+        ),
+        "utf8"
+      )
+    ) as { value: Record<string, unknown> };
+    expect(revision.value).toMatchObject({
+      preferred_traits: [],
+      avoided_traits: [],
+      use_cases: {}
     });
   });
 

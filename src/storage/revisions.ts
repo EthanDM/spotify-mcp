@@ -4,9 +4,9 @@ import path from "node:path";
 
 import { ensureDirectoryWithinRoot } from "./shared.js";
 
-type SharedWriteGuard = {
+type SharedAccessGuard = {
   root: string;
-  assertWritable: () => Promise<void>;
+  assertAvailable: () => Promise<void>;
 };
 
 export type RevisionEnvelope<T> = {
@@ -41,7 +41,7 @@ export class RevisionStore<T> {
     private readonly documentName: string,
     private readonly machineId: string,
     private readonly normalize: (value: unknown) => T,
-    private readonly sharedWriteGuard: SharedWriteGuard | null = null
+    private readonly sharedAccessGuard: SharedAccessGuard | null = null
   ) {}
 
   async read(): Promise<RevisionState<T> | null> {
@@ -61,6 +61,11 @@ export class RevisionStore<T> {
 
   getRevisionPath(revisionId: string): string {
     return path.join(this.revisionsDirectory, `${revisionId}.json`);
+  }
+
+  async readAll(): Promise<Array<RevisionEnvelope<T>>> {
+    await this.sharedAccessGuard?.assertAvailable();
+    return this.loadAll();
   }
 
   async readTips(): Promise<Array<RevisionEnvelope<T>>> {
@@ -132,10 +137,10 @@ export class RevisionStore<T> {
       written_by: this.machineId,
       value: this.normalize(value)
     };
-    if (this.sharedWriteGuard) {
-      await this.sharedWriteGuard.assertWritable();
+    if (this.sharedAccessGuard) {
+      await this.sharedAccessGuard.assertAvailable();
       await ensureDirectoryWithinRoot(
-        this.sharedWriteGuard.root,
+        this.sharedAccessGuard.root,
         this.revisionsDirectory
       );
     } else {
@@ -155,14 +160,17 @@ export class RevisionStore<T> {
     return envelope;
   }
 
-  private async readAll(): Promise<Array<RevisionEnvelope<T>>> {
+  private async loadAll(): Promise<Array<RevisionEnvelope<T>>> {
     let names: string[];
     try {
       names = (await fs.readdir(this.revisionsDirectory))
         .filter((name) => name.endsWith(".json"))
         .sort();
     } catch (error) {
-      if (isMissing(error)) return [];
+      if (isMissing(error)) {
+        await this.sharedAccessGuard?.assertAvailable();
+        return [];
+      }
       throw error;
     }
     const revisions = await Promise.all(

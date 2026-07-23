@@ -64,7 +64,7 @@ const personalization = new PersonalizationService(
         machineId: storage.machineId!,
         sharedMode: true,
         sharedRoot: sharedStorage!.sharedRoot,
-        assertSharedWriteAvailable: () => sharedStorage!.assertWritable()
+        assertSharedStorageAvailable: () => sharedStorage!.assertWritable()
       })
     : new PersonalizationStore(storage.localPersonalizationDirectory)
 );
@@ -76,7 +76,7 @@ const people = new PeopleProfileService(
         machineId: storage.machineId!,
         sharedMode: true,
         sharedRoot: sharedStorage!.sharedRoot,
-        assertSharedWriteAvailable: () => sharedStorage!.assertWritable()
+        assertSharedStorageAvailable: () => sharedStorage!.assertWritable()
       })
     : new PeopleStore(storage.localPeopleDirectory)
 );

@@ -34,7 +34,7 @@ async function main(): Promise<void> {
           machineId: storage.machineId!,
           sharedMode: true,
           sharedRoot: sharedStorage!.sharedRoot,
-          assertSharedWriteAvailable: () => sharedStorage!.assertWritable()
+          assertSharedStorageAvailable: () => sharedStorage!.assertWritable()
         })
       : new PersonalizationStore(storage.localPersonalizationDirectory)
   );

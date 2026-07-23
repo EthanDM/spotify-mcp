@@ -152,7 +152,7 @@ function personalization(
     machineId,
     sharedMode: true,
     sharedRoot: path.join(root, "shared"),
-    assertSharedWriteAvailable: async () => {}
+    assertSharedStorageAvailable: async () => {}
   });
 }
 function people(root: string, machineId: string): PeopleStore {
@@ -163,7 +163,7 @@ function people(root: string, machineId: string): PeopleStore {
     machineId,
     sharedMode: true,
     sharedRoot: path.join(root, "shared"),
-    assertSharedWriteAvailable: async () => {}
+    assertSharedStorageAvailable: async () => {}
   });
 }
 function record(entry_id: string, recorded_at: string): PersonPlaylistRecord {

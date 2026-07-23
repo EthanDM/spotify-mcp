@@ -180,7 +180,7 @@ SPOTIFY_MCP_MACHINE_ID=desktop
 
 Use a different stable lowercase id such as `neo` on the other Mac. On first use, Spotify MCP creates a private local `installation-id` and reserves the machine id under the shared `machines/` directory. A machine id can belong to only one installation, so do not copy `installation-id` between Macs or reuse an id after configuring another Mac.
 
-Never move or symlink the entire `~/.config/spotify-mcp` directory: `auth.json`, Spotify snapshots, generated contexts, `.env`, and Codex configuration must remain machine-local. Spotify MCP rechecks the iCloud root and machine reservation before each shared write. If the configured root disappears, the write fails instead of recreating a local shadow directory or falling back to local storage.
+Never move or symlink the entire `~/.config/spotify-mcp` directory: `auth.json`, Spotify snapshots, generated contexts, `.env`, and Codex configuration must remain machine-local. Spotify MCP rechecks the iCloud root and machine reservation before each shared read or write. If the configured root disappears, the operation fails instead of reporting empty durable state, recreating a local shadow directory, or falling back to local storage.
 
 Migrate the desktop first after iCloud is available:
 

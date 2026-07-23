@@ -39,7 +39,7 @@ describe("shared storage guard", () => {
     expect(claim.installation_id).toBe(installationId);
   });
 
-  it("does not recreate a shared root that disappears before a write", async () => {
+  it("rejects reads and writes when the shared root disappears", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-unmounted-"));
     const sharedRoot = path.join(root, "shared");
     const localRoot = path.join(root, "local");
@@ -54,10 +54,16 @@ describe("shared storage guard", () => {
       machineId: "desktop",
       sharedMode: true,
       sharedRoot,
-      assertSharedWriteAvailable: () => guard.assertWritable()
+      assertSharedStorageAvailable: () => guard.assertWritable()
     });
 
     await rm(sharedRoot, { recursive: true });
+    await expect(store.readPreferences()).rejects.toThrow(
+      "Configured shared storage is unavailable"
+    );
+    await expect(store.readRecentEvents(10)).rejects.toThrow(
+      "Configured shared storage is unavailable"
+    );
     await expect(
       store.appendEvent({
         ts: "2026-01-01T00:00:00.000Z",

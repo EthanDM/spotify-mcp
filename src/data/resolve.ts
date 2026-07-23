@@ -49,7 +49,7 @@ async function main(): Promise<void> {
     normalize,
     {
       root: sharedStorage.sharedRoot,
-      assertWritable: () => sharedStorage.assertWritable()
+      assertAvailable: () => sharedStorage.assertWritable()
     }
   );
   const tips = await store.readTips();

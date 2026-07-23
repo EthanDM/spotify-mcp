@@ -15,7 +15,7 @@ type StoreOptions = {
   machineId: string;
   sharedMode: true;
   sharedRoot: string;
-  assertSharedWriteAvailable: () => Promise<void>;
+  assertSharedStorageAvailable: () => Promise<void>;
 };
 
 export class PeopleStore {
@@ -24,7 +24,7 @@ export class PeopleStore {
   private readonly machineId: string;
   private readonly sharedMode: boolean;
   private readonly sharedRoot: string | null;
-  private readonly assertSharedWriteAvailable: (() => Promise<void>) | null;
+  private readonly assertSharedStorageAvailable: (() => Promise<void>) | null;
 
   constructor(options: string | StoreOptions) {
     this.localDirectory =
@@ -34,8 +34,8 @@ export class PeopleStore {
     this.machineId = typeof options === "string" ? "local" : options.machineId;
     this.sharedMode = typeof options !== "string";
     this.sharedRoot = typeof options === "string" ? null : options.sharedRoot;
-    this.assertSharedWriteAvailable =
-      typeof options === "string" ? null : options.assertSharedWriteAvailable;
+    this.assertSharedStorageAvailable =
+      typeof options === "string" ? null : options.assertSharedStorageAvailable;
   }
 
   get basePath(): string {
@@ -67,9 +67,11 @@ export class PeopleStore {
 
   async getPlaylistHistoryPaths(profileId: string): Promise<string[]> {
     if (!this.sharedMode) return [this.getPlaylistHistoryPath(profileId)];
+    await this.assertSharedStorageAvailable!();
     return listFiles(
       path.join(this.getProfileDirectoryPath(profileId), "playlist-history"),
-      ".ndjson"
+      ".ndjson",
+      this.assertSharedStorageAvailable!
     );
   }
 
@@ -83,13 +85,17 @@ export class PeopleStore {
     return (await this.readProfile(profileId)) !== null;
   }
   async listProfileIds(): Promise<string[]> {
+    if (this.sharedMode) await this.assertSharedStorageAvailable!();
     try {
       return (await fs.readdir(this.sharedDirectory, { withFileTypes: true }))
         .filter((entry) => entry.isDirectory())
         .map((entry) => entry.name)
         .sort();
     } catch (error) {
-      if (isMissing(error)) return [];
+      if (isMissing(error)) {
+        await this.assertSharedStorageAvailable?.();
+        return [];
+      }
       throw error;
     }
   }
@@ -150,7 +156,10 @@ export class PeopleStore {
       try {
         raw = await fs.readFile(file, "utf8");
       } catch (error) {
-        if (isMissing(error)) continue;
+        if (isMissing(error)) {
+          await this.assertSharedStorageAvailable?.();
+          continue;
+        }
         throw error;
       }
       for (const [index, line] of raw.split("\n").entries()) {
@@ -192,7 +201,7 @@ export class PeopleStore {
   ): Promise<void> {
     const file = this.getPlaylistHistoryPath(profileId);
     if (this.sharedMode) {
-      await this.assertSharedWriteAvailable!();
+      await this.assertSharedStorageAvailable!();
       await ensureDirectoryWithinRoot(this.sharedRoot!, path.dirname(file));
     } else {
       await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
@@ -243,21 +252,28 @@ export class PeopleStore {
       this.sharedMode
         ? {
             root: this.sharedRoot!,
-            assertWritable: this.assertSharedWriteAvailable!
+            assertAvailable: this.assertSharedStorageAvailable!
           }
         : null
     );
   }
 }
 
-async function listFiles(directory: string, suffix: string): Promise<string[]> {
+async function listFiles(
+  directory: string,
+  suffix: string,
+  assertSharedStorageAvailable?: () => Promise<void>
+): Promise<string[]> {
   try {
     return (await fs.readdir(directory))
       .filter((name) => name.endsWith(suffix))
       .sort()
       .map((name) => path.join(directory, name));
   } catch (error) {
-    if (isMissing(error)) return [];
+    if (isMissing(error)) {
+      await assertSharedStorageAvailable?.();
+      return [];
+    }
     throw error;
   }
 }
