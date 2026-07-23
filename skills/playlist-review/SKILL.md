@@ -54,9 +54,8 @@ If the user did not provide a use case, infer the playlist's likely purpose from
 
 3. Diagnose the playlist.
 
-- Check opener strength.
-- Check closer strength.
-- Check sequencing continuity and abrupt transitions.
+- When ordered playback is claimed or materially important, check opener strength, closer strength, sequencing continuity, and abrupt transitions.
+- For a reusable shuffle pool, judge texture, energy, artist, and role distribution across the complete body; do not recommend changes based on opener, closer, or adjacency.
 - Check artist overconcentration.
 - Judge personalization strength separately from useful variety.
 - Check duplicate tracks or duplicate-like redundancy.
@@ -68,7 +67,7 @@ If the user did not provide a use case, infer the playlist's likely purpose from
 
 - Call out the best tracks or strongest sections.
 - Name specific removal candidates.
-- Name specific reorder candidates.
+- Name specific reorder candidates only when order is claimed or materially important.
 - If the track count is too high, recommend a tighter target range.
 - If confidence is high, suggest exact move/remove actions.
 

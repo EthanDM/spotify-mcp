@@ -60,14 +60,7 @@ For a short explicit request such as "make a focused evening-walk playlist," do 
 - Ground unfamiliar genres with high-confidence canonical or contemporary anchors before expanding into obscure discovery.
 - Assemble and judge the complete candidate pool before creating a playlist.
 
-5. Assemble the playlist.
-
-- Create a new private playlist with `spotify_create_playlist` unless the user explicitly wants an existing playlist replaced or public.
-- Add tracks with `spotify_add_playlist_items`.
-- If the user wants an exact ordered body, use `spotify_replace_playlist_items`.
-- Use `spotify_reorder_playlist_items` when a specific opening, midpoint, or finish sequence matters.
-
-6. Sanity-check the result.
+5. Validate the complete body before mutating Spotify.
 
 - Check track count against the intended use case.
 - Reject weak prompt-fit or functional-fit candidates before applying diversity arithmetic.
@@ -83,6 +76,15 @@ For a short explicit request such as "make a focused evening-walk playlist," do 
 - For ordered builds, verify every track's phase and confirm the ending supports the claimed destination.
 - Inspect all credited artist appearances, not only primary-artist counts, and flag repeated reliance on one familiar musical ecosystem even when each individual artist stays under the numeric cap.
 - If the playlist is noisy or bloated, tighten it before calling it done.
+
+Do not create, add, replace, or reorder playlist items until every applicable check above passes.
+
+6. Create and verify.
+
+- Create a new private playlist with `spotify_create_playlist` unless the user explicitly wants an existing playlist replaced or public.
+- Add tracks with `spotify_add_playlist_items`.
+- If the user wants an exact ordered body, use `spotify_replace_playlist_items`.
+- Use `spotify_reorder_playlist_items` when a specific opening, midpoint, or finish sequence matters.
 - Read the completed playlist back and verify the exact final count before claiming success.
 
 7. Close the loop.

@@ -53,6 +53,10 @@ const forbiddenContent = [
     label: "Spotify credential assignment",
     pattern:
       /SPOTIFY_(?:CLIENT_ID|CLIENT_SECRET|ACCESS_TOKEN|REFRESH_TOKEN)\s*=/
+  },
+  {
+    label: "stored Spotify token field",
+    pattern: /"(?:accessToken|refreshToken)"\s*:/
   }
 ];
 

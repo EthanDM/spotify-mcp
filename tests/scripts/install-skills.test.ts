@@ -166,4 +166,28 @@ describe("skill installer", () => {
       await rm(linkFixture, { force: true });
     }
   });
+
+  it("rejects stored Spotify token fields under arbitrary filenames", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "oauth-backup.json"
+    );
+    try {
+      await writeFile(
+        fixture,
+        JSON.stringify({
+          accessToken: "access-value",
+          refreshToken: "refresh-value"
+        })
+      );
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("stored Spotify token field")
+      });
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
 });

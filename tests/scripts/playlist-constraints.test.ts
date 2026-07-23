@@ -82,14 +82,54 @@ describe("playlist constraint checker", () => {
       stderr: expect.stringContaining("artist_specific must be a boolean")
     });
   });
+
+  it("requires mode fields and complete historical references", async () => {
+    const missingMode = await writeManifest(
+      { target_track_count: 1, tracks: [track("spotify:track:one", "close")] },
+      false
+    );
+    await expect(
+      execute("python3", [checker, missingMode])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("curation_mode is required")
+    });
+
+    const missingUris = await writeManifest({
+      target_track_count: 1,
+      tracks: [track("spotify:track:one", "close")],
+      historical_references: [{ id: "reference" }]
+    });
+    await expect(
+      execute("python3", [checker, missingUris])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "historical_references[1].track_uris must be a list"
+      )
+    });
+  });
 });
 
-async function writeManifest(value: unknown): Promise<string> {
+async function writeManifest(
+  value: unknown,
+  includeModes = true
+): Promise<string> {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "spotify-constraints-")
   );
   const manifest = path.join(directory, "manifest.json");
-  await writeFile(manifest, JSON.stringify(value));
+  await writeFile(
+    manifest,
+    JSON.stringify(
+      includeModes
+        ? {
+            curation_mode: "recovered",
+            audience_mode: "self_personalized",
+            playback_mode: "shuffle",
+            ...(value as Record<string, unknown>)
+          }
+        : value
+    )
+  );
   return manifest;
 }
 

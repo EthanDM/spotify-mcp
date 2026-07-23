@@ -57,10 +57,10 @@ def main() -> None:
     recent = require_list(manifest.get("recent_comparable_builds", []), "recent_comparable_builds")
     recent_general = require_list(manifest.get("recent_general_builds", []), "recent_general_builds")
     personalization_sources = require_list(manifest.get("personalization_sources", []), "personalization_sources")
-    mode = manifest.get("curation_mode", "general")
-    audience_mode = manifest.get("audience_mode", "self_personalized")
+    mode = manifest.get("curation_mode")
+    audience_mode = manifest.get("audience_mode")
     person_profile_id = manifest.get("person_profile_id")
-    playback_mode = manifest.get("playback_mode", "shuffle")
+    playback_mode = manifest.get("playback_mode")
     vocal_policy = manifest.get("vocal_policy", "unrestricted")
     exceptions = set(require_list(manifest.get("exceptions", []), "exceptions"))
     artist_specific = manifest.get("artist_specific", False)
@@ -68,11 +68,11 @@ def main() -> None:
     target_track_count_range = manifest.get("target_track_count_range")
 
     if mode not in {"general", "artist_catalog", "derivative", "recovered"}:
-        fail("curation_mode must be general, artist_catalog, derivative, or recovered")
+        fail("curation_mode is required and must be general, artist_catalog, derivative, or recovered")
     if audience_mode not in {"self_personalized", "self_neutral", "person_profile"}:
-        fail("audience_mode must be self_personalized, self_neutral, or person_profile")
+        fail("audience_mode is required and must be self_personalized, self_neutral, or person_profile")
     if playback_mode not in {"shuffle", "ordered"}:
-        fail("playback_mode must be shuffle or ordered")
+        fail("playback_mode is required and must be shuffle or ordered")
     if vocal_policy not in {"unrestricted", "mostly_instrumental", "instrumental_only"}:
         fail("vocal_policy must be unrestricted, mostly_instrumental, or instrumental_only")
     if not isinstance(artist_specific, bool):
@@ -209,7 +209,10 @@ def main() -> None:
         if not isinstance(ref, dict):
             fail(f"historical_references[{index}] must be an object")
         ref_id = str(ref.get("id", f"reference-{index}"))
-        ref_uris = set(require_list(ref.get("track_uris", []), f"historical_references[{index}].track_uris"))
+        ref_uri_list = require_list(ref.get("track_uris"), f"historical_references[{index}].track_uris")
+        if not ref_uri_list or any(not isinstance(uri, str) or not uri for uri in ref_uri_list):
+            fail(f"historical_references[{index}].track_uris must contain non-empty strings")
+        ref_uris = set(ref_uri_list)
         overlap = final_uri_set & ref_uris
         historical_union |= ref_uris
         reference_overlaps.append({"id": ref_id, "count": len(overlap)})
