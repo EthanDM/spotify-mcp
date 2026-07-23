@@ -371,6 +371,25 @@ describe("skill installer", () => {
     }
   });
 
+  it("rejects Yarn credential assignments", async () => {
+    const fixture = path.resolve("skills", "playlist-review", ".yarnrc.yml");
+    try {
+      for (const assignment of [
+        "npmAuthToken: npm_example",
+        "npmAuthIdent: user:password"
+      ]) {
+        await writeFile(fixture, assignment);
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("Yarn credential assignment")
+        });
+      }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
   it("rejects case-insensitive Spotify credential assignments", async () => {
     const fixture = path.resolve(
       "skills",

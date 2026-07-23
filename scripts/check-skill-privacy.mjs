@@ -100,6 +100,10 @@ const forbiddenContent = [
     pattern: /(?:^|\n)\s*aws_(?:access_key_id|secret_access_key)\s*=/i
   },
   {
+    label: "Yarn credential assignment",
+    pattern: /(?:^|\n)\s*npmAuth(?:Token|Ident)\s*:/i
+  },
+  {
     label: "stored Spotify token field",
     pattern:
       /"(?:accessToken|refreshToken|access_token|refresh_token|clientSecret|client_secret)"\s*:/
