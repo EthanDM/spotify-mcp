@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RevisionStore } from "../storage/revisions.js";
+import { ensureDirectoryWithinRoot } from "../storage/shared.js";
 import type {
   PersonPlaylistRecord,
   PersonProfile,
@@ -13,6 +14,8 @@ type StoreOptions = {
   sharedDirectory: string;
   machineId: string;
   sharedMode: true;
+  sharedRoot: string;
+  assertSharedWriteAvailable: () => Promise<void>;
 };
 
 export class PeopleStore {
@@ -20,6 +23,8 @@ export class PeopleStore {
   private readonly sharedDirectory: string;
   private readonly machineId: string;
   private readonly sharedMode: boolean;
+  private readonly sharedRoot: string | null;
+  private readonly assertSharedWriteAvailable: (() => Promise<void>) | null;
 
   constructor(options: string | StoreOptions) {
     this.localDirectory =
@@ -28,6 +33,9 @@ export class PeopleStore {
       typeof options === "string" ? options : options.sharedDirectory;
     this.machineId = typeof options === "string" ? "local" : options.machineId;
     this.sharedMode = typeof options !== "string";
+    this.sharedRoot = typeof options === "string" ? null : options.sharedRoot;
+    this.assertSharedWriteAvailable =
+      typeof options === "string" ? null : options.assertSharedWriteAvailable;
   }
 
   get basePath(): string {
@@ -183,7 +191,12 @@ export class PeopleStore {
     record: PersonPlaylistRecord
   ): Promise<void> {
     const file = this.getPlaylistHistoryPath(profileId);
-    await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+    if (this.sharedMode) {
+      await this.assertSharedWriteAvailable!();
+      await ensureDirectoryWithinRoot(this.sharedRoot!, path.dirname(file));
+    } else {
+      await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+    }
     await fs.appendFile(file, `${JSON.stringify(record)}\n`, {
       encoding: "utf8",
       mode: 0o600
@@ -226,7 +239,13 @@ export class PeopleStore {
         )
           throw new Error(`Invalid person profile ${profileId}.`);
         return value as PersonProfile;
-      }
+      },
+      this.sharedMode
+        ? {
+            root: this.sharedRoot!,
+            assertWritable: this.assertSharedWriteAvailable!
+          }
+        : null
     );
   }
 }

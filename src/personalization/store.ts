@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RevisionStore } from "../storage/revisions.js";
+import { ensureDirectoryWithinRoot } from "../storage/shared.js";
 import type {
   PersonalizationContextResult,
   PersonalizationEvent,
@@ -16,6 +17,8 @@ type StoreOptions = {
   sharedDirectory: string;
   machineId: string;
   sharedMode: true;
+  sharedRoot: string;
+  assertSharedWriteAvailable: () => Promise<void>;
 };
 
 export class PersonalizationStore {
@@ -23,6 +26,8 @@ export class PersonalizationStore {
   private readonly sharedDirectory: string;
   private readonly machineId: string;
   private readonly sharedMode: boolean;
+  private readonly sharedRoot: string | null;
+  private readonly assertSharedWriteAvailable: (() => Promise<void>) | null;
 
   constructor(options: string | StoreOptions) {
     this.localDirectory =
@@ -31,6 +36,9 @@ export class PersonalizationStore {
       typeof options === "string" ? options : options.sharedDirectory;
     this.machineId = typeof options === "string" ? "local" : options.machineId;
     this.sharedMode = typeof options !== "string";
+    this.sharedRoot = typeof options === "string" ? null : options.sharedRoot;
+    this.assertSharedWriteAvailable =
+      typeof options === "string" ? null : options.assertSharedWriteAvailable;
   }
 
   get snapshotPath(): string {
@@ -109,10 +117,18 @@ export class PersonalizationStore {
           schema_version: 1 as const
         }
       : event;
-    await fs.mkdir(path.dirname(this.interactionLogPath), {
-      recursive: true,
-      mode: 0o700
-    });
+    if (this.sharedMode) {
+      await this.assertSharedWriteAvailable!();
+      await ensureDirectoryWithinRoot(
+        this.sharedRoot!,
+        path.dirname(this.interactionLogPath)
+      );
+    } else {
+      await fs.mkdir(path.dirname(this.interactionLogPath), {
+        recursive: true,
+        mode: 0o700
+      });
+    }
     await fs.appendFile(
       this.interactionLogPath,
       `${JSON.stringify(persisted)}\n`,
@@ -150,7 +166,13 @@ export class PersonalizationStore {
       "personalization preferences",
       this.machineId,
       (value) =>
-        normalizePreferences(value as PersonalizationPreferences | null)
+        normalizePreferences(value as PersonalizationPreferences | null),
+      this.sharedMode
+        ? {
+            root: this.sharedRoot!,
+            assertWritable: this.assertSharedWriteAvailable!
+          }
+        : null
     );
   }
 

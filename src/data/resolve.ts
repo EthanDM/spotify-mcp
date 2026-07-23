@@ -2,9 +2,10 @@ import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { assertSharedStorageAvailable, getStorageConfig } from "../config.js";
+import { getStorageConfig } from "../config.js";
 import { normalizePreferences } from "../personalization/store.js";
 import { RevisionStore } from "../storage/revisions.js";
+import { SharedStorageGuard } from "../storage/shared.js";
 import {
   validatePersonProfileDocument,
   validatePreferencesDocument
@@ -15,7 +16,8 @@ async function main(): Promise<void> {
   const config = getStorageConfig();
   if (!config.sharedRoot || !config.machineId)
     throw new Error("Shared storage configuration is required.");
-  await assertSharedStorageAvailable(config);
+  const sharedStorage = new SharedStorageGuard(config);
+  await sharedStorage.claimMachineId();
   if (!args.document)
     throw new Error(
       "Use --document preferences or --document people/<profile-id>."
@@ -44,7 +46,11 @@ async function main(): Promise<void> {
     revisionsDirectory,
     args.document,
     config.machineId,
-    normalize
+    normalize,
+    {
+      root: sharedStorage.sharedRoot,
+      assertWritable: () => sharedStorage.assertWritable()
+    }
   );
   const tips = await store.readTips();
   process.stdout.write(

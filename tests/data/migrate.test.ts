@@ -58,6 +58,7 @@ describe("shared data migration", () => {
     expect(dryRun.stdout).toContain("No files changed");
     await expect(readFile(shared)).rejects.toThrow();
 
+    await mkdir(shared);
     await execute(command, ["src/data/migrate.ts", "--apply"], {
       env: environment
     });
@@ -268,12 +269,13 @@ describe("shared data migration", () => {
   });
 });
 
-function runMigration(
+async function runMigration(
   local: string,
   shared: string,
   machineId: string,
   apply = false
 ) {
+  if (apply) await mkdir(shared, { recursive: true });
   return execute(
     path.resolve("node_modules/.bin/tsx"),
     ["src/data/migrate.ts", ...(apply ? ["--apply"] : [])],

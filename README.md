@@ -178,7 +178,9 @@ SPOTIFY_MCP_SHARED_DATA_DIR=~/Library/Mobile Documents/com~apple~CloudDocs/App D
 SPOTIFY_MCP_MACHINE_ID=desktop
 ```
 
-Use a different stable lowercase id such as `neo` on the other Mac. Never move or symlink the entire `~/.config/spotify-mcp` directory: `auth.json`, Spotify snapshots, generated contexts, `.env`, and Codex configuration must remain machine-local. Shared writes fail when the configured iCloud directory is unavailable; they never fall back to local storage.
+Use a different stable lowercase id such as `neo` on the other Mac. On first use, Spotify MCP creates a private local `installation-id` and reserves the machine id under the shared `machines/` directory. A machine id can belong to only one installation, so do not copy `installation-id` between Macs or reuse an id after configuring another Mac.
+
+Never move or symlink the entire `~/.config/spotify-mcp` directory: `auth.json`, Spotify snapshots, generated contexts, `.env`, and Codex configuration must remain machine-local. Spotify MCP rechecks the iCloud root and machine reservation before each shared write. If the configured root disappears, the write fails instead of recreating a local shadow directory or falling back to local storage.
 
 Migrate the desktop first after iCloud is available:
 
@@ -187,7 +189,7 @@ pnpm data:migrate
 pnpm data:migrate -- --apply
 ```
 
-The first command is read-only. The applied migration preserves the original local files, excludes credentials and generated state, and can be rerun without duplicating records. Allow iCloud to finish syncing before configuring or migrating Neo. If Neo has different preferences or profiles, migration imports them as explicit revision forks while still migrating its histories and artifacts; resolve those forks afterward.
+The first command is read-only. Create the configured directory in iCloud before applying the migration. The applied migration reserves the machine id, preserves the original local files, excludes credentials and generated state, and can be rerun without duplicating records. Allow iCloud to finish syncing before configuring or migrating Neo. If Neo has different preferences or profiles, migration imports them as explicit revision forks while still migrating its histories and artifacts; resolve those forks afterward.
 
 Preferences and person profiles retain immutable revisions. If offline edits create multiple tips, normal access refuses to choose one. Inspect and resolve the conflict explicitly:
 

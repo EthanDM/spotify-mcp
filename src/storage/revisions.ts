@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { ensureDirectoryWithinRoot } from "./shared.js";
+
+type SharedWriteGuard = {
+  root: string;
+  assertWritable: () => Promise<void>;
+};
+
 export type RevisionEnvelope<T> = {
   schema_version: 1;
   revision_id: string;
@@ -33,7 +40,8 @@ export class RevisionStore<T> {
     readonly revisionsDirectory: string,
     private readonly documentName: string,
     private readonly machineId: string,
-    private readonly normalize: (value: unknown) => T
+    private readonly normalize: (value: unknown) => T,
+    private readonly sharedWriteGuard: SharedWriteGuard | null = null
   ) {}
 
   async read(): Promise<RevisionState<T> | null> {
@@ -124,7 +132,15 @@ export class RevisionStore<T> {
       written_by: this.machineId,
       value: this.normalize(value)
     };
-    await fs.mkdir(this.revisionsDirectory, { recursive: true, mode: 0o700 });
+    if (this.sharedWriteGuard) {
+      await this.sharedWriteGuard.assertWritable();
+      await ensureDirectoryWithinRoot(
+        this.sharedWriteGuard.root,
+        this.revisionsDirectory
+      );
+    } else {
+      await fs.mkdir(this.revisionsDirectory, { recursive: true, mode: 0o700 });
+    }
     const destination = path.join(
       this.revisionsDirectory,
       `${envelope.revision_id}.json`

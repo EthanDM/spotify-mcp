@@ -1,4 +1,5 @@
 import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -144,19 +145,25 @@ function personalization(
   root: string,
   machineId: string
 ): PersonalizationStore {
+  mkdirSync(path.join(root, "shared"), { recursive: true });
   return new PersonalizationStore({
     localDirectory: path.join(root, machineId, "local"),
     sharedDirectory: path.join(root, "shared", "personalization"),
     machineId,
-    sharedMode: true
+    sharedMode: true,
+    sharedRoot: path.join(root, "shared"),
+    assertSharedWriteAvailable: async () => {}
   });
 }
 function people(root: string, machineId: string): PeopleStore {
+  mkdirSync(path.join(root, "shared"), { recursive: true });
   return new PeopleStore({
     localDirectory: path.join(root, machineId, "local-people"),
     sharedDirectory: path.join(root, "shared", "people"),
     machineId,
-    sharedMode: true
+    sharedMode: true,
+    sharedRoot: path.join(root, "shared"),
+    assertSharedWriteAvailable: async () => {}
   });
 }
 function record(entry_id: string, recorded_at: string): PersonPlaylistRecord {

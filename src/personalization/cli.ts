@@ -1,8 +1,9 @@
 import "dotenv/config";
 
 import { TokenStore } from "../auth/token-store.js";
-import { assertSharedStorageAvailable, getStorageConfig } from "../config.js";
+import { getStorageConfig } from "../config.js";
 import { SpotifyClient } from "../lib/spotify.js";
+import { SharedStorageGuard } from "../storage/shared.js";
 import { PersonalizationService } from "./service.js";
 import { PersonalizationStore } from "./store.js";
 
@@ -19,7 +20,10 @@ async function main(): Promise<void> {
   }
 
   const storage = getStorageConfig();
-  await assertSharedStorageAvailable(storage);
+  const sharedStorage = storage.sharedMode
+    ? new SharedStorageGuard(storage)
+    : null;
+  await sharedStorage?.claimMachineId();
   const spotify = new SpotifyClient(new TokenStore(storage.tokenFile));
   const personalization = new PersonalizationService(
     spotify,
@@ -28,7 +32,9 @@ async function main(): Promise<void> {
           localDirectory: storage.localPersonalizationDirectory,
           sharedDirectory: storage.sharedPersonalizationDirectory,
           machineId: storage.machineId!,
-          sharedMode: true
+          sharedMode: true,
+          sharedRoot: sharedStorage!.sharedRoot,
+          assertSharedWriteAvailable: () => sharedStorage!.assertWritable()
         })
       : new PersonalizationStore(storage.localPersonalizationDirectory)
   );

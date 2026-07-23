@@ -7,6 +7,10 @@ import { getStorageConfig } from "../config.js";
 import { normalizePreferences } from "../personalization/store.js";
 import { RevisionStore } from "../storage/revisions.js";
 import {
+  ensureDirectoryWithinRoot,
+  SharedStorageGuard
+} from "../storage/shared.js";
+import {
   validatePersonPlaylistRecordDocument,
   validatePersonProfileDocument,
   validatePersonalizationEventDocument,
@@ -42,6 +46,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  const sharedStorage = new SharedStorageGuard(config);
+  await sharedStorage.claimMachineId();
+  const revisionGuard = {
+    root: sharedStorage.sharedRoot,
+    assertWritable: () => sharedStorage.assertWritable()
+  };
   const counts = {
     preferences: 0,
     profiles: 0,
@@ -66,7 +76,8 @@ async function main(): Promise<void> {
       ),
       "personalization preferences",
       config.machineId,
-      (value) => normalizePreferences(validatePreferencesDocument(value))
+      (value) => normalizePreferences(validatePreferencesDocument(value)),
+      revisionGuard
     );
     await seedRevision(store, normalizePreferences(preferences), "preferences");
     counts.preferences = 1;
@@ -88,7 +99,8 @@ async function main(): Promise<void> {
         path.join(config.sharedRoot, "people", profileId, "revisions"),
         `person profile ${profileId}`,
         config.machineId,
-        (value) => validatePersonProfileDocument(value, profileId)
+        (value) => validatePersonProfileDocument(value, profileId),
+        revisionGuard
       );
       await seedRevision(store, profile, `person profile ${profileId}`);
       counts.profiles += 1;
@@ -108,7 +120,9 @@ async function main(): Promise<void> {
         `${config.machineId}.ndjson`
       ),
       "entry_id",
-      config.machineId
+      config.machineId,
+      false,
+      sharedStorage
     );
   }
   counts.events = await migrateNdjson(
@@ -121,11 +135,13 @@ async function main(): Promise<void> {
     ),
     "event_id",
     config.machineId,
-    true
+    true,
+    sharedStorage
   );
   counts.artifacts = await copyArtifacts(
     path.join(config.localRoot, "artifacts"),
-    path.join(config.sharedRoot, "artifacts")
+    path.join(config.sharedRoot, "artifacts"),
+    sharedStorage
   );
 
   const manifest = {
@@ -142,7 +158,11 @@ async function main(): Promise<void> {
     "migrations",
     `${config.machineId}.json`
   );
-  await writeAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeAtomic(
+    manifestPath,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    sharedStorage
+  );
   process.stdout.write(
     `Migration complete: ${JSON.stringify(counts)}\nManifest: ${manifestPath}\nOriginal local files were preserved.\n`
   );
@@ -376,7 +396,8 @@ async function migrateNdjson(
   destination: string,
   idField: string,
   machineId: string,
-  addEventMetadata = false
+  addEventMetadata: boolean,
+  sharedStorage: SharedStorageGuard
 ): Promise<number> {
   if (!(await exists(source))) return 0;
   const sourceLines = (await fs.readFile(source, "utf8"))
@@ -425,7 +446,11 @@ async function migrateNdjson(
     }
   }
   if (additions.length > 0) {
-    await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
+    await sharedStorage.assertWritable();
+    await ensureDirectoryWithinRoot(
+      sharedStorage.sharedRoot,
+      path.dirname(destination)
+    );
     await fs.appendFile(destination, `${additions.join("\n")}\n`, {
       encoding: "utf8",
       mode: 0o600
@@ -459,21 +484,27 @@ function addRecord(
 
 async function copyArtifacts(
   source: string,
-  destination: string
+  destination: string,
+  sharedStorage: SharedStorageGuard
 ): Promise<number> {
   if (!(await exists(source))) return 0;
   let copied = 0;
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
-    if (entry.isDirectory()) copied += await copyArtifacts(from, to);
+    if (entry.isDirectory())
+      copied += await copyArtifacts(from, to, sharedStorage);
     else if (entry.isFile()) {
       const sourceBytes = await fs.readFile(from);
       const target = await readBytes(to);
       if (target && hash(target) !== hash(sourceBytes))
         throw new Error(`Artifact collision with different content: ${to}`);
       if (!target) {
-        await fs.mkdir(path.dirname(to), { recursive: true, mode: 0o700 });
+        await sharedStorage.assertWritable();
+        await ensureDirectoryWithinRoot(
+          sharedStorage.sharedRoot,
+          path.dirname(to)
+        );
         await fs.copyFile(from, to);
         await fs.chmod(to, 0o600);
         copied += 1;
@@ -548,8 +579,13 @@ async function exists(file: string): Promise<boolean> {
     throw error;
   }
 }
-async function writeAtomic(file: string, value: string): Promise<void> {
-  await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+async function writeAtomic(
+  file: string,
+  value: string,
+  sharedStorage: SharedStorageGuard
+): Promise<void> {
+  await sharedStorage.assertWritable();
+  await ensureDirectoryWithinRoot(sharedStorage.sharedRoot, path.dirname(file));
   const temporary = `${file}.${process.pid}.tmp`;
   await fs.writeFile(temporary, value, { encoding: "utf8", mode: 0o600 });
   await fs.rename(temporary, file);
