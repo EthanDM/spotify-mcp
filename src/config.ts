@@ -113,6 +113,17 @@ export async function assertSharedStorageAvailable(
       isSameOrNested(physicalSharedRoot, physicalLocalRoot)
     )
       throw new Error("local and shared roots resolve to nested directories");
+    for (const localPath of [
+      config.tokenFile,
+      config.localPersonalizationDirectory,
+      config.localPeopleDirectory
+    ]) {
+      const physicalLocalPath = await resolvePhysicalPath(localPath);
+      if (isSameOrNested(physicalSharedRoot, physicalLocalPath))
+        throw new Error(
+          `sensitive local path resolves inside shared storage: ${localPath}`
+        );
+    }
     await fs.access(config.sharedRoot, constants.R_OK | constants.W_OK);
   } catch (error) {
     const detail = error instanceof Error ? ` (${error.message})` : "";
@@ -134,14 +145,11 @@ function rejectExplicitEmpty(
 export function getTokenFilePath(): string {
   const config = getStorageConfig();
   if (config.sharedRoot) {
-    const physicalLocalRoot = resolvePhysicalPathSync(config.localRoot);
     const physicalSharedRoot = resolvePhysicalPathSync(config.sharedRoot);
-    if (
-      isSameOrNested(physicalLocalRoot, physicalSharedRoot) ||
-      isSameOrNested(physicalSharedRoot, physicalLocalRoot)
-    )
+    const physicalTokenFile = resolvePhysicalPathSync(config.tokenFile);
+    if (isSameOrNested(physicalSharedRoot, physicalTokenFile))
       throw new Error(
-        "Local and shared storage resolve to nested directories; refusing to expose the token path."
+        "The local token path resolves inside shared storage; refusing to expose the token path."
       );
   }
   return config.tokenFile;

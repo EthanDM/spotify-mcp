@@ -105,6 +105,24 @@ describe("storage configuration", () => {
     );
   });
 
+  it("rejects sensitive local subpaths linked into shared storage", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-local-link-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(local);
+    await mkdir(shared);
+    await symlink(shared, path.join(local, "personalization"));
+    const config = getStorageConfig({
+      SPOTIFY_MCP_DATA_DIR: local,
+      SPOTIFY_MCP_SHARED_DATA_DIR: shared,
+      SPOTIFY_MCP_MACHINE_ID: "desktop"
+    });
+
+    await expect(assertSharedStorageAvailable(config)).rejects.toThrow(
+      "sensitive local path resolves inside shared storage"
+    );
+  });
+
   it("refuses token paths when local storage resolves into shared storage", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-token-link-"));
     const shared = path.join(root, "shared");

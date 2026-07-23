@@ -653,7 +653,7 @@ async function copyArtifacts(
     if (entry.isDirectory())
       copied += await copyArtifacts(from, to, sharedStorage);
     else if (entry.isFile()) {
-      const sourceBytes = await fs.readFile(from);
+      const sourceBytes = await readBytesNoFollow(from);
       const target = await readBytesNoFollowIfExists(to);
       if (target && hash(target) !== hash(sourceBytes))
         throw new Error(`Artifact collision with different content: ${to}`);
@@ -664,7 +664,7 @@ async function copyArtifacts(
           path.dirname(to)
         );
         try {
-          await fs.copyFile(from, to, fsConstants.COPYFILE_EXCL);
+          await fs.writeFile(to, sourceBytes, { mode: 0o600, flag: "wx" });
         } catch (error) {
           if (!hasCode(error, "EEXIST")) throw error;
           const concurrentTarget = await readBytesNoFollow(to);
@@ -834,10 +834,17 @@ async function directoryNames(directory: string): Promise<string[]> {
 }
 async function ndjsonFiles(directory: string): Promise<string[]> {
   try {
-    return (await fs.readdir(directory, { withFileTypes: true }))
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".ndjson"))
-      .map((entry) => path.join(directory, entry.name))
-      .sort();
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    const files: string[] = [];
+    for (const entry of entries) {
+      if (!entry.name.endsWith(".ndjson")) continue;
+      if (!entry.isFile())
+        throw new Error(
+          `Shared NDJSON stream must be a regular file: ${path.join(directory, entry.name)}`
+        );
+      files.push(path.join(directory, entry.name));
+    }
+    return files.sort();
   } catch (error) {
     if (isMissing(error)) return [];
     throw error;

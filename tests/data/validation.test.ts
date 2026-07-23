@@ -116,7 +116,7 @@ describe("conflict resolution document validation", () => {
     expect(() =>
       validatePreferencesDocument({
         ...preferences(),
-        preferred_artists: ["Artist", "Artist"]
+        preferred_artists: ["Artist", " Artist "]
       })
     ).toThrow("duplicate values");
   });

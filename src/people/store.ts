@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RevisionStore } from "../storage/revisions.js";
+import { validatePersonProfileDocument } from "../data/validation.js";
 import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
@@ -249,15 +250,7 @@ export class PeopleStore {
       this.getProfilePath(profileId),
       `person profile ${profileId}`,
       this.machineId,
-      (value) => {
-        if (
-          !value ||
-          typeof value !== "object" ||
-          typeof (value as PersonProfile).id !== "string"
-        )
-          throw new Error(`Invalid person profile ${profileId}.`);
-        return value as PersonProfile;
-      },
+      (value) => validatePersonProfileDocument(value, profileId),
       this.sharedMode
         ? {
             root: this.sharedRoot!,

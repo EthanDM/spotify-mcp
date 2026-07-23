@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, symlink } from "node:fs/promises";
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -180,6 +180,20 @@ describe("shared stores", () => {
         second.revisionId
       )
     ).rejects.toThrow("changed after it was read");
+  });
+
+  it("rejects a shared profile whose id differs from its directory", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-id-"));
+    const store = people(root, "desktop");
+    await new PeopleProfileService(store).createProfile({ name: "Alice" });
+    await rename(
+      path.join(root, "shared", "people", "alice"),
+      path.join(root, "shared", "people", "bob")
+    );
+
+    await expect(store.readProfile("bob")).rejects.toThrow(
+      "Person profile id must be bob"
+    );
   });
 });
 
