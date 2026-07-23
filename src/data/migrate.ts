@@ -349,6 +349,10 @@ async function validateMigration(
   artifactReferenceRoot = localRoot
 ): Promise<string[]> {
   const warnings: string[] = [];
+  const revisionGuard = {
+    root: sharedRoot,
+    assertAvailable: async () => undefined
+  };
   const personalizationDirectory = path.join(localRoot, "personalization");
   if (
     (await exists(personalizationDirectory)) &&
@@ -373,7 +377,8 @@ async function validateMigration(
       revisionsDirectory,
       "personalization preferences",
       machineId,
-      (value) => validatePreferencesDocument(value)
+      (value) => validatePreferencesDocument(value),
+      revisionGuard
     );
     if (await validateSeed(store, normalized, "preferences", machineId))
       warnings.push(
@@ -400,7 +405,8 @@ async function validateMigration(
         revisionsDirectory,
         `person profile ${profileId}`,
         machineId,
-        (value) => validatePersonProfileDocument(value, profileId)
+        (value) => validatePersonProfileDocument(value, profileId),
+        revisionGuard
       );
       if (
         await validateSeed(

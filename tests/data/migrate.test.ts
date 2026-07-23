@@ -284,6 +284,27 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects empty shared revision directories during preflight", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-empty-shared-revisions-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await mkdir(
+      path.join(shared, "personalization", "preferences", "revisions"),
+      { recursive: true }
+    );
+    await writeFile(
+      path.join(local, "personalization", "user-preferences.json"),
+      JSON.stringify(preferences("Artist"))
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("empty shared revision directory")
+    });
+  });
+
   it("rejects malformed canonical migration inputs", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-invalid-migration-")
