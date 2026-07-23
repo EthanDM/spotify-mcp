@@ -1,4 +1,4 @@
-import { mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -76,6 +76,26 @@ describe("RevisionStore", () => {
     );
 
     await expect(store.read()).rejects.toBeTruthy();
+  });
+
+  it("refuses symlinked revision directory ancestors in shared storage", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-directory-link-")
+    );
+    const outside = path.join(root, "outside");
+    const sharedRoot = path.join(root, "shared");
+    await mkdir(outside);
+    await mkdir(sharedRoot);
+    await symlink(outside, path.join(sharedRoot, "preferences"));
+    const store = new RevisionStore<{ value: string }>(
+      path.join(sharedRoot, "preferences", "revisions"),
+      "test document",
+      "desktop",
+      normalize,
+      { root: sharedRoot, assertAvailable: async () => undefined }
+    );
+
+    await expect(store.read()).rejects.toThrow("must not contain symlinks");
   });
 });
 

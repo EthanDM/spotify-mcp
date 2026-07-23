@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { ensureDirectoryWithinRoot, readFileNoFollow } from "./shared.js";
+import {
+  assertNoSymlinksWithinRoot,
+  ensureDirectoryWithinRoot,
+  readFileNoFollow
+} from "./shared.js";
 
 type SharedAccessGuard = {
   root: string;
@@ -161,6 +165,11 @@ export class RevisionStore<T> {
   }
 
   private async loadAll(): Promise<Array<RevisionEnvelope<T>>> {
+    if (this.sharedAccessGuard)
+      await assertNoSymlinksWithinRoot(
+        this.sharedAccessGuard.root,
+        this.revisionsDirectory
+      );
     let names: string[];
     try {
       names = (await fs.readdir(this.revisionsDirectory))

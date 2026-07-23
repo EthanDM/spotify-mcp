@@ -593,13 +593,17 @@ function rewriteArtifactPaths(
           : artifactPath.startsWith("~/")
             ? path.join(homedir(), artifactPath.slice(2))
             : artifactPath;
-      if (!path.isAbsolute(expandedPath)) return artifactPath;
+      if (!path.isAbsolute(expandedPath)) {
+        const normalized = path.normalize(expandedPath);
+        if (relativeWithin("artifacts", normalized) !== null) return normalized;
+        throw new Error(
+          `Unportable artifact path in playlist history: ${artifactPath}`
+        );
+      }
       const relative =
         relativeWithin(sourceArtifactsRoot, expandedPath) ??
         relativeWithin(sharedArtifactsRoot, expandedPath);
       if (relative !== null) return path.join("artifacts", relative);
-      if (relativeWithin("artifacts", path.normalize(artifactPath)) !== null)
-        return path.normalize(artifactPath);
       throw new Error(
         `Unportable artifact path in playlist history: ${artifactPath}`
       );
