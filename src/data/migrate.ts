@@ -379,6 +379,8 @@ async function validateArtifactCollisions(
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
+    if (entry.isSymbolicLink())
+      throw new Error(`Artifact migration does not allow symlinks: ${from}`);
     if (entry.isDirectory()) await validateArtifactCollisions(from, to);
     else if (entry.isFile()) {
       const target = await readBytes(to);
@@ -541,6 +543,8 @@ async function copyArtifacts(
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
+    if (entry.isSymbolicLink())
+      throw new Error(`Artifact migration does not allow symlinks: ${from}`);
     if (entry.isDirectory())
       copied += await copyArtifacts(from, to, sharedStorage);
     else if (entry.isFile()) {

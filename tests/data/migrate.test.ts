@@ -5,6 +5,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  symlink,
   writeFile
 } from "node:fs/promises";
 import os from "node:os";
@@ -345,6 +346,24 @@ describe("shared data migration", () => {
       recursive: true
     });
     await expect(runMigration(local, shared, "desktop")).rejects.toBeTruthy();
+  });
+
+  it("rejects symlinked legacy artifacts during preflight", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-artifact-link-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const outside = path.join(root, "outside.md");
+    await mkdir(path.join(local, "artifacts"), { recursive: true });
+    await writeFile(outside, "outside");
+    await symlink(outside, path.join(local, "artifacts", "linked.md"));
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "Artifact migration does not allow symlinks"
+      )
+    });
   });
 
   it("does not overwrite an artifact created by a concurrent migration", async () => {
