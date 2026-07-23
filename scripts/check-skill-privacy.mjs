@@ -120,7 +120,7 @@ function isForbiddenRuntimePath(relativePath) {
     .map((segment) => segment.toLowerCase());
   return (
     segments.length >= 2 &&
-    segments.at(-2) === ".docker" &&
+    [".docker", ".kube"].includes(segments.at(-2)) &&
     segments.at(-1) === "config.json"
   );
 }
