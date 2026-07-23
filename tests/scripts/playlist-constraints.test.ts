@@ -55,6 +55,33 @@ describe("playlist constraint checker", () => {
     expect(report.ordered_phase_progression_valid).toBe(true);
     expect(report.passes_applicable_hard_checks).toBe(true);
   });
+
+  it("validates and applies the artist-specific derivative flag", async () => {
+    const tracks = [1, 2, 3, 4].map((index) => ({
+      ...track(`spotify:track:${index}`, "development"),
+      primary_artist: "Artist"
+    }));
+    const manifest = await writeManifest({
+      target_track_count: 4,
+      tracks,
+      curation_mode: "derivative",
+      artist_specific: true
+    });
+    const result = await execute("python3", [checker, manifest]);
+    const report = JSON.parse(result.stdout) as {
+      passes_applicable_hard_checks: boolean;
+    };
+    expect(report.passes_applicable_hard_checks).toBe(true);
+
+    const invalid = await writeManifest({
+      target_track_count: 1,
+      tracks: [tracks[0]],
+      artist_specific: "yes"
+    });
+    await expect(execute("python3", [checker, invalid])).rejects.toMatchObject({
+      stderr: expect.stringContaining("artist_specific must be a boolean")
+    });
+  });
 });
 
 async function writeManifest(value: unknown): Promise<string> {

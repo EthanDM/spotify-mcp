@@ -51,6 +51,7 @@ For a short explicit request such as "make a focused evening-walk playlist," do 
   - curation mode: general personal build, artist/catalog build, recovered/reconstruction build, or intentional derivative such as a refresh, core cut, or sequel
   - playback mode: shuffle-first or ordered
 - State the target track-count range if known or reasonably inferable.
+- If the user wants an existing playlist refreshed or overwritten, call `spotify_get_playlist`, then page through `spotify_get_playlist_items` until the complete current body is loaded before searching or selecting replacements. Preserve intentional anchors unless the request says otherwise. If the playlist contains local-file items, explain that exact replacement cannot safely preserve them and stop or offer a new-playlist path.
 
 4. Search deliberately.
 

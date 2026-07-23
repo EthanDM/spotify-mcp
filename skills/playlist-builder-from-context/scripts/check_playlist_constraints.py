@@ -63,7 +63,7 @@ def main() -> None:
     playback_mode = manifest.get("playback_mode", "shuffle")
     vocal_policy = manifest.get("vocal_policy", "unrestricted")
     exceptions = set(require_list(manifest.get("exceptions", []), "exceptions"))
-    artist_specific = bool(manifest.get("artist_specific", False))
+    artist_specific = manifest.get("artist_specific", False)
     target_track_count = manifest.get("target_track_count")
     target_track_count_range = manifest.get("target_track_count_range")
 
@@ -75,6 +75,8 @@ def main() -> None:
         fail("playback_mode must be shuffle or ordered")
     if vocal_policy not in {"unrestricted", "mostly_instrumental", "instrumental_only"}:
         fail("vocal_policy must be unrestricted, mostly_instrumental, or instrumental_only")
+    if not isinstance(artist_specific, bool):
+        fail("artist_specific must be a boolean")
     if target_track_count is not None and target_track_count_range is not None:
         fail("use either target_track_count or target_track_count_range, not both")
     if target_track_count is None and target_track_count_range is None:

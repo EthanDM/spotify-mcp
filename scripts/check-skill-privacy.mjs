@@ -41,7 +41,10 @@ const forbiddenContent = [
     pattern:
       /https:\/\/open\.spotify\.com\/(?:track|playlist|album|artist)\/[A-Za-z0-9]+/
   },
-  { label: "GitHub token", pattern: /\bgh[opusr]_[A-Za-z0-9]+\b/ },
+  {
+    label: "GitHub token",
+    pattern: /\b(?:gh[opusr]_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)\b/
+  },
   {
     label: "private key",
     pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/
@@ -81,6 +84,10 @@ async function listFiles(directory) {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...(await listFiles(entryPath)));
     else if (entry.isFile()) files.push(entryPath);
+    else if (entry.isSymbolicLink())
+      throw new Error(
+        `Skill privacy check failed:\n${path.relative(repositoryRoot, entryPath)}: symbolic links are forbidden`
+      );
   }
   return files;
 }

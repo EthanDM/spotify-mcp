@@ -135,4 +135,35 @@ describe("skill installer", () => {
       await rm(fixture, { force: true });
     }
   });
+
+  it("rejects fine-grained GitHub tokens and symbolic links", async () => {
+    const tokenFixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "privacy-token-fixture.md"
+    );
+    const linkFixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "privacy-link-fixture"
+    );
+    try {
+      await writeFile(tokenFixture, "github_pat_example_credential");
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("GitHub token")
+      });
+      await rm(tokenFixture, { force: true });
+      await symlink("/home/alice/private/profile.json", linkFixture);
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("symbolic links are forbidden")
+      });
+    } finally {
+      await rm(tokenFixture, { force: true });
+      await rm(linkFixture, { force: true });
+    }
+  });
 });
