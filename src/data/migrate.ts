@@ -904,17 +904,12 @@ async function readJson<T>(file: string): Promise<T | undefined> {
   return raw === null ? undefined : (JSON.parse(raw) as T);
 }
 async function readBytes(file: string): Promise<Buffer | null> {
-  try {
-    return await fs.readFile(file);
-  } catch (error) {
-    if (isMissing(error)) return null;
-    throw error;
-  }
+  return readBytesNoFollowIfExists(file);
 }
 async function readBytesNoFollow(file: string): Promise<Buffer> {
   const handle = await fs.open(
     file,
-    fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW
+    fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_NOFOLLOW
   );
   try {
     const stats = await handle.stat();
