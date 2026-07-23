@@ -137,4 +137,28 @@ describe("storage configuration", () => {
       )
     ).toThrow("must not traverse outside");
   });
+
+  it("rejects an artifacts directory linked outside the shared root", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-artifacts-link-")
+    );
+    const sharedRoot = path.join(root, "shared");
+    const outsideArtifacts = path.join(root, "outside-artifacts");
+    await mkdir(sharedRoot);
+    await mkdir(outsideArtifacts);
+    await writeFile(path.join(outsideArtifacts, "review.md"), "review");
+    await symlink(outsideArtifacts, path.join(sharedRoot, "artifacts"));
+    const config = getStorageConfig({
+      SPOTIFY_MCP_DATA_DIR: "/tmp/local",
+      SPOTIFY_MCP_SHARED_DATA_DIR: sharedRoot,
+      SPOTIFY_MCP_MACHINE_ID: "neo"
+    });
+
+    expect(() =>
+      toPortableArtifactPath(
+        path.join(sharedRoot, "artifacts", "review.md"),
+        config
+      )
+    ).toThrow("artifacts directory must not traverse outside");
+  });
 });

@@ -174,8 +174,13 @@ export function validatePersonProfileDocument(
   for (const field of ["name", "created_at", "updated_at"])
     requireString(document[field], `person profile.${field}`);
   requireNullableString(document.relationship, "person profile.relationship");
-  if (document.age !== null && typeof document.age !== "number")
-    throw new Error("person profile.age must be a number or null.");
+  if (
+    document.age !== null &&
+    (!Number.isInteger(document.age) || Number(document.age) < 0)
+  )
+    throw new Error(
+      "person profile.age must be a non-negative integer or null."
+    );
   requireNullableString(document.age_range, "person profile.age_range");
   for (const field of [
     "life_context",
@@ -256,9 +261,15 @@ function validateUseCase(value: unknown, label: string): void {
       `${label}.ideal_track_count_range`
     );
     requireKnownKeys(range, ["min", "max"], `${label}.ideal_track_count_range`);
-    if (typeof range.min !== "number" || typeof range.max !== "number")
+    if (
+      !Number.isInteger(range.min) ||
+      !Number.isInteger(range.max) ||
+      Number(range.min) <= 0 ||
+      Number(range.max) <= 0 ||
+      Number(range.min) > Number(range.max)
+    )
       throw new Error(
-        `${label}.ideal_track_count_range must contain numeric min and max.`
+        `${label}.ideal_track_count_range must contain positive integer min and max with min no greater than max.`
       );
   }
 }

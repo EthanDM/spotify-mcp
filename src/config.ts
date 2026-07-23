@@ -168,6 +168,11 @@ export function toPortableArtifactPath(
         `Shared artifact paths must be inside ${config.artifactsDirectory}.`
       );
     const physicalArtifactsDirectory = realpathSync(config.artifactsDirectory);
+    const physicalSharedRoot = realpathSync(config.sharedRoot!);
+    if (!isSameOrNested(physicalSharedRoot, physicalArtifactsDirectory))
+      throw new Error(
+        `Shared artifacts directory must not traverse outside ${config.sharedRoot}.`
+      );
     const physicalArtifactPath = realpathSync(expandedPath);
     if (!isSameOrNested(physicalArtifactsDirectory, physicalArtifactPath))
       throw new Error(
@@ -184,6 +189,11 @@ export function toPortableArtifactPath(
       `Shared artifact paths must be relative to the shared artifacts directory.`
     );
   const physicalArtifactsDirectory = realpathSync(config.artifactsDirectory);
+  const physicalSharedRoot = realpathSync(config.sharedRoot!);
+  if (!isSameOrNested(physicalSharedRoot, physicalArtifactsDirectory))
+    throw new Error(
+      `Shared artifacts directory must not traverse outside ${config.sharedRoot}.`
+    );
   const physicalArtifactPath = realpathSync(
     path.join(config.sharedRoot!, normalized)
   );

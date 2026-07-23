@@ -197,6 +197,35 @@ describe("shared data migration", () => {
       )
     ) as { tips: Array<{ revision_id: string }> };
     expect(resolvedInspection.tips).toHaveLength(1);
+
+    const laptopLocal = path.join(root, "laptop-local");
+    await mkdir(path.join(laptopLocal, "personalization"), { recursive: true });
+    await writeFile(
+      path.join(laptopLocal, "personalization", "user-preferences.json"),
+      JSON.stringify(preferences("Artist"))
+    );
+    const laptopDryRun = await runMigration(
+      laptopLocal,
+      shared,
+      "laptop",
+      false
+    );
+    expect(laptopDryRun.stdout).toContain(
+      "WILL CREATE CONFLICT: personalization preferences"
+    );
+    await runMigration(laptopLocal, shared, "laptop", true);
+    const afterAncestorImport = await execute(
+      command,
+      ["src/data/resolve.ts", "--document", "preferences"],
+      { env: { ...environment, SPOTIFY_MCP_MACHINE_ID: "laptop" } }
+    );
+    const ancestorInspection = JSON.parse(
+      afterAncestorImport.stdout.slice(
+        0,
+        afterAncestorImport.stdout.indexOf("\nNo files changed")
+      )
+    ) as { tips: Array<{ revision_id: string }> };
+    expect(ancestorInspection.tips).toHaveLength(2);
   });
 
   it("normalizes legacy preference documents before migrating", async () => {
@@ -571,6 +600,27 @@ describe("shared data migration", () => {
     const record = {
       ...playlistRecord("entry"),
       artifact_paths: [path.join(local, "artifacts", "missing.md")]
+    };
+    await mkdir(path.join(local, "people", "friend"), { recursive: true });
+    await writeFile(
+      path.join(local, "people", "friend", "playlist-history.ndjson"),
+      `${JSON.stringify(record)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("Referenced artifact does not exist")
+    });
+  });
+
+  it("rejects missing portable playlist-history artifacts", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-missing-portable-artifact-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const record = {
+      ...playlistRecord("entry"),
+      artifact_paths: [path.join("artifacts", "missing.md")]
     };
     await mkdir(path.join(local, "people", "friend"), { recursive: true });
     await writeFile(

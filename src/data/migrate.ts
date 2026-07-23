@@ -83,7 +83,7 @@ async function main(): Promise<void> {
       (value) => validatePreferencesDocument(value),
       revisionGuard
     );
-    await seedRevision(store, preferences, "preferences");
+    await seedRevision(store, preferences, "preferences", config.machineId);
     counts.preferences = 1;
   }
 
@@ -106,7 +106,12 @@ async function main(): Promise<void> {
         (value) => validatePersonProfileDocument(value, profileId),
         revisionGuard
       );
-      await seedRevision(store, profile, `person profile ${profileId}`);
+      await seedRevision(
+        store,
+        profile,
+        `person profile ${profileId}`,
+        config.machineId
+      );
       counts.profiles += 1;
     }
     counts.playlist_history += await migrateNdjson(
@@ -246,7 +251,7 @@ async function validateMigration(
       machineId,
       (value) => validatePreferencesDocument(value)
     );
-    if (await validateSeed(store, normalized, "preferences"))
+    if (await validateSeed(store, normalized, "preferences", machineId))
       warnings.push(
         "WILL CREATE CONFLICT: personalization preferences differ from the shared revision."
       );
@@ -266,7 +271,14 @@ async function validateMigration(
         machineId,
         (value) => validatePersonProfileDocument(value, profileId)
       );
-      if (await validateSeed(store, profile, `person profile ${profileId}`))
+      if (
+        await validateSeed(
+          store,
+          profile,
+          `person profile ${profileId}`,
+          machineId
+        )
+      )
         warnings.push(
           `WILL CREATE CONFLICT: person profile ${profileId} differs from the shared revision.`
         );
@@ -310,12 +322,21 @@ async function validateMigration(
 async function validateSeed<T>(
   store: RevisionStore<T>,
   value: T,
-  name: string
+  name: string,
+  machineId: string
 ): Promise<boolean> {
-  const revisions = await store.readAll();
-  if (revisions.some((revision) => stable(revision.value) === stable(value)))
-    return false;
   const tips = await store.readTips();
+  if (tips.some((revision) => stable(revision.value) === stable(value)))
+    return false;
+  const revisions = await store.readAll();
+  if (
+    revisions.some(
+      (revision) =>
+        revision.written_by === machineId &&
+        stable(revision.value) === stable(value)
+    )
+  )
+    return false;
   if (tips.length === 0) return false;
   if (tips.length === 1) return true;
   throw new Error(
@@ -397,12 +418,20 @@ async function validateArtifactCollisions(
 async function seedRevision<T>(
   store: RevisionStore<T>,
   value: T,
-  name: string
+  name: string,
+  machineId: string
 ): Promise<void> {
-  const revisions = await store.readAll();
-  if (revisions.some((revision) => stable(revision.value) === stable(value)))
-    return;
   const tips = await store.readTips();
+  if (tips.some((revision) => stable(revision.value) === stable(value))) return;
+  const revisions = await store.readAll();
+  if (
+    revisions.some(
+      (revision) =>
+        revision.written_by === machineId &&
+        stable(revision.value) === stable(value)
+    )
+  )
+    return;
   if (tips.length === 0) {
     await store.write(value, null);
     return;
@@ -620,7 +649,14 @@ function rewriteArtifactPaths(
             : artifactPath;
       if (!path.isAbsolute(expandedPath)) {
         const normalized = path.normalize(expandedPath);
-        if (relativeWithin("artifacts", normalized) !== null) return normalized;
+        const relative = relativeWithin("artifacts", normalized);
+        if (relative !== null) {
+          if (!existsSync(path.join(sharedArtifactsRoot, relative)))
+            throw new Error(
+              `Referenced artifact does not exist: ${artifactPath}`
+            );
+          return normalized;
+        }
         throw new Error(
           `Unportable artifact path in playlist history: ${artifactPath}`
         );
@@ -755,7 +791,11 @@ async function writeAtomic(
   await sharedStorage.assertWritable();
   await ensureDirectoryWithinRoot(sharedStorage.sharedRoot, path.dirname(file));
   const temporary = `${file}.${process.pid}.tmp`;
-  await fs.writeFile(temporary, value, { encoding: "utf8", mode: 0o600 });
+  await fs.writeFile(temporary, value, {
+    encoding: "utf8",
+    mode: 0o600,
+    flag: "wx"
+  });
   await fs.rename(temporary, file);
 }
 function isMissing(error: unknown): boolean {

@@ -74,4 +74,80 @@ describe("conflict resolution document validation", () => {
       })
     ).toThrow("positive integer");
   });
+
+  it("rejects invalid ages and use-case track ranges", () => {
+    for (const age of [-1, 1.5])
+      expect(() =>
+        validatePersonProfileDocument({ ...profile(), age }, "friend")
+      ).toThrow("non-negative integer");
+
+    for (const range of [
+      { min: 0, max: 10 },
+      { min: 10.5, max: 20 },
+      { min: 20, max: 10 }
+    ])
+      expect(() =>
+        validatePreferencesDocument({
+          ...preferences(),
+          use_cases: {
+            workout: { ...useCase(), ideal_track_count_range: range }
+          }
+        })
+      ).toThrow("positive integer min and max");
+  });
 });
+
+function preferences() {
+  return {
+    preferred_artists: [],
+    avoided_artists: [],
+    preferred_genres: [],
+    avoided_genres: [],
+    preferred_traits: [],
+    avoided_traits: [],
+    discovery_level: null,
+    notes: [],
+    use_cases: {},
+    updated_at: null
+  };
+}
+
+function useCase() {
+  return {
+    preferred_artists: [],
+    avoided_artists: [],
+    preferred_genres: [],
+    avoided_genres: [],
+    preferred_traits: [],
+    avoided_traits: [],
+    playback_mode: null,
+    ideal_track_count_range: null,
+    discovery_level: null,
+    notes: [],
+    updated_at: null
+  };
+}
+
+function profile() {
+  return {
+    id: "friend",
+    name: "Friend",
+    relationship: null,
+    age: null,
+    age_range: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    life_context: [],
+    preferred_artists: [],
+    avoided_artists: [],
+    preferred_genres: [],
+    avoided_genres: [],
+    preferred_traits: [],
+    avoided_traits: [],
+    reference_playlists: [],
+    reference_tracks: [],
+    reference_artists: [],
+    playlist_goals: [],
+    notes: []
+  };
+}
