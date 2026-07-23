@@ -95,7 +95,7 @@ For a short explicit request such as "make a focused evening-walk playlist," do 
 
 8. Save a sidecar artifact for fast personal builds.
 
-- Resolve the artifact root from `SPOTIFY_MCP_SHARED_DATA_DIR/artifacts` when shared storage is configured. Otherwise use `SPOTIFY_MCP_DATA_DIR/artifacts`, defaulting `SPOTIFY_MCP_DATA_DIR` to `~/.config/spotify-mcp`.
+- Use the MCP server's supported artifact root at `$HOME/.config/spotify-mcp/artifacts`.
 - Record the prompt, inferred brief, historical references, search queries, selected tracks, and verification result under `<artifact-root>/generated-playlists/`.
 - Separate initial search queries from recovery-pass queries, or explicitly state that no recovery pass ran.
 - For longer workflows, save notes when useful under `<artifact-root>/`.

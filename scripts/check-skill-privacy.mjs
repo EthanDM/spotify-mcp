@@ -13,6 +13,8 @@ const forbiddenFileNames = new Set([
   "auth.json",
   "interaction-log.ndjson",
   "playlist-history.ndjson",
+  "profile.json",
+  "profile-context.md",
   "profile-snapshot.json",
   "user-preferences.json"
 ]);

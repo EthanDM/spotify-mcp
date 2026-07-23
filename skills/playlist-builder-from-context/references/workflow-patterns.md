@@ -37,7 +37,7 @@ Default a short self request to `self_personalized`. Use `self_neutral` only for
 3. Select historical reference examples.
 
 - Apply this step only to `self_personalized`.
-- Resolve the artifact root from `SPOTIFY_MCP_SHARED_DATA_DIR/artifacts` when configured. Otherwise use `SPOTIFY_MCP_DATA_DIR/artifacts`, defaulting `SPOTIFY_MCP_DATA_DIR` to `~/.config/spotify-mcp`.
+- Use the MCP server's supported artifact root at `$HOME/.config/spotify-mcp/artifacts`.
 - Read `<artifact-root>/ai-playlists/README.md` when it exists.
 - Choose one to three playlists with the closest semantic use case, energy, genre, setting, or era.
 - Read only those exported tracklist files.
@@ -121,7 +121,7 @@ Use these definitions and thresholds for a general personal build with final cou
 
 8. Run a deterministic constraint check before creation.
 
-- Create a temporary JSON manifest containing the final tracks with `uri`, `name`, `primary_artist`, `bucket`, `evidence_tier`, `prompt_fit`, `functional_fit`, and ordered `phase` when applicable; `audience_mode`; `personalization_sources`; `person_profile_id` when applicable; selected historical references; recent comparable builds; up to 10 recent general builds for ecosystem reporting; playback mode; curation mode; and documented exceptions. When vocals are constrained, also include manifest-level `vocal_policy` and per-track `vocal_profile`. Keep the full credited-artist list alongside the manifest or candidate notes for the qualitative ecosystem review; the deterministic helper intentionally uses primary artists for its numeric rules.
+- Create a temporary JSON manifest containing the final tracks with `uri`, `name`, `primary_artist`, `bucket`, `evidence_tier`, `prompt_fit`, `functional_fit`, and ordered `phase` when applicable; either `target_track_count` or `target_track_count_range` with numeric `min` and `max`; `audience_mode`; `personalization_sources`; `person_profile_id` when applicable; selected historical references; recent comparable builds; up to 10 recent general builds for ecosystem reporting; playback mode; curation mode; and documented exceptions. When vocals are constrained, also include manifest-level `vocal_policy` and per-track `vocal_profile`. Keep the full credited-artist list alongside the manifest or candidate notes for the qualitative ecosystem review; the deterministic helper intentionally uses primary artists for its numeric rules.
 - Run `python3 scripts/check_playlist_constraints.py <manifest.json>` from the skill directory.
 - Fix hard violations before creation. If comparison history is insufficient, preserve `null`/`unknown` history metrics rather than treating them as zero.
 - Recommendation judgment remains in the agent. The script only performs URI-set arithmetic, counts, rounding, and threshold checks.

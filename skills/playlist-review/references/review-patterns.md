@@ -149,7 +149,7 @@ Avoid:
 
 ## Artifact Path Patterns
 
-Use stable, descriptive paths under the configured artifact root. Resolve it from `SPOTIFY_MCP_SHARED_DATA_DIR/artifacts` when configured; otherwise use `SPOTIFY_MCP_DATA_DIR/artifacts`, with `~/.config/spotify-mcp` as the default data directory.
+Use stable, descriptive paths under the MCP server's supported artifact root at `$HOME/.config/spotify-mcp/artifacts`.
 
 Examples:
 

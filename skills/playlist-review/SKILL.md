@@ -81,7 +81,7 @@ If the user did not provide a use case, infer the playlist's likely purpose from
 
 6. Optionally save a sidecar artifact.
 
-- Resolve the artifact root from `SPOTIFY_MCP_SHARED_DATA_DIR/artifacts` when configured. Otherwise use `SPOTIFY_MCP_DATA_DIR/artifacts`, defaulting `SPOTIFY_MCP_DATA_DIR` to `~/.config/spotify-mcp`.
+- Use the MCP server's supported artifact root at `$HOME/.config/spotify-mcp/artifacts`.
 - Save human-readable review notes under `<artifact-root>/`.
 - Use a stable, descriptive path.
 - For person-specific work, prefer `<artifact-root>/people/<profile-id>/`.

@@ -64,6 +64,8 @@ def main() -> None:
     vocal_policy = manifest.get("vocal_policy", "unrestricted")
     exceptions = set(require_list(manifest.get("exceptions", []), "exceptions"))
     artist_specific = bool(manifest.get("artist_specific", False))
+    target_track_count = manifest.get("target_track_count")
+    target_track_count_range = manifest.get("target_track_count_range")
 
     if mode not in {"general", "artist_catalog", "derivative", "recovered"}:
         fail("curation_mode must be general, artist_catalog, derivative, or recovered")
@@ -73,6 +75,32 @@ def main() -> None:
         fail("playback_mode must be shuffle or ordered")
     if vocal_policy not in {"unrestricted", "mostly_instrumental", "instrumental_only"}:
         fail("vocal_policy must be unrestricted, mostly_instrumental, or instrumental_only")
+    if target_track_count is not None and target_track_count_range is not None:
+        fail("use either target_track_count or target_track_count_range, not both")
+    if target_track_count is None and target_track_count_range is None:
+        fail("target_track_count or target_track_count_range is required")
+    if target_track_count is not None and (
+        not isinstance(target_track_count, int)
+        or isinstance(target_track_count, bool)
+        or target_track_count < 1
+    ):
+        fail("target_track_count must be a positive integer")
+    target_min = target_track_count
+    target_max = target_track_count
+    if target_track_count_range is not None:
+        if not isinstance(target_track_count_range, dict):
+            fail("target_track_count_range must be an object")
+        target_min = target_track_count_range.get("min")
+        target_max = target_track_count_range.get("max")
+        if (
+            not isinstance(target_min, int)
+            or isinstance(target_min, bool)
+            or not isinstance(target_max, int)
+            or isinstance(target_max, bool)
+            or target_min < 1
+            or target_max < target_min
+        ):
+            fail("target_track_count_range must contain positive integer min and max")
 
     uris: list[str] = []
     names: list[str] = []
@@ -242,6 +270,8 @@ def main() -> None:
     relax_recent_overlap = "narrow_recent_overlap" in exceptions
 
     violations: list[str] = []
+    if not target_min <= n <= target_max:
+        violations.append("target_track_count")
     if duplicate_uris:
         violations.append("duplicate_track_uri")
     if audience_mode == "self_neutral" and personalization_sources:
@@ -288,6 +318,8 @@ def main() -> None:
         "personalization_sources": personalization_sources,
         "curation_mode": mode,
         "track_count": n,
+        "target_track_count": target_track_count,
+        "target_track_count_range": target_track_count_range,
         "duplicate_track_uris": duplicate_uris,
         "potential_version_families": potential_version_families,
         "unique_primary_artists": len(artist_counts),

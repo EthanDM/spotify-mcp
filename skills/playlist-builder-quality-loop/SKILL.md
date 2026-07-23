@@ -86,7 +86,7 @@ Use `$playlist-review` instead when the user only wants curation feedback and do
 - Default to read-only diagnosis.
 - A request to review, rate, or identify lessons does not authorize playlist or system changes.
 - After explicit approval, apply only the already-proposed narrow change and verify it.
-- Keep generated personal artifacts outside the public repository. Resolve the artifact root from `SPOTIFY_MCP_SHARED_DATA_DIR/artifacts` when configured; otherwise use `SPOTIFY_MCP_DATA_DIR/artifacts`, with `~/.config/spotify-mcp` as the default data directory.
+- Keep generated personal artifacts outside the public repository under the MCP server's supported artifact root at `$HOME/.config/spotify-mcp/artifacts`.
 
 ## Output Contract
 

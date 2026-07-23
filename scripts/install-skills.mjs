@@ -16,12 +16,15 @@ const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   ".."
 );
-const codexHome =
+const configuredCodexHome =
   process.env.CODEX_HOME?.trim() || path.join(os.homedir(), ".codex");
 
-if (!path.isAbsolute(codexHome) || codexHome === path.parse(codexHome).root) {
+if (!path.isAbsolute(configuredCodexHome)) {
   throw new Error("CODEX_HOME must be a safe absolute directory.");
 }
+const codexHome = await resolveFilesystemPath(configuredCodexHome);
+if (codexHome === path.parse(codexHome).root)
+  throw new Error("CODEX_HOME must be a safe absolute directory.");
 
 const skillsRoot = path.join(codexHome, "skills");
 if (apply) await fs.mkdir(codexHome, { recursive: true, mode: 0o700 });
@@ -34,31 +37,40 @@ if (stagingRoot) {
     await fs.cp(
       path.join(repositoryRoot, "skills", skillName),
       path.join(stagingRoot, skillName),
-      { recursive: true, preserveTimestamps: true }
+      {
+        recursive: true,
+        preserveTimestamps: true,
+        filter: shouldInstall
+      }
     );
   }
 }
 
-for (const skillName of skillNames) {
-  const source = path.join(repositoryRoot, "skills", skillName);
-  const destination = path.join(skillsRoot, skillName);
-  process.stdout.write(
-    `${apply ? "INSTALL" : "WOULD INSTALL"}: ${source} -> ${destination}\n`
-  );
-  if (apply) {
-    await fs.mkdir(skillsRoot, { recursive: true, mode: 0o700 });
-    const backup = path.join(stagingRoot, `${skillName}.backup`);
-    const stagedSkill = path.join(stagingRoot, skillName);
-    const destinationExists = await exists(destination);
-    if (destinationExists) await fs.rename(destination, backup);
-    try {
+const replacements = [];
+try {
+  for (const skillName of skillNames) {
+    const source = path.join(repositoryRoot, "skills", skillName);
+    const destination = path.join(skillsRoot, skillName);
+    process.stdout.write(
+      `${apply ? "INSTALL" : "WOULD INSTALL"}: ${source} -> ${destination}\n`
+    );
+    if (apply) {
+      await fs.mkdir(skillsRoot, { recursive: true, mode: 0o700 });
+      const backup = path.join(stagingRoot, `${skillName}.backup`);
+      const stagedSkill = path.join(stagingRoot, skillName);
+      const destinationExists = await exists(destination);
+      if (destinationExists) await fs.rename(destination, backup);
+      replacements.push({ backup, destination, destinationExists });
       await fs.rename(stagedSkill, destination);
-    } catch (error) {
-      if (destinationExists) await fs.rename(backup, destination);
-      throw error;
     }
-    if (destinationExists) await fs.rm(backup, { recursive: true });
   }
+} catch (error) {
+  for (const replacement of replacements.reverse()) {
+    await fs.rm(replacement.destination, { recursive: true, force: true });
+    if (replacement.destinationExists)
+      await fs.rename(replacement.backup, replacement.destination);
+  }
+  throw error;
 }
 
 if (stagingRoot) await fs.rm(stagingRoot, { recursive: true });
@@ -79,4 +91,28 @@ async function exists(target) {
     }
     throw error;
   }
+}
+
+function shouldInstall(source) {
+  const relative = path.relative(path.join(repositoryRoot, "skills"), source);
+  const segments = relative.split(path.sep);
+  return !segments.some(
+    (segment) =>
+      segment === ".skill-work" ||
+      segment === "__pycache__" ||
+      segment === ".DS_Store" ||
+      segment.endsWith(".pyc")
+  );
+}
+
+async function resolveFilesystemPath(target) {
+  const normalized = path.resolve(target);
+  let existing = normalized;
+  while (!(await exists(existing))) {
+    const parent = path.dirname(existing);
+    if (parent === existing) break;
+    existing = parent;
+  }
+  const resolvedExisting = await fs.realpath(existing);
+  return path.join(resolvedExisting, path.relative(existing, normalized));
 }
