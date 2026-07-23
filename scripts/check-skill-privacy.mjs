@@ -185,6 +185,7 @@ function isForbiddenRuntimePath(relativePath) {
     (parentDirectory === ".m2" && fileName === "settings.xml") ||
     (parentDirectory === ".terraform.d" &&
       fileName === "credentials.tfrc.json") ||
+    (parentDirectory === "gcloud" && fileName === "credentials.db") ||
     (parentDirectory === "huggingface" && fileName === "token") ||
     (parentDirectory === "nuget" && fileName === "nuget.config") ||
     (parentDirectory === "pip" && ["pip.conf", "pip.ini"].includes(fileName))

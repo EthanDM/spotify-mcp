@@ -423,6 +423,7 @@ describe("skill installer", () => {
       [".gradle", "gradle.properties"],
       [".m2", "settings.xml"],
       [".terraform.d", "credentials.tfrc.json"],
+      [".config", "gcloud", "credentials.db"],
       [".cache", "huggingface", "token"],
       [".nuget", "NuGet", "NuGet.Config"],
       [".config", "pip", "pip.conf"],
