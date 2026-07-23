@@ -206,6 +206,7 @@ export class RevisionStore<T> {
           raw.schema_version !== 1 ||
           typeof raw.revision_id !== "string" ||
           raw.revision_id.length === 0 ||
+          `${raw.revision_id}.json` !== name ||
           !Array.isArray(raw.parent_revision_ids) ||
           raw.parent_revision_ids.some(
             (parent) => typeof parent !== "string" || parent.length === 0
