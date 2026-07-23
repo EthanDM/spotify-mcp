@@ -176,6 +176,7 @@ function isForbiddenRuntimePath(relativePath) {
   const parentDirectory = segments.at(-2);
   const fileName = segments.at(-1);
   return (
+    (parentDirectory === ".azure" && fileName === "msal_token_cache.json") ||
     (parentDirectory === ".docker" && fileName === "config.json") ||
     (parentDirectory === ".kube" && fileName === "config") ||
     (parentDirectory === ".cargo" &&

@@ -415,6 +415,7 @@ describe("skill installer", () => {
 
   it("rejects credential-store paths", async () => {
     for (const pathSegments of [
+      [".azure", "msal_token_cache.json"],
       [".docker", "config.json"],
       [".kube", "config"],
       [".cargo", "credentials"],
