@@ -124,21 +124,34 @@ export class PeopleStore {
   }
 
   private async listProfileEntries(): Promise<
-    Array<{ id: string; hadRevisionsPath: boolean }>
+    Array<{
+      id: string;
+      hadRevisionsPath: boolean;
+      directoryIdentity: DirectoryIdentity | null;
+    }>
   > {
     let directoryObserved = false;
+    let directoryIdentity: DirectoryIdentity | null = null;
     if (this.sharedMode) {
       await this.assertSharedStorageAvailable!();
       directoryObserved = await assertNoSymlinksWithinRoot(
         this.sharedRoot!,
         this.sharedDirectory
       );
+      if (directoryObserved)
+        directoryIdentity = await readDirectoryIdentity(this.sharedDirectory);
     }
     try {
       const entries = await fs.readdir(this.sharedDirectory, {
         withFileTypes: true
       });
-      const profiles: Array<{ id: string; hadRevisionsPath: boolean }> = [];
+      if (directoryIdentity)
+        await assertDirectoryIdentity(this.sharedDirectory, directoryIdentity);
+      const profiles: Array<{
+        id: string;
+        hadRevisionsPath: boolean;
+        directoryIdentity: DirectoryIdentity | null;
+      }> = [];
       for (const entry of entries) {
         if (entry.isSymbolicLink())
           throw new Error(
@@ -147,14 +160,28 @@ export class PeopleStore {
         if (!entry.isDirectory()) continue;
         let hadRevisionsPath = false;
         if (this.sharedMode) {
+          if (directoryIdentity)
+            await assertDirectoryIdentity(
+              this.sharedDirectory,
+              directoryIdentity
+            );
           try {
             await fs.lstat(this.getProfilePath(entry.name));
             hadRevisionsPath = true;
           } catch (error) {
             if (!isMissing(error)) throw error;
           }
+          if (directoryIdentity)
+            await assertDirectoryIdentity(
+              this.sharedDirectory,
+              directoryIdentity
+            );
         }
-        profiles.push({ id: entry.name, hadRevisionsPath });
+        profiles.push({
+          id: entry.name,
+          hadRevisionsPath,
+          directoryIdentity
+        });
       }
       return profiles.sort((a, b) => a.id.localeCompare(b.id));
     } catch (error) {
@@ -196,8 +223,18 @@ export class PeopleStore {
   async readAllProfiles(): Promise<PersonProfile[]> {
     const profiles = await Promise.all(
       (await this.listProfileEntries()).map(
-        async ({ id, hadRevisionsPath }) => {
+        async ({ id, hadRevisionsPath, directoryIdentity }) => {
+          if (directoryIdentity)
+            await assertDirectoryIdentity(
+              this.sharedDirectory,
+              directoryIdentity
+            );
           const profile = await this.readProfile(id);
+          if (directoryIdentity)
+            await assertDirectoryIdentity(
+              this.sharedDirectory,
+              directoryIdentity
+            );
           if (profile === null && this.sharedMode) {
             try {
               await fs.lstat(this.getProfileDirectoryPath(id));

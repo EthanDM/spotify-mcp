@@ -444,6 +444,55 @@ describe("shared stores", () => {
     readdir.mockRestore();
   });
 
+  it("rejects a shared people directory replaced during enumeration", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-people-directory-swap-")
+    );
+    const store = people(root, "desktop");
+    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    const directory = store.basePath;
+    const original = path.join(root, "original-people");
+    const replacement = path.join(root, "replacement-people");
+    await mkdir(replacement);
+    const readDirectory = fs.readdir.bind(fs);
+    const readdir = vi
+      .spyOn(fs, "readdir")
+      .mockImplementationOnce(async (...args) => {
+        const entries = await readDirectory(...args);
+        await rename(directory, original);
+        await rename(replacement, directory);
+        return entries;
+      });
+
+    await expect(store.listProfileIds()).rejects.toThrow(
+      "Shared stream directory changed during read"
+    );
+    readdir.mockRestore();
+  });
+
+  it("rejects a shared people directory replaced after a profile read", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-people-read-swap-")
+    );
+    const store = people(root, "desktop");
+    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    const directory = store.basePath;
+    const original = path.join(root, "original-people");
+    const replacement = path.join(root, "replacement-people");
+    await mkdir(replacement);
+    const readProfile = store.readProfile.bind(store);
+    vi.spyOn(store, "readProfile").mockImplementationOnce(async (profileId) => {
+      const profile = await readProfile(profileId);
+      await rename(directory, original);
+      await rename(replacement, directory);
+      return profile;
+    });
+
+    await expect(store.readAllProfiles()).rejects.toThrow(
+      "Shared stream directory changed during read"
+    );
+  });
+
   it("rejects symlinked profile entries while listing people", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-link-"));
     const sharedPeople = path.join(root, "shared", "people");

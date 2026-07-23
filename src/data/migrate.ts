@@ -12,6 +12,7 @@ import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
+  readDirectoryIdentity,
   readFileNoFollow,
   SharedStorageGuard
 } from "../storage/shared.js";
@@ -717,7 +718,14 @@ async function migrateNdjson(
       sharedStorage.sharedRoot,
       path.dirname(destination)
     );
-    await appendPrivateFile(destination, `${additions.join("\n")}\n`);
+    const directoryIdentity = await readDirectoryIdentity(
+      path.dirname(destination)
+    );
+    await appendPrivateFile(
+      destination,
+      `${additions.join("\n")}\n`,
+      directoryIdentity
+    );
   }
   return added;
 }
