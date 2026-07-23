@@ -2,10 +2,10 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import { constants as fsConstants, existsSync, lstatSync } from "node:fs";
 import fs from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
-import { getStorageConfig } from "../config.js";
+import { getStorageConfig, type StorageConfig } from "../config.js";
 import { normalizePreferences } from "../personalization/store.js";
 import { RevisionStore } from "../storage/revisions.js";
 import {
@@ -31,27 +31,60 @@ async function main(): Promise<void> {
     );
 
   const plan = await buildPlan(config.localRoot, config.sharedRoot);
-  plan.lines.push(
-    ...(await validateMigration(
-      config.localRoot,
-      config.sharedRoot,
-      config.machineId
-    ))
-  );
-  process.stdout.write(
-    `${apply ? "Applying" : "Dry run"} Spotify MCP shared-data migration\n${plan.lines.join("\n")}\n`
-  );
-  process.stdout.write(
-    "Local auth.json, snapshots, generated contexts, .env, and runtime configuration are excluded.\n"
-  );
   if (!apply) {
+    plan.lines.push(
+      ...(await validateMigration(
+        config.localRoot,
+        config.sharedRoot,
+        config.machineId
+      ))
+    );
+    writePlan(plan.lines, false);
     process.stdout.write(
       "No files changed. Re-run with --apply after reviewing this plan.\n"
     );
     return;
   }
 
-  const sourceHashesBefore = await buildSourceHashes(config.localRoot);
+  const snapshot = await createMigrationSnapshot(config.localRoot);
+  try {
+    plan.lines.push(
+      ...(await validateMigration(
+        snapshot.root,
+        config.sharedRoot,
+        config.machineId,
+        config.localRoot
+      ))
+    );
+    writePlan(plan.lines, true);
+    await applyMigration(
+      {
+        ...config,
+        sharedRoot: config.sharedRoot,
+        machineId: config.machineId
+      },
+      snapshot.root,
+      snapshot.sourceHashes
+    );
+  } finally {
+    await fs.rm(snapshot.root, { recursive: true, force: true });
+  }
+}
+
+function writePlan(lines: string[], apply: boolean): void {
+  process.stdout.write(
+    `${apply ? "Applying" : "Dry run"} Spotify MCP shared-data migration\n${lines.join("\n")}\n`
+  );
+  process.stdout.write(
+    "Local auth.json, snapshots, generated contexts, .env, and runtime configuration are excluded.\n"
+  );
+}
+
+async function applyMigration(
+  config: StorageConfig & { sharedRoot: string; machineId: string },
+  sourceRoot: string,
+  sourceHashes: Record<string, string>
+): Promise<void> {
   const sharedStorage = new SharedStorageGuard(config);
   await sharedStorage.claimMachineId();
   const revisionGuard = {
@@ -66,7 +99,7 @@ async function main(): Promise<void> {
     artifacts: 0
   };
   const preferencesSource = path.join(
-    config.localRoot,
+    sourceRoot,
     "personalization",
     "user-preferences.json"
   );
@@ -90,20 +123,15 @@ async function main(): Promise<void> {
   }
 
   counts.artifacts = await copyArtifacts(
-    path.join(config.localRoot, "artifacts"),
+    path.join(sourceRoot, "artifacts"),
     path.join(config.sharedRoot, "artifacts"),
     sharedStorage
   );
 
   for (const profileId of await directoryNames(
-    path.join(config.localRoot, "people")
+    path.join(sourceRoot, "people")
   )) {
-    const source = path.join(
-      config.localRoot,
-      "people",
-      profileId,
-      "profile.json"
-    );
+    const source = path.join(sourceRoot, "people", profileId, "profile.json");
     const profileDocument = await readJson<unknown>(source);
     if (profileDocument !== undefined) {
       const profile = validatePersonProfileDocument(profileDocument, profileId);
@@ -123,12 +151,7 @@ async function main(): Promise<void> {
       counts.profiles += 1;
     }
     counts.playlist_history += await migrateNdjson(
-      path.join(
-        config.localRoot,
-        "people",
-        profileId,
-        "playlist-history.ndjson"
-      ),
+      path.join(sourceRoot, "people", profileId, "playlist-history.ndjson"),
       path.join(
         config.sharedRoot,
         "people",
@@ -154,7 +177,7 @@ async function main(): Promise<void> {
     );
   }
   counts.events = await migrateNdjson(
-    path.join(config.localRoot, "personalization", "interaction-log.ndjson"),
+    path.join(sourceRoot, "personalization", "interaction-log.ndjson"),
     path.join(
       config.sharedRoot,
       "personalization",
@@ -166,17 +189,12 @@ async function main(): Promise<void> {
     true,
     sharedStorage
   );
-  const sourceHashesAfter = await buildSourceHashes(config.localRoot);
-  if (stable(sourceHashesBefore) !== stable(sourceHashesAfter))
-    throw new Error(
-      "Local migration sources changed while migration was running. Stop the legacy server and retry."
-    );
   const manifest = {
     schema_version: 1,
     migrated_at: new Date().toISOString(),
     machine_id: config.machineId,
     counts,
-    source_hashes: sourceHashesBefore
+    source_hashes: sourceHashes
   };
   const manifestPath = path.join(
     config.sharedRoot,
@@ -191,6 +209,68 @@ async function main(): Promise<void> {
   process.stdout.write(
     `Migration complete: ${JSON.stringify(counts)}\nManifest: ${manifestPath}\nOriginal local files were preserved.\n`
   );
+}
+
+async function createMigrationSnapshot(localRoot: string): Promise<{
+  root: string;
+  sourceHashes: Record<string, string>;
+}> {
+  const sourceHashes = await buildSourceHashes(localRoot);
+  const snapshotRoot = await fs.mkdtemp(
+    path.join(tmpdir(), "spotify-mcp-migration-")
+  );
+  try {
+    for (const relative of ["personalization", "people", "artifacts"])
+      await copySnapshotDirectory(
+        path.join(localRoot, relative),
+        path.join(snapshotRoot, relative)
+      );
+    const snapshotHashes = await buildSourceHashes(snapshotRoot);
+    const sourceHashesAfter = await buildSourceHashes(localRoot);
+    if (
+      stable(sourceHashes) !== stable(snapshotHashes) ||
+      stable(sourceHashes) !== stable(sourceHashesAfter)
+    )
+      throw new Error(
+        "Local migration sources changed while preparing the migration snapshot. Stop the legacy server and retry."
+      );
+    return { root: snapshotRoot, sourceHashes };
+  } catch (error) {
+    await fs.rm(snapshotRoot, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function copySnapshotDirectory(
+  source: string,
+  destination: string
+): Promise<void> {
+  let stats;
+  try {
+    stats = await fs.lstat(source);
+  } catch (error) {
+    if (isMissing(error)) return;
+    throw error;
+  }
+  if (stats.isSymbolicLink())
+    throw new Error(`Migration source does not allow symlinks: ${source}`);
+  if (!stats.isDirectory())
+    throw new Error(`Migration source must be a directory: ${source}`);
+  await fs.mkdir(destination, { recursive: true, mode: 0o700 });
+  for (const entry of await fs.readdir(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name);
+    const to = path.join(destination, entry.name);
+    if (entry.isDirectory()) await copySnapshotDirectory(from, to);
+    else if (entry.isFile())
+      await fs.writeFile(to, await readBytesNoFollow(from), {
+        mode: 0o600,
+        flag: "wx"
+      });
+    else
+      throw new Error(
+        `Migration source requires regular files or directories: ${from}`
+      );
+  }
 }
 
 async function buildSourceHashes(
@@ -261,7 +341,8 @@ async function buildPlan(
 async function validateMigration(
   localRoot: string,
   sharedRoot: string,
-  machineId: string
+  machineId: string,
+  artifactReferenceRoot = localRoot
 ): Promise<string[]> {
   const warnings: string[] = [];
   const personalizationDirectory = path.join(localRoot, "personalization");
@@ -345,7 +426,7 @@ async function validateMigration(
       (value) =>
         rewriteArtifactPaths(
           value,
-          path.join(localRoot, "artifacts"),
+          path.join(artifactReferenceRoot, "artifacts"),
           path.join(sharedRoot, "artifacts")
         ),
       (value) =>

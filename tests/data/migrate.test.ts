@@ -321,6 +321,24 @@ describe("shared data migration", () => {
     });
   });
 
+  it("does not mutate shared storage when snapshot validation fails", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-invalid-snapshot-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await writeFile(
+      path.join(local, "personalization", "user-preferences.json"),
+      JSON.stringify({ preferred_artists: null })
+    );
+
+    await expect(
+      runMigration(local, shared, "desktop", true)
+    ).rejects.toBeTruthy();
+    await expect(readdir(shared)).resolves.toEqual([]);
+  });
+
   it("rejects FIFO migration sources without blocking", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-source-fifo-"));
     const local = path.join(root, "local");

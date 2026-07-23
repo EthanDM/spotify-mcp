@@ -189,7 +189,7 @@ pnpm data:migrate
 pnpm data:migrate -- --apply
 ```
 
-The first command is read-only. Create the configured directory in iCloud before applying the migration. The applied migration reserves the machine id, preserves the original local files, excludes credentials and generated state, and can be rerun without duplicating records. Allow iCloud to finish syncing before configuring or migrating Neo. If Neo has different preferences or profiles, migration imports them as explicit revision forks while still migrating its histories and artifacts; resolve those forks afterward.
+The first command is read-only. Create the configured directory in iCloud before applying the migration. Apply first validates a private immutable snapshot of the local migration inputs, then reserves the machine id and writes shared state from that snapshot. The migration preserves the original local files, excludes credentials and generated state, and can be rerun without duplicating records. Allow iCloud to finish syncing before configuring or migrating Neo. If Neo has different preferences or profiles, migration imports them as explicit revision forks while still migrating its histories and artifacts; resolve those forks afterward.
 
 Preferences and person profiles retain immutable revisions. If offline edits create multiple tips, normal access refuses to choose one. Inspect and resolve the conflict explicitly:
 
