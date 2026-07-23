@@ -261,7 +261,9 @@ describe("skill installer", () => {
     const fixtures = [
       path.resolve("skills", "playlist-review", ".env.production"),
       path.resolve("skills", "playlist-review", ".ENV.production"),
+      path.resolve("skills", "playlist-review", ".netrc"),
       path.resolve("skills", "playlist-review", ".npmrc"),
+      path.resolve("skills", "playlist-review", "_netrc"),
       path.resolve("skills", "playlist-review", "AUTH.JSON"),
       path.resolve("skills", "playlist-review", "personalization-context.md")
     ];
