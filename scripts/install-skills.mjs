@@ -34,7 +34,9 @@ if (codexHome === path.parse(codexHome).root)
   throw new Error("CODEX_HOME must be a safe absolute directory.");
 
 if (apply) await fs.mkdir(codexHome, { recursive: true, mode: 0o700 });
-const skillsRoot = await resolveFilesystemPath(path.join(codexHome, "skills"));
+const skillsRootPath = path.join(codexHome, "skills");
+await rejectDanglingSymlink(skillsRootPath);
+const skillsRoot = await resolveFilesystemPath(skillsRootPath);
 if (!isWithin(codexHome, skillsRoot))
   throw new Error(
     "CODEX_HOME/skills must resolve inside the configured Codex home."
@@ -111,6 +113,29 @@ async function entryExists(target) {
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
       return false;
+    }
+    throw error;
+  }
+}
+
+async function rejectDanglingSymlink(target) {
+  let stats;
+  try {
+    stats = await fs.lstat(target);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  if (!stats.isSymbolicLink()) return;
+  try {
+    await fs.realpath(target);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      throw new Error(
+        "CODEX_HOME/skills must not be a dangling symbolic link."
+      );
     }
     throw error;
   }

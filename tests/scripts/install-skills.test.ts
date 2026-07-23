@@ -3,6 +3,7 @@ import {
   access,
   mkdtemp,
   mkdir,
+  readdir,
   rm,
   symlink,
   writeFile
@@ -54,6 +55,28 @@ describe("skill installer", () => {
     await expect(
       access(path.join(destination, "SKILL.md"))
     ).resolves.toBeUndefined();
+  });
+
+  it("rejects a dangling skills-root link before creating staging files", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    await symlink(
+      path.join(codexHome, "missing-skills"),
+      path.join(codexHome, "skills")
+    );
+
+    await expect(
+      execute("node", ["scripts/install-skills.mjs", "--apply"], {
+        env: { ...process.env, CODEX_HOME: codexHome }
+      })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("must not be a dangling symbolic link")
+    });
+
+    expect(
+      (await readdir(codexHome)).filter((name) =>
+        name.startsWith(".spotify-mcp-skills-")
+      )
+    ).toEqual([]);
   });
 
   it("excludes generated skill work from installed packages", async () => {
@@ -263,6 +286,7 @@ describe("skill installer", () => {
     const fixtures = [
       path.resolve("skills", "playlist-review", ".env.production"),
       path.resolve("skills", "playlist-review", ".ENV.production"),
+      path.resolve("skills", "playlist-review", ".git-credentials"),
       path.resolve("skills", "playlist-review", ".netrc"),
       path.resolve("skills", "playlist-review", ".npmrc"),
       path.resolve("skills", "playlist-review", ".pypirc"),

@@ -10,6 +10,7 @@ const repositoryRoot = path.resolve(
 const skillsRoot = path.join(repositoryRoot, "skills");
 const forbiddenFileNames = new Set([
   ".env",
+  ".git-credentials",
   ".netrc",
   ".npmrc",
   ".pypirc",

@@ -28,7 +28,9 @@ def require_list(value: Any, name: str) -> list[Any]:
 
 def require_nonempty_strings(value: Any, name: str) -> list[str]:
     items = require_list(value, name)
-    if not items or any(not isinstance(item, str) or not item for item in items):
+    if not items or any(
+        not isinstance(item, str) or not item.strip() for item in items
+    ):
         fail(f"{name} must contain non-empty strings")
     return items
 
