@@ -401,6 +401,7 @@ describe("skill installer", () => {
       [".cargo", "credentials"],
       [".cargo", "credentials.toml"],
       [".gem", "credentials"],
+      [".m2", "settings.xml"],
       [".config", "pip", "pip.conf"],
       ["pip", "pip.ini"]
     ]) {
