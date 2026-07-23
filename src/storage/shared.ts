@@ -174,6 +174,8 @@ export async function appendPrivateFile(
       await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
     await handle.writeFile(value, "utf8");
     await handle.chmod(0o600);
+    if (directoryIdentity)
+      await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
   } finally {
     await handle.close();
   }

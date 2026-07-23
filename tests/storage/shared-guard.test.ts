@@ -24,6 +24,7 @@ import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
+  readDirectoryIdentity,
   readFileNoFollow,
   SharedStorageGuard
 } from "../../src/storage/shared.js";
@@ -189,6 +190,41 @@ describe("shared storage guard", () => {
     await symlink(outside, linked);
     await expect(appendPrivateFile(linked, "escaped\n")).rejects.toBeTruthy();
     expect(await readFile(outside, "utf8")).toBe("outside\n");
+  });
+
+  it("rejects an append when its directory changes during the write", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-append-swap-"));
+    const directory = path.join(root, "events");
+    const original = path.join(root, "original-events");
+    const replacement = path.join(root, "replacement-events");
+    const file = path.join(directory, "desktop.ndjson");
+    await mkdir(directory);
+    await mkdir(replacement);
+    await writeFile(file, "first\n");
+    const directoryIdentity = await readDirectoryIdentity(directory);
+    const openFile = fs.open.bind(fs);
+    const open = vi
+      .spyOn(fs, "open")
+      .mockImplementationOnce(async (...args) => {
+        const handle = await openFile(...args);
+        const write = handle.writeFile.bind(handle);
+        vi.spyOn(handle, "writeFile").mockImplementationOnce(
+          async (...writeArgs) => {
+            await rename(directory, original);
+            await rename(replacement, directory);
+            return write(...writeArgs);
+          }
+        );
+        return handle;
+      });
+
+    await expect(
+      appendPrivateFile(file, "second\n", directoryIdentity)
+    ).rejects.toThrow("Shared storage directory changed");
+    expect(await readFile(path.join(original, "desktop.ndjson"), "utf8")).toBe(
+      "first\nsecond\n"
+    );
+    open.mockRestore();
   });
 
   it("rejects FIFO reads without blocking", async () => {
