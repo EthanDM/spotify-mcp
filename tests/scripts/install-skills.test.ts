@@ -133,6 +133,29 @@ describe("skill installer", () => {
     }
   });
 
+  it("rejects tracked generated skill work", async () => {
+    const fixtureRelative = path.join(
+      "skills",
+      "playlist-review",
+      ".skill-work",
+      "tracked.json"
+    );
+    const fixture = path.resolve(fixtureRelative);
+    await mkdir(path.dirname(fixture), { recursive: true });
+    await writeFile(fixture, "generated private data");
+    try {
+      await execute("git", ["add", "-f", "--", fixtureRelative]);
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("tracked generated paths are forbidden")
+      });
+    } finally {
+      await execute("git", ["rm", "--cached", "-f", "--", fixtureRelative]);
+      await rm(path.dirname(fixture), { recursive: true, force: true });
+    }
+  });
+
   it("runs the privacy gate before installing skill contents", async () => {
     const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
     const fixture = path.resolve(

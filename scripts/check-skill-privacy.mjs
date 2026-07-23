@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -8,6 +9,17 @@ const repositoryRoot = path.resolve(
   ".."
 );
 const skillsRoot = path.join(repositoryRoot, "skills");
+const trackedSkillPaths = execFileSync(
+  "git",
+  ["ls-files", "-z", "--", "skills"],
+  {
+    cwd: repositoryRoot,
+    encoding: "utf8"
+  }
+)
+  .split("\0")
+  .filter(Boolean)
+  .map((filePath) => path.normalize(filePath));
 const forbiddenFileNames = new Set([
   ".env",
   ".ash_history",
@@ -125,8 +137,14 @@ process.stdout.write("Skill privacy check passed.\n");
 async function listFiles(directory) {
   const files = [];
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-    if (isGenerated(entry.name)) continue;
     const entryPath = path.join(directory, entry.name);
+    if (isGenerated(entry.name)) {
+      if (isTracked(entryPath))
+        throw new Error(
+          `Skill privacy check failed:\n${path.relative(repositoryRoot, entryPath)}: tracked generated paths are forbidden`
+        );
+      continue;
+    }
     if (entry.isDirectory()) files.push(...(await listFiles(entryPath)));
     else if (entry.isFile()) files.push(entryPath);
     else if (entry.isSymbolicLink())
@@ -135,6 +153,15 @@ async function listFiles(directory) {
       );
   }
   return files;
+}
+
+function isTracked(entryPath) {
+  const relativePath = path.normalize(path.relative(repositoryRoot, entryPath));
+  return trackedSkillPaths.some(
+    (trackedPath) =>
+      trackedPath === relativePath ||
+      trackedPath.startsWith(`${relativePath}${path.sep}`)
+  );
 }
 
 function isForbiddenRuntimePath(relativePath) {
