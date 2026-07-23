@@ -510,6 +510,25 @@ describe("shared data migration", () => {
     await expect(runMigration(local, shared, "desktop")).rejects.toBeTruthy();
   });
 
+  it("ignores excluded generated files while snapshotting", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-generated-snapshot-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await symlink(
+      path.join(root, "missing"),
+      path.join(local, "personalization", "profile-snapshot.json")
+    );
+
+    await expect(
+      runMigration(local, shared, "desktop", true)
+    ).resolves.toMatchObject({
+      stdout: expect.stringContaining("Migration complete")
+    });
+  });
+
   it("rejects non-regular legacy artifacts during preflight", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-artifact-fifo-")

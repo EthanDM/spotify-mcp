@@ -167,7 +167,8 @@ async function applyMigration(
         rewriteArtifactPaths(
           value,
           path.join(config.localRoot, "artifacts"),
-          path.join(config.sharedRoot!, "artifacts")
+          path.join(config.sharedRoot!, "artifacts"),
+          path.join(sourceRoot, "artifacts")
         ),
       (value) =>
         rewriteSharedArtifactPaths(
@@ -223,7 +224,8 @@ async function createMigrationSnapshot(localRoot: string): Promise<{
     for (const relative of ["personalization", "people", "artifacts"])
       await copySnapshotDirectory(
         path.join(localRoot, relative),
-        path.join(snapshotRoot, relative)
+        path.join(snapshotRoot, relative),
+        localRoot
       );
     const snapshotHashes = await buildSourceHashes(snapshotRoot);
     const sourceHashesAfter = await buildSourceHashes(localRoot);
@@ -243,7 +245,8 @@ async function createMigrationSnapshot(localRoot: string): Promise<{
 
 async function copySnapshotDirectory(
   source: string,
-  destination: string
+  destination: string,
+  root: string
 ): Promise<void> {
   let stats;
   try {
@@ -260,7 +263,8 @@ async function copySnapshotDirectory(
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
-    if (entry.isDirectory()) await copySnapshotDirectory(from, to);
+    if (isGeneratedLocalState(path.relative(root, from))) continue;
+    if (entry.isDirectory()) await copySnapshotDirectory(from, to, root);
     else if (entry.isFile())
       await fs.writeFile(to, await readBytesNoFollow(from), {
         mode: 0o600,
@@ -427,7 +431,8 @@ async function validateMigration(
         rewriteArtifactPaths(
           value,
           path.join(artifactReferenceRoot, "artifacts"),
-          path.join(sharedRoot, "artifacts")
+          path.join(sharedRoot, "artifacts"),
+          path.join(localRoot, "artifacts")
         ),
       (value) =>
         rewriteSharedArtifactPaths(value, path.join(sharedRoot, "artifacts"))
@@ -823,7 +828,8 @@ async function copyArtifacts(
 function rewriteArtifactPaths(
   value: Record<string, unknown>,
   sourceArtifactsRoot: string,
-  sharedArtifactsRoot: string
+  sharedArtifactsRoot: string,
+  sourceValidationRoot = sourceArtifactsRoot
 ): Record<string, unknown> {
   if (!Array.isArray(value.artifact_paths)) return value;
   return {
@@ -840,10 +846,13 @@ function rewriteArtifactPaths(
         const normalized = path.normalize(expandedPath);
         const relative = relativeWithin("artifacts", normalized);
         if (relative !== null) {
-          const sourceTarget = path.join(sourceArtifactsRoot, relative);
+          const sourceValidationTarget = path.join(
+            sourceValidationRoot,
+            relative
+          );
           const sharedTarget = path.join(sharedArtifactsRoot, relative);
           const existingTargets = [
-            [path.dirname(sourceArtifactsRoot), sourceTarget],
+            [path.dirname(sourceValidationRoot), sourceValidationTarget],
             [path.dirname(sharedArtifactsRoot), sharedTarget]
           ].filter(([, target]) => existsSync(target));
           if (existingTargets.length === 0)
@@ -864,8 +873,8 @@ function rewriteArtifactPaths(
       if (relative !== null) {
         const existingTargets = [
           [
-            path.dirname(sourceArtifactsRoot),
-            path.join(sourceArtifactsRoot, relative)
+            path.dirname(sourceValidationRoot),
+            path.join(sourceValidationRoot, relative)
           ],
           [
             path.dirname(sharedArtifactsRoot),
