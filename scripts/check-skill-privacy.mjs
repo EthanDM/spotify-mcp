@@ -186,7 +186,8 @@ function isForbiddenRuntimePath(relativePath) {
     (parentDirectory === ".m2" && fileName === "settings.xml") ||
     (parentDirectory === ".terraform.d" &&
       fileName === "credentials.tfrc.json") ||
-    (parentDirectory === "gcloud" && fileName === "credentials.db") ||
+    (parentDirectory === "gcloud" &&
+      ["access_tokens.db", "credentials.db"].includes(fileName)) ||
     (parentDirectory === "glab-cli" && fileName === "config.yml") ||
     (parentDirectory === "huggingface" && fileName === "token") ||
     (parentDirectory === "nuget" && fileName === "nuget.config") ||

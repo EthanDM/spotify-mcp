@@ -424,6 +424,7 @@ describe("skill installer", () => {
       [".gradle", "gradle.properties"],
       [".m2", "settings.xml"],
       [".terraform.d", "credentials.tfrc.json"],
+      [".config", "gcloud", "access_tokens.db"],
       [".config", "gcloud", "credentials.db"],
       [".config", "glab-cli", "config.yml"],
       [".cache", "huggingface", "token"],
