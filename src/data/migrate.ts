@@ -975,7 +975,7 @@ async function readText(file: string): Promise<string | null> {
 }
 async function exists(file: string): Promise<boolean> {
   try {
-    await fs.access(file);
+    await fs.lstat(file);
     return true;
   } catch (error) {
     if (isMissing(error)) return false;

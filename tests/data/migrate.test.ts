@@ -541,6 +541,26 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects a dangling legacy personalization root", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-personalization-dangling-")
+    );
+    const local = path.join(root, "local");
+    await mkdir(local);
+    await symlink(
+      path.join(root, "missing"),
+      path.join(local, "personalization")
+    );
+
+    await expect(
+      runMigration(local, path.join(root, "shared"), "desktop")
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "Personalization migration does not allow symlinks"
+      )
+    });
+  });
+
   it("rejects a symlinked legacy artifacts root", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-artifact-root-link-")
