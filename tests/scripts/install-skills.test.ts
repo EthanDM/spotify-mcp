@@ -41,6 +41,21 @@ describe("skill installer", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("replaces dangling destination symlinks without losing the entry", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    const destination = path.join(codexHome, "skills", "playlist-review");
+    await mkdir(path.dirname(destination), { recursive: true });
+    await symlink(path.join(codexHome, "missing-skill"), destination);
+
+    await execute("node", ["scripts/install-skills.mjs", "--apply"], {
+      env: { ...process.env, CODEX_HOME: codexHome }
+    });
+
+    await expect(
+      access(path.join(destination, "SKILL.md"))
+    ).resolves.toBeUndefined();
+  });
+
   it("excludes generated skill work from installed packages", async () => {
     const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
     const workDirectory = path.resolve(

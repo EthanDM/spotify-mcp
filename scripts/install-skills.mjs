@@ -62,7 +62,7 @@ try {
       await fs.mkdir(skillsRoot, { recursive: true, mode: 0o700 });
       const backup = path.join(stagingRoot, `${skillName}.backup`);
       const stagedSkill = path.join(stagingRoot, skillName);
-      const destinationExists = await exists(destination);
+      const destinationExists = await entryExists(destination);
       if (destinationExists) await fs.rename(destination, backup);
       replacements.push({ backup, destination, destinationExists });
       await fs.rename(stagedSkill, destination);
@@ -88,6 +88,18 @@ if (!apply) {
 async function exists(target) {
   try {
     await fs.access(target);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function entryExists(target) {
+  try {
+    await fs.lstat(target);
     return true;
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {

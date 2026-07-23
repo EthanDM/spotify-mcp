@@ -71,7 +71,7 @@ For a short explicit request such as "make a focused evening-walk playlist," do 
 - Apply only the diversity and overlap controls that belong to the selected curation mode.
 - Check track and anchor-artist overlap against usable recent comparable MCP history when available.
 - Use the deterministic local constraint check in `references/workflow-patterns.md` before claiming exact percentages or threshold compliance.
-- Check opener strength and overall coherence.
+- For ordered builds, check opener strength; for every build, check overall coherence.
 - For activity playlists, state the intended ending behavior and verify the final three to five tracks still serve the activity; do not introduce a cooldown unless the prompt or inferred session shape calls for one.
 - For ordered builds, verify every track's phase and confirm the ending supports the claimed destination.
 - Inspect all credited artist appearances, not only primary-artist counts, and flag repeated reliance on one familiar musical ecosystem even when each individual artist stays under the numeric cap.
