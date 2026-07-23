@@ -69,6 +69,22 @@ describe("shared stores", () => {
     ).rejects.toThrow("Invalid personalization event");
   });
 
+  it("requires identity metadata on shared personalization events", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-event-metadata-")
+    );
+    const events = path.join(root, "shared", "personalization", "events");
+    await mkdir(events, { recursive: true });
+    await writeFile(
+      path.join(events, "desktop.ndjson"),
+      `${JSON.stringify({ ts: "2026-01-01T00:00:00.000Z", type: "test", details: {} })}\n`
+    );
+
+    await expect(
+      personalization(root, "desktop").readRecentEvents(10)
+    ).rejects.toThrow("Invalid shared personalization event metadata");
+  });
+
   it("deduplicates migrated events whose only difference is machine provenance", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-deduped-"));
     const desktop = personalization(root, "desktop");

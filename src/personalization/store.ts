@@ -225,6 +225,16 @@ export class PersonalizationStore {
             `Invalid personalization event at ${file}:${index + 1}.`
           );
         }
+        if (
+          this.sharedMode &&
+          (typeof event.event_id !== "string" ||
+            typeof event.machine_id !== "string" ||
+            event.machine_id !== path.basename(file, ".ndjson") ||
+            event.schema_version !== 1)
+        )
+          throw new Error(
+            `Invalid shared personalization event metadata at ${file}:${index + 1}.`
+          );
         const id = event.event_id ?? `legacy:${file}:${index + 1}`;
         const { machine_id: ignoredMachineId, ...semanticEvent } = event;
         void ignoredMachineId;

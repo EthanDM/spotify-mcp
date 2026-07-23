@@ -144,6 +144,12 @@ export async function appendPrivateFile(
   file: string,
   value: string
 ): Promise<void> {
+  try {
+    if (!(await fs.lstat(file)).isFile())
+      throw new Error(`Storage path must be a regular file: ${file}`);
+  } catch (error) {
+    if (!isMissing(error)) throw error;
+  }
   const handle = await fs.open(
     file,
     constants.O_APPEND |
