@@ -7,6 +7,7 @@ import {
   symlink,
   writeFile
 } from "node:fs/promises";
+import fs from "node:fs/promises";
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -58,6 +59,31 @@ describe("shared stores", () => {
     await expect(store.readAllEvents()).rejects.toThrow(
       "Shared personalization stream disappeared after enumeration"
     );
+  });
+
+  it("fails when an observed personalization directory disappears", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-event-directory-gone-")
+    );
+    const store = personalization(root, "desktop");
+    await store.appendEvent({
+      ts: "2026-01-01T00:00:00.000Z",
+      type: "desktop",
+      details: {}
+    });
+    const directory = path.dirname(store.interactionLogPath);
+    const readDirectory = fs.readdir.bind(fs);
+    const readdir = vi
+      .spyOn(fs, "readdir")
+      .mockImplementationOnce(async (...args) => {
+        await rm(directory, { recursive: true });
+        return readDirectory(...args);
+      });
+
+    await expect(store.getInteractionLogPaths()).rejects.toThrow(
+      "Shared stream directory disappeared after validation"
+    );
+    readdir.mockRestore();
   });
 
   it("rejects symlinked personalization stream directories", async () => {
@@ -203,6 +229,30 @@ describe("shared stores", () => {
     await expect(store.readPlaylistHistory("friend")).rejects.toThrow(
       "Shared playlist history disappeared after enumeration"
     );
+  });
+
+  it("fails when an observed playlist-history directory disappears", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-history-directory-gone-")
+    );
+    const store = people(root, "desktop");
+    await store.appendPlaylistRecord(
+      "friend",
+      record("one", "2026-01-01T00:00:00.000Z")
+    );
+    const directory = path.dirname(store.getPlaylistHistoryPath("friend"));
+    const readDirectory = fs.readdir.bind(fs);
+    const readdir = vi
+      .spyOn(fs, "readdir")
+      .mockImplementationOnce(async (...args) => {
+        await rm(directory, { recursive: true });
+        return readDirectory(...args);
+      });
+
+    await expect(store.getPlaylistHistoryPaths("friend")).rejects.toThrow(
+      "Shared stream directory disappeared after validation"
+    );
+    readdir.mockRestore();
   });
 
   it("rejects incomplete shared playlist-history records", async () => {

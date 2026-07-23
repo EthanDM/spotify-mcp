@@ -77,14 +77,15 @@ export class PeopleStore {
   async getPlaylistHistoryPaths(profileId: string): Promise<string[]> {
     if (!this.sharedMode) return [this.getPlaylistHistoryPath(profileId)];
     await this.assertSharedStorageAvailable!();
-    await assertNoSymlinksWithinRoot(
+    const directoryObserved = await assertNoSymlinksWithinRoot(
       this.sharedRoot!,
       path.join(this.getProfileDirectoryPath(profileId), "playlist-history")
     );
     return listFiles(
       path.join(this.getProfileDirectoryPath(profileId), "playlist-history"),
       ".ndjson",
-      this.assertSharedStorageAvailable!
+      this.assertSharedStorageAvailable!,
+      directoryObserved
     );
   }
 
@@ -314,7 +315,8 @@ export class PeopleStore {
 async function listFiles(
   directory: string,
   suffix: string,
-  assertSharedStorageAvailable?: () => Promise<void>
+  assertSharedStorageAvailable?: () => Promise<void>,
+  directoryObserved = false
 ): Promise<string[]> {
   try {
     const entries = await fs.readdir(directory, { withFileTypes: true });
@@ -331,6 +333,10 @@ async function listFiles(
   } catch (error) {
     if (isMissing(error)) {
       await assertSharedStorageAvailable?.();
+      if (directoryObserved)
+        throw new Error(
+          `Shared stream directory disappeared after validation: ${directory}`
+        );
       return [];
     }
     throw error;

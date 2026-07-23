@@ -1,8 +1,9 @@
+import fs from "node:fs/promises";
 import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   RevisionConflictError,
@@ -116,6 +117,45 @@ describe("RevisionStore", () => {
     await expect(store.read()).rejects.toThrow(
       "empty shared revision directory"
     );
+  });
+
+  it("fails when shared revisions disappear after validation", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-directory-gone-")
+    );
+    const sharedRoot = path.join(root, "shared");
+    const revisions = path.join(sharedRoot, "preferences", "revisions");
+    await mkdir(revisions, { recursive: true });
+    await writeFile(
+      path.join(revisions, "root.json"),
+      JSON.stringify({
+        schema_version: 1,
+        revision_id: "root",
+        parent_revision_ids: [],
+        written_at: new Date().toISOString(),
+        written_by: "desktop",
+        value: { value: "root" }
+      })
+    );
+    const store = new RevisionStore<{ value: string }>(
+      revisions,
+      "test document",
+      "desktop",
+      normalize,
+      { root: sharedRoot, assertAvailable: async () => undefined }
+    );
+    const readDirectory = fs.readdir.bind(fs);
+    const readdir = vi
+      .spyOn(fs, "readdir")
+      .mockImplementationOnce(async (...args) => {
+        await fs.rm(revisions, { recursive: true });
+        return readDirectory(...args);
+      });
+
+    await expect(store.read()).rejects.toThrow(
+      "shared revisions disappeared after validation"
+    );
+    readdir.mockRestore();
   });
 
   it("rejects revision graphs with no tips", async () => {

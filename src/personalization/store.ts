@@ -70,14 +70,15 @@ export class PersonalizationStore {
   async getInteractionLogPaths(): Promise<string[]> {
     if (!this.sharedMode) return [this.interactionLogPath];
     await this.assertSharedStorageAvailable!();
-    await assertNoSymlinksWithinRoot(
+    const directoryObserved = await assertNoSymlinksWithinRoot(
       this.sharedRoot!,
       path.join(this.sharedDirectory, "events")
     );
     return listFiles(
       path.join(this.sharedDirectory, "events"),
       ".ndjson",
-      this.assertSharedStorageAvailable!
+      this.assertSharedStorageAvailable!,
+      directoryObserved
     );
   }
 
@@ -300,7 +301,8 @@ export function normalizePreferences(
 async function listFiles(
   directory: string,
   suffix: string,
-  assertSharedStorageAvailable?: () => Promise<void>
+  assertSharedStorageAvailable?: () => Promise<void>,
+  directoryObserved = false
 ): Promise<string[]> {
   try {
     const entries = await fs.readdir(directory, { withFileTypes: true });
@@ -317,6 +319,10 @@ async function listFiles(
   } catch (error) {
     if (isMissing(error)) {
       await assertSharedStorageAvailable?.();
+      if (directoryObserved)
+        throw new Error(
+          `Shared stream directory disappeared after validation: ${directory}`
+        );
       return [];
     }
     throw error;

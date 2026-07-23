@@ -188,7 +188,7 @@ export async function readFileNoFollow(file: string): Promise<string> {
 export async function assertNoSymlinksWithinRoot(
   root: string,
   target: string
-): Promise<void> {
+): Promise<boolean> {
   const relative = path.relative(root, target);
   if (
     relative === ".." ||
@@ -205,10 +205,11 @@ export async function assertNoSymlinksWithinRoot(
           `Shared storage path must not contain symlinks: ${current}`
         );
     } catch (error) {
-      if (isMissing(error)) return;
+      if (isMissing(error)) return false;
       throw error;
     }
   }
+  return true;
 }
 
 function isMissing(error: unknown): boolean {

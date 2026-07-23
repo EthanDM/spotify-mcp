@@ -169,11 +169,12 @@ export class RevisionStore<T> {
   }
 
   private async loadAll(): Promise<Array<RevisionEnvelope<T>>> {
-    if (this.sharedAccessGuard)
-      await assertNoSymlinksWithinRoot(
-        this.sharedAccessGuard.root,
-        this.revisionsDirectory
-      );
+    const revisionsDirectoryObserved = this.sharedAccessGuard
+      ? await assertNoSymlinksWithinRoot(
+          this.sharedAccessGuard.root,
+          this.revisionsDirectory
+        )
+      : false;
     let names: string[];
     try {
       const entries = await fs.readdir(this.revisionsDirectory, {
@@ -196,6 +197,10 @@ export class RevisionStore<T> {
     } catch (error) {
       if (isMissing(error)) {
         await this.sharedAccessGuard?.assertAvailable();
+        if (revisionsDirectoryObserved)
+          throw new Error(
+            `${this.documentName} shared revisions disappeared after validation. Retry after shared storage finishes syncing.`
+          );
         return [];
       }
       throw error;
