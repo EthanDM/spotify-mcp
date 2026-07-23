@@ -146,7 +146,9 @@ function isForbiddenRuntimePath(relativePath) {
   const fileName = segments.at(-1);
   return (
     (parentDirectory === ".docker" && fileName === "config.json") ||
-    (parentDirectory === ".kube" && fileName === "config")
+    (parentDirectory === ".kube" && fileName === "config") ||
+    (parentDirectory === ".cargo" &&
+      ["credentials", "credentials.toml"].includes(fileName))
   );
 }
 

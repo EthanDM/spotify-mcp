@@ -371,10 +371,12 @@ describe("skill installer", () => {
     }
   });
 
-  it("rejects container credential-store paths", async () => {
+  it("rejects credential-store paths", async () => {
     for (const [directoryName, fileName] of [
       [".docker", "config.json"],
-      [".kube", "config"]
+      [".kube", "config"],
+      [".cargo", "credentials"],
+      [".cargo", "credentials.toml"]
     ]) {
       const fixtureDirectory = path.resolve(
         "skills",
