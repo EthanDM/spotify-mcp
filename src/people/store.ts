@@ -27,6 +27,8 @@ type StoreOptions = {
   assertSharedStorageAvailable: () => Promise<void>;
 };
 
+type DirectoryIdentity = { device: number; inode: number };
+
 export class PeopleStore {
   private readonly localDirectory: string;
   private readonly sharedDirectory: string;
@@ -74,7 +76,10 @@ export class PeopleStore {
     return path.join(this.localDirectory, profileId, "profile-context.md");
   }
 
-  async getPlaylistHistoryPaths(profileId: string): Promise<string[]> {
+  async getPlaylistHistoryPaths(
+    profileId: string,
+    observeDirectory?: (identity: DirectoryIdentity) => void
+  ): Promise<string[]> {
     if (!this.sharedMode) return [this.getPlaylistHistoryPath(profileId)];
     await this.assertSharedStorageAvailable!();
     const directoryObserved = await assertNoSymlinksWithinRoot(
@@ -85,7 +90,8 @@ export class PeopleStore {
       path.join(this.getProfileDirectoryPath(profileId), "playlist-history"),
       ".ndjson",
       this.assertSharedStorageAvailable!,
-      directoryObserved
+      directoryObserved,
+      observeDirectory
     );
   }
 
@@ -219,7 +225,10 @@ export class PeopleStore {
   async readPlaylistHistory(
     profileId: string
   ): Promise<PersonPlaylistRecord[]> {
-    const files = await this.getPlaylistHistoryPaths(profileId);
+    let directoryIdentity: DirectoryIdentity | null = null;
+    const files = await this.getPlaylistHistoryPaths(profileId, (identity) => {
+      directoryIdentity = identity;
+    });
     const records = new Map<
       string,
       { value: PersonPlaylistRecord; raw: string }
@@ -227,7 +236,11 @@ export class PeopleStore {
     for (const file of files) {
       let raw: string;
       try {
+        if (directoryIdentity)
+          await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
         raw = await readFileNoFollow(file);
+        if (directoryIdentity)
+          await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
       } catch (error) {
         if (isMissing(error)) {
           await this.assertSharedStorageAvailable?.();
@@ -324,10 +337,16 @@ async function listFiles(
   directory: string,
   suffix: string,
   assertSharedStorageAvailable?: () => Promise<void>,
-  directoryObserved = false
+  directoryObserved = false,
+  observeDirectory?: (identity: DirectoryIdentity) => void
 ): Promise<string[]> {
+  const directoryIdentity = directoryObserved
+    ? await readDirectoryIdentity(directory)
+    : null;
   try {
     const entries = await fs.readdir(directory, { withFileTypes: true });
+    if (directoryIdentity)
+      await assertDirectoryIdentity(directory, directoryIdentity);
     const files: string[] = [];
     for (const entry of entries) {
       if (!entry.name.endsWith(suffix)) continue;
@@ -337,6 +356,7 @@ async function listFiles(
         );
       files.push(path.join(directory, entry.name));
     }
+    if (directoryIdentity) observeDirectory?.(directoryIdentity);
     return files.sort();
   } catch (error) {
     if (isMissing(error)) {
@@ -349,6 +369,26 @@ async function listFiles(
     }
     throw error;
   }
+}
+
+async function readDirectoryIdentity(
+  directory: string
+): Promise<DirectoryIdentity> {
+  const stats = await fs.lstat(directory);
+  if (!stats.isDirectory())
+    throw new Error(`Shared stream path is not a directory: ${directory}`);
+  return { device: stats.dev, inode: stats.ino };
+}
+
+async function assertDirectoryIdentity(
+  directory: string,
+  expected: DirectoryIdentity
+): Promise<void> {
+  const actual = await readDirectoryIdentity(directory);
+  if (actual.device !== expected.device || actual.inode !== expected.inode)
+    throw new Error(
+      `Shared stream directory changed during read: ${directory}`
+    );
 }
 async function readJson<T>(file: string): Promise<T | null> {
   try {

@@ -86,6 +86,36 @@ describe("shared stores", () => {
     readdir.mockRestore();
   });
 
+  it("rejects a personalization directory replaced during enumeration", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-event-directory-swap-")
+    );
+    const store = personalization(root, "desktop");
+    await store.appendEvent({
+      ts: "2026-01-01T00:00:00.000Z",
+      type: "desktop",
+      details: {}
+    });
+    const directory = path.dirname(store.interactionLogPath);
+    const original = path.join(root, "original-events");
+    const replacement = path.join(root, "replacement-events");
+    await mkdir(replacement);
+    const readDirectory = fs.readdir.bind(fs);
+    const readdir = vi
+      .spyOn(fs, "readdir")
+      .mockImplementationOnce(async (...args) => {
+        const entries = await readDirectory(...args);
+        await fs.rename(directory, original);
+        await fs.symlink(replacement, directory);
+        return entries;
+      });
+
+    await expect(store.getInteractionLogPaths()).rejects.toThrow(
+      "Shared stream path is not a directory"
+    );
+    readdir.mockRestore();
+  });
+
   it("rejects symlinked personalization stream directories", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-link-"));
     const sharedRoot = path.join(root, "shared");
@@ -251,6 +281,35 @@ describe("shared stores", () => {
 
     await expect(store.getPlaylistHistoryPaths("friend")).rejects.toThrow(
       "Shared stream directory disappeared after validation"
+    );
+    readdir.mockRestore();
+  });
+
+  it("rejects a playlist-history directory replaced during enumeration", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-history-directory-swap-")
+    );
+    const store = people(root, "desktop");
+    await store.appendPlaylistRecord(
+      "friend",
+      record("one", "2026-01-01T00:00:00.000Z")
+    );
+    const directory = path.dirname(store.getPlaylistHistoryPath("friend"));
+    const original = path.join(root, "original-history");
+    const replacement = path.join(root, "replacement-history");
+    await mkdir(replacement);
+    const readDirectory = fs.readdir.bind(fs);
+    const readdir = vi
+      .spyOn(fs, "readdir")
+      .mockImplementationOnce(async (...args) => {
+        const entries = await readDirectory(...args);
+        await fs.rename(directory, original);
+        await fs.symlink(replacement, directory);
+        return entries;
+      });
+
+    await expect(store.getPlaylistHistoryPaths("friend")).rejects.toThrow(
+      "Shared stream path is not a directory"
     );
     readdir.mockRestore();
   });

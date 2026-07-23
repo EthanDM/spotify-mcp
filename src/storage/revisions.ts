@@ -164,12 +164,33 @@ export class RevisionStore<T> {
       `${envelope.revision_id}.json`
     );
     const temporary = `${destination}.${process.pid}.tmp`;
+    const directoryIdentity = this.sharedAccessGuard
+      ? await readDirectoryIdentity(this.revisionsDirectory, this.documentName)
+      : null;
+    if (directoryIdentity)
+      await assertDirectoryIdentity(
+        this.revisionsDirectory,
+        this.documentName,
+        directoryIdentity
+      );
     await fs.writeFile(temporary, JSON.stringify(envelope, null, 2), {
       encoding: "utf8",
       mode: 0o600,
       flag: "wx"
     });
+    if (directoryIdentity)
+      await assertDirectoryIdentity(
+        this.revisionsDirectory,
+        this.documentName,
+        directoryIdentity
+      );
     await fs.rename(temporary, destination);
+    if (directoryIdentity)
+      await assertDirectoryIdentity(
+        this.revisionsDirectory,
+        this.documentName,
+        directoryIdentity
+      );
     return envelope;
   }
 
