@@ -318,6 +318,20 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects FIFO migration sources without blocking", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-source-fifo-"));
+    const local = path.join(root, "local");
+    const source = path.join(local, "personalization", "user-preferences.json");
+    await mkdir(path.dirname(source), { recursive: true });
+    await execute("mkfifo", [source]);
+
+    await expect(
+      runMigration(local, path.join(root, "shared"), "desktop")
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("Migration source must be a regular file")
+    });
+  });
+
   it.each([
     { preferred_artists: null },
     { use_cases: false },

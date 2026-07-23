@@ -957,7 +957,7 @@ async function readText(file: string): Promise<string | null> {
   try {
     const handle = await fs.open(
       file,
-      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW
+      fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_NOFOLLOW
     );
     try {
       if (!(await handle.stat()).isFile())
