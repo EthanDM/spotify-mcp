@@ -598,7 +598,11 @@ function rewriteArtifactPaths(
         relativeWithin(sourceArtifactsRoot, expandedPath) ??
         relativeWithin(sharedArtifactsRoot, expandedPath);
       if (relative !== null) return path.join("artifacts", relative);
-      return artifactPath;
+      if (relativeWithin("artifacts", path.normalize(artifactPath)) !== null)
+        return path.normalize(artifactPath);
+      throw new Error(
+        `Unportable artifact path in playlist history: ${artifactPath}`
+      );
     })
   };
 }

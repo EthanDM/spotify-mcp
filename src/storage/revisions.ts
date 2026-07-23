@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { ensureDirectoryWithinRoot } from "./shared.js";
+import { ensureDirectoryWithinRoot, readFileNoFollow } from "./shared.js";
 
 type SharedAccessGuard = {
   root: string;
@@ -176,7 +176,7 @@ export class RevisionStore<T> {
     const revisions = await Promise.all(
       names.map(async (name) => {
         const filePath = path.join(this.revisionsDirectory, name);
-        const raw = JSON.parse(await fs.readFile(filePath, "utf8")) as Partial<
+        const raw = JSON.parse(await readFileNoFollow(filePath)) as Partial<
           RevisionEnvelope<unknown>
         >;
         if (

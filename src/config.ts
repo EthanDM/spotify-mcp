@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { constants } from "node:fs";
+import { constants, realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -167,6 +167,12 @@ export function toPortableArtifactPath(
       throw new Error(
         `Shared artifact paths must be inside ${config.artifactsDirectory}.`
       );
+    const physicalArtifactsDirectory = realpathSync(config.artifactsDirectory);
+    const physicalArtifactPath = realpathSync(expandedPath);
+    if (!isSameOrNested(physicalArtifactsDirectory, physicalArtifactPath))
+      throw new Error(
+        `Shared artifact paths must not traverse outside ${config.artifactsDirectory}.`
+      );
     return path.join(
       "artifacts",
       path.relative(config.artifactsDirectory, expandedPath)
@@ -176,6 +182,14 @@ export function toPortableArtifactPath(
   if (!isSameOrNested("artifacts", normalized))
     throw new Error(
       `Shared artifact paths must be relative to the shared artifacts directory.`
+    );
+  const physicalArtifactsDirectory = realpathSync(config.artifactsDirectory);
+  const physicalArtifactPath = realpathSync(
+    path.join(config.sharedRoot!, normalized)
+  );
+  if (!isSameOrNested(physicalArtifactsDirectory, physicalArtifactPath))
+    throw new Error(
+      `Shared artifact paths must not traverse outside ${config.artifactsDirectory}.`
     );
   return normalized;
 }

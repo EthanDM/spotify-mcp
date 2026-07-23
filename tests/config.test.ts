@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -103,21 +103,38 @@ describe("storage configuration", () => {
     );
   });
 
-  it("stores shared artifact paths relative to the shared root", () => {
-    const sharedRoot = path.join(os.homedir(), "Shared", "spotify-mcp");
+  it("stores shared artifact paths relative to the shared root", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-portable-"));
+    const sharedRoot = path.join(root, "shared");
+    const artifactPath = path.join(
+      sharedRoot,
+      "artifacts",
+      "people",
+      "friend",
+      "review.md"
+    );
+    await mkdir(path.dirname(artifactPath), { recursive: true });
+    await writeFile(artifactPath, "review");
     const config = getStorageConfig({
       SPOTIFY_MCP_DATA_DIR: "/tmp/local",
       SPOTIFY_MCP_SHARED_DATA_DIR: sharedRoot,
       SPOTIFY_MCP_MACHINE_ID: "neo"
     });
-    expect(
-      toPortableArtifactPath(
-        "~/Shared/spotify-mcp/artifacts/people/friend/review.md",
-        config
-      )
-    ).toBe(path.join("artifacts", "people", "friend", "review.md"));
+    expect(toPortableArtifactPath(artifactPath, config)).toBe(
+      path.join("artifacts", "people", "friend", "review.md")
+    );
     expect(() => toPortableArtifactPath("/tmp/unrelated.md", config)).toThrow(
       "Shared artifact paths must be inside"
     );
+
+    const outside = path.join(root, "outside.md");
+    await writeFile(outside, "outside");
+    await symlink(outside, path.join(sharedRoot, "artifacts", "linked.md"));
+    expect(() =>
+      toPortableArtifactPath(
+        path.join(sharedRoot, "artifacts", "linked.md"),
+        config
+      )
+    ).toThrow("must not traverse outside");
   });
 });

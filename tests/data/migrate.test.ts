@@ -488,6 +488,27 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects unportable playlist-history artifact paths", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-unportable-artifact-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const record = {
+      ...playlistRecord("entry"),
+      artifact_paths: [path.join(root, "outside.md")]
+    };
+    await mkdir(path.join(local, "people", "friend"), { recursive: true });
+    await writeFile(
+      path.join(local, "people", "friend", "playlist-history.ndjson"),
+      `${JSON.stringify(record)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("Unportable artifact path")
+    });
+  });
+
   it("rejects conflicting event IDs from another machine stream", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-id-"));
     const local = path.join(root, "local");

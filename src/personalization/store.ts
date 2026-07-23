@@ -5,7 +5,8 @@ import path from "node:path";
 import { RevisionStore } from "../storage/revisions.js";
 import {
   appendPrivateFile,
-  ensureDirectoryWithinRoot
+  ensureDirectoryWithinRoot,
+  readFileNoFollow
 } from "../storage/shared.js";
 import type {
   PersonalizationContextResult,
@@ -192,7 +193,7 @@ export class PersonalizationStore {
     for (const file of files) {
       let raw: string;
       try {
-        raw = await fs.readFile(file, "utf8");
+        raw = await readFileNoFollow(file);
       } catch (error) {
         if (isMissing(error)) {
           await this.assertSharedStorageAvailable?.();

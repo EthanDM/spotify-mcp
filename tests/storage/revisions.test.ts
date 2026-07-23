@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -49,6 +49,33 @@ describe("RevisionStore", () => {
       "fork"
     ]);
     expect((await first.read())?.revisionId).toBe(resolved.revision_id);
+  });
+
+  it("refuses symlinked revision files", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-link-")
+    );
+    const outside = path.join(directory, "outside-revision.data");
+    await writeFile(
+      outside,
+      JSON.stringify({
+        schema_version: 1,
+        revision_id: "outside",
+        parent_revision_ids: [],
+        written_at: new Date().toISOString(),
+        written_by: "desktop",
+        value: { value: "outside" }
+      })
+    );
+    await symlink(outside, path.join(directory, "outside.json"));
+    const store = new RevisionStore<{ value: string }>(
+      directory,
+      "test document",
+      "desktop",
+      normalize
+    );
+
+    await expect(store.read()).rejects.toBeTruthy();
   });
 });
 

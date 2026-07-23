@@ -54,7 +54,7 @@ export class SharedStorageGuard {
     let claim: MachineClaim;
     try {
       claim = JSON.parse(
-        await fs.readFile(this.claimPath, "utf8")
+        await readFileNoFollow(this.claimPath)
       ) as MachineClaim;
     } catch (error) {
       if (isMissing(error))
@@ -153,6 +153,15 @@ export async function appendPrivateFile(
   try {
     await handle.writeFile(value, "utf8");
     await handle.chmod(0o600);
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function readFileNoFollow(file: string): Promise<string> {
+  const handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    return await handle.readFile("utf8");
   } finally {
     await handle.close();
   }
