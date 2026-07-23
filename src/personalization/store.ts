@@ -211,7 +211,10 @@ export class PersonalizationStore {
       } catch (error) {
         if (isMissing(error)) {
           await this.assertSharedStorageAvailable?.();
-          continue;
+          if (!this.sharedMode) continue;
+          throw new Error(
+            `Shared personalization stream disappeared after enumeration: ${file}`
+          );
         }
         throw error;
       }

@@ -182,7 +182,10 @@ export class PeopleStore {
       } catch (error) {
         if (isMissing(error)) {
           await this.assertSharedStorageAvailable?.();
-          continue;
+          if (!this.sharedMode) continue;
+          throw new Error(
+            `Shared playlist history disappeared after enumeration: ${file}`
+          );
         }
         throw error;
       }

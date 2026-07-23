@@ -3,6 +3,7 @@ import {
   mkdtemp,
   readFile,
   rename,
+  rm,
   symlink,
   writeFile
 } from "node:fs/promises";
@@ -10,7 +11,7 @@ import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { PeopleStore } from "../../src/people/store.js";
 import type { PersonPlaylistRecord } from "../../src/people/types.js";
@@ -38,6 +39,25 @@ describe("shared stores", () => {
     ).toEqual(["desktop", "neo"]);
     expect(await neo.countEvents()).toBe(2);
     expect(await desktop.getInteractionLogPaths()).toHaveLength(2);
+  });
+
+  it("fails when an enumerated personalization stream disappears", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-gone-"));
+    const store = personalization(root, "desktop");
+    await store.appendEvent({
+      ts: "2026-01-01T00:00:00.000Z",
+      type: "desktop",
+      details: {}
+    });
+    const files = await store.getInteractionLogPaths();
+    vi.spyOn(store, "getInteractionLogPaths").mockImplementation(async () => {
+      await rm(files[0]);
+      return files;
+    });
+
+    await expect(store.readAllEvents()).rejects.toThrow(
+      "Shared personalization stream disappeared after enumeration"
+    );
   });
 
   it("rejects symlinked personalization stream directories", async () => {
@@ -165,6 +185,24 @@ describe("shared stores", () => {
       (await desktop.readPlaylistHistory("friend")).map((item) => item.entry_id)
     ).toEqual(["one", "two"]);
     expect(await desktop.getPlaylistHistoryPaths("friend")).toHaveLength(2);
+  });
+
+  it("fails when an enumerated playlist-history stream disappears", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-history-gone-"));
+    const store = people(root, "desktop");
+    await store.appendPlaylistRecord(
+      "friend",
+      record("one", "2026-01-01T00:00:00.000Z")
+    );
+    const files = await store.getPlaylistHistoryPaths("friend");
+    vi.spyOn(store, "getPlaylistHistoryPaths").mockImplementation(async () => {
+      await rm(files[0]);
+      return files;
+    });
+
+    await expect(store.readPlaylistHistory("friend")).rejects.toThrow(
+      "Shared playlist history disappeared after enumeration"
+    );
   });
 
   it("rejects incomplete shared playlist-history records", async () => {

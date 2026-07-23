@@ -940,6 +940,32 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects portable references to shared special files", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-portable-special-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const artifact = path.join(shared, "artifacts", "stream");
+    const record = {
+      ...playlistRecord("entry"),
+      artifact_paths: [path.join("artifacts", "stream")]
+    };
+    await mkdir(path.join(local, "people", "friend"), { recursive: true });
+    await mkdir(path.dirname(artifact), { recursive: true });
+    await execute("mkfifo", [artifact]);
+    await writeFile(
+      path.join(local, "people", "friend", "playlist-history.ndjson"),
+      `${JSON.stringify(record)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "Referenced artifact must be a regular file or directory"
+      )
+    });
+  });
+
   it("does not satisfy sibling history from local artifacts", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-sibling-artifact-")

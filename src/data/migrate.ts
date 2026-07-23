@@ -859,8 +859,14 @@ function rewriteArtifactPaths(
             throw new Error(
               `Referenced artifact does not exist: ${artifactPath}`
             );
-          for (const [root, target] of existingTargets)
+          for (const [root, target] of existingTargets) {
             assertNoSymlinkSegmentsSync(root, target);
+            const stats = lstatSync(target);
+            if (!stats.isFile() && !stats.isDirectory())
+              throw new Error(
+                `Referenced artifact must be a regular file or directory: ${artifactPath}`
+              );
+          }
           return normalized;
         }
         throw new Error(
@@ -885,8 +891,14 @@ function rewriteArtifactPaths(
           throw new Error(
             `Referenced artifact does not exist: ${artifactPath}`
           );
-        for (const [root, target] of existingTargets)
+        for (const [root, target] of existingTargets) {
           assertNoSymlinkSegmentsSync(root, target);
+          const stats = lstatSync(target);
+          if (!stats.isFile() && !stats.isDirectory())
+            throw new Error(
+              `Referenced artifact must be a regular file or directory: ${artifactPath}`
+            );
+        }
         return path.join("artifacts", relative);
       }
       throw new Error(
