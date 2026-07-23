@@ -101,6 +101,12 @@ describe("conflict resolution document validation", () => {
         notes: []
       })
     ).toThrow("positive integer");
+    expect(() =>
+      validatePreferencesDocument({
+        ...preferences(),
+        preferred_artists: [" "]
+      })
+    ).toThrow("non-empty strings");
   });
 
   it("rejects invalid ages and use-case track ranges", () => {

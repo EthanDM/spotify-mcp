@@ -474,6 +474,32 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects symlinked revision directories during preflight", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-link-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await mkdir(path.join(shared, "personalization", "preferences"), {
+      recursive: true
+    });
+    await mkdir(outside);
+    await symlink(
+      outside,
+      path.join(shared, "personalization", "preferences", "revisions")
+    );
+    await writeFile(
+      path.join(local, "personalization", "user-preferences.json"),
+      JSON.stringify(preferences("Artist"))
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("must not contain symlinks")
+    });
+  });
+
   it("does not overwrite an artifact created by a concurrent migration", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-artifact-race-")

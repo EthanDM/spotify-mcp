@@ -326,6 +326,9 @@ function requireNullableString(value: unknown, label: string): void {
     throw new Error(`${label} must be a string or null.`);
 }
 function requireStringArray(value: unknown, label: string): void {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string"))
-    throw new Error(`${label} must be an array of strings.`);
+  if (
+    !Array.isArray(value) ||
+    value.some((item) => typeof item !== "string" || !item.trim())
+  )
+    throw new Error(`${label} must be an array of non-empty strings.`);
 }

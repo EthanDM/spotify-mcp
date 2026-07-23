@@ -250,8 +250,15 @@ async function validateMigration(
   );
   if (preferencesDocument !== undefined) {
     const normalized = normalizeMigratedPreferences(preferencesDocument);
+    const revisionsDirectory = path.join(
+      sharedRoot,
+      "personalization",
+      "preferences",
+      "revisions"
+    );
+    await assertNoSymlinksWithinRoot(sharedRoot, revisionsDirectory);
     const store = new RevisionStore(
-      path.join(sharedRoot, "personalization", "preferences", "revisions"),
+      revisionsDirectory,
       "personalization preferences",
       machineId,
       (value) => validatePreferencesDocument(value)
@@ -270,8 +277,15 @@ async function validateMigration(
     );
     if (profileDocument !== undefined) {
       const profile = validatePersonProfileDocument(profileDocument, profileId);
+      const revisionsDirectory = path.join(
+        sharedRoot,
+        "people",
+        profileId,
+        "revisions"
+      );
+      await assertNoSymlinksWithinRoot(sharedRoot, revisionsDirectory);
       const store = new RevisionStore(
-        path.join(sharedRoot, "people", profileId, "revisions"),
+        revisionsDirectory,
         `person profile ${profileId}`,
         machineId,
         (value) => validatePersonProfileDocument(value, profileId)
@@ -649,7 +663,7 @@ async function copyArtifacts(
           await fs.copyFile(from, to, fsConstants.COPYFILE_EXCL);
         } catch (error) {
           if (!hasCode(error, "EEXIST")) throw error;
-          const concurrentTarget = await fs.readFile(to);
+          const concurrentTarget = await readBytesNoFollow(to);
           if (hash(concurrentTarget) !== hash(sourceBytes))
             throw new Error(`Artifact collision with different content: ${to}`);
           continue;
@@ -835,6 +849,20 @@ async function readBytes(file: string): Promise<Buffer | null> {
   } catch (error) {
     if (isMissing(error)) return null;
     throw error;
+  }
+}
+async function readBytesNoFollow(file: string): Promise<Buffer> {
+  const handle = await fs.open(
+    file,
+    fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW
+  );
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile())
+      throw new Error(`Shared artifact destination is not a file: ${file}`);
+    return await handle.readFile();
+  } finally {
+    await handle.close();
   }
 }
 async function readText(file: string): Promise<string | null> {
