@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playlist Prompt Studio"
+  short_description: "Turn rough music ideas into prompt options"
+  default_prompt: "Use $playlist-prompt-studio to turn my rough playlist idea into minimal, balanced, and exploratory copy-ready prompts."

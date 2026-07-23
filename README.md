@@ -141,6 +141,24 @@ command = "pnpm"
 args = ["--dir", "/absolute/path/to/spotify-mcp", "dev"]
 ```
 
+## Codex Skills
+
+The repository includes four Codex skills under `skills/` for playlist prompting, building, review, and builder-quality evaluation. These repository copies are canonical and contain workflow instructions and deterministic validation code only; credentials, personalization, listener profiles, histories, and generated artifacts stay outside Git.
+
+Preview installation into `~/.codex/skills`:
+
+```bash
+pnpm skills:install
+```
+
+Apply the installation:
+
+```bash
+pnpm skills:install -- --apply
+```
+
+Set `CODEX_HOME` to install into another absolute Codex directory. Run `pnpm skills:check` before publishing skill changes to scan for personal paths, identifiers, credentials, runtime-state files, and hardcoded artifact paths. See [`skills/README.md`](skills/README.md) for the package list and storage rules.
+
 ## Tool Notes
 
 - New playlists default to `public: false`.

@@ -12,6 +12,7 @@ This repository is a local Spotify MCP server for Codex. Keep changes simple, ex
 - Reuse existing Spotify client primitives before introducing new helper layers.
 - Avoid broad abstractions for one-off Spotify behaviors.
 - Keep generated user-specific artifacts out of the repo. They belong under `~/.config/spotify-mcp/artifacts/` unless they are deliberate example docs or test fixtures.
+- Keep bundled Codex skills under `skills/` free of personal names, credentials, runtime state, generated artifacts, and hardcoded machine-specific paths. Run `pnpm skills:check` after changing them.
 
 ## Verification
 

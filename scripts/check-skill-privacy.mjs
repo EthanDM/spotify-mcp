@@ -1,0 +1,79 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+const repositoryRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  ".."
+);
+const skillsRoot = path.join(repositoryRoot, "skills");
+const forbiddenFileNames = new Set([
+  ".env",
+  "auth.json",
+  "interaction-log.ndjson",
+  "playlist-history.ndjson",
+  "profile-snapshot.json",
+  "user-preferences.json"
+]);
+const forbiddenContent = [
+  { label: "personal macOS home path", pattern: /\/Users\/[^/\s]+\// },
+  {
+    label: "email address",
+    pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
+  },
+  {
+    label: "hardcoded artifact path",
+    pattern: /~\/\.config\/spotify-mcp\/artifacts/
+  },
+  {
+    label: "Spotify entity URI",
+    pattern: /spotify:(?:track|playlist|album|artist):[A-Za-z0-9]+/
+  },
+  {
+    label: "Spotify entity URL",
+    pattern:
+      /https:\/\/open\.spotify\.com\/(?:track|playlist|album|artist)\/[A-Za-z0-9]+/
+  },
+  { label: "GitHub token", pattern: /\bgh[opusr]_[A-Za-z0-9]+\b/ },
+  {
+    label: "private key",
+    pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/
+  },
+  {
+    label: "Spotify credential assignment",
+    pattern:
+      /SPOTIFY_(?:CLIENT_ID|CLIENT_SECRET|ACCESS_TOKEN|REFRESH_TOKEN)\s*=/
+  }
+];
+
+const failures = [];
+for (const filePath of await listFiles(skillsRoot)) {
+  const relativePath = path.relative(repositoryRoot, filePath);
+  if (forbiddenFileNames.has(path.basename(filePath))) {
+    failures.push(`${relativePath}: forbidden runtime-state filename`);
+    continue;
+  }
+  const content = await fs.readFile(filePath, "utf8");
+  for (const check of forbiddenContent) {
+    if (check.pattern.test(content)) {
+      failures.push(`${relativePath}: ${check.label}`);
+    }
+  }
+}
+
+if (failures.length > 0) {
+  throw new Error(`Skill privacy check failed:\n${failures.join("\n")}`);
+}
+
+process.stdout.write("Skill privacy check passed.\n");
+
+async function listFiles(directory) {
+  const files = [];
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...(await listFiles(entryPath)));
+    else if (entry.isFile()) files.push(entryPath);
+  }
+  return files;
+}

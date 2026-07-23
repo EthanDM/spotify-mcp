@@ -1,0 +1,82 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+const skillNames = [
+  "playlist-builder-from-context",
+  "playlist-builder-quality-loop",
+  "playlist-prompt-studio",
+  "playlist-review"
+];
+
+const apply = process.argv.slice(2).includes("--apply");
+const repositoryRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  ".."
+);
+const codexHome =
+  process.env.CODEX_HOME?.trim() || path.join(os.homedir(), ".codex");
+
+if (!path.isAbsolute(codexHome) || codexHome === path.parse(codexHome).root) {
+  throw new Error("CODEX_HOME must be a safe absolute directory.");
+}
+
+const skillsRoot = path.join(codexHome, "skills");
+if (apply) await fs.mkdir(codexHome, { recursive: true, mode: 0o700 });
+const stagingRoot = apply
+  ? await fs.mkdtemp(path.join(codexHome, ".spotify-mcp-skills-"))
+  : null;
+
+if (stagingRoot) {
+  for (const skillName of skillNames) {
+    await fs.cp(
+      path.join(repositoryRoot, "skills", skillName),
+      path.join(stagingRoot, skillName),
+      { recursive: true, preserveTimestamps: true }
+    );
+  }
+}
+
+for (const skillName of skillNames) {
+  const source = path.join(repositoryRoot, "skills", skillName);
+  const destination = path.join(skillsRoot, skillName);
+  process.stdout.write(
+    `${apply ? "INSTALL" : "WOULD INSTALL"}: ${source} -> ${destination}\n`
+  );
+  if (apply) {
+    await fs.mkdir(skillsRoot, { recursive: true, mode: 0o700 });
+    const backup = path.join(stagingRoot, `${skillName}.backup`);
+    const stagedSkill = path.join(stagingRoot, skillName);
+    const destinationExists = await exists(destination);
+    if (destinationExists) await fs.rename(destination, backup);
+    try {
+      await fs.rename(stagedSkill, destination);
+    } catch (error) {
+      if (destinationExists) await fs.rename(backup, destination);
+      throw error;
+    }
+    if (destinationExists) await fs.rm(backup, { recursive: true });
+  }
+}
+
+if (stagingRoot) await fs.rm(stagingRoot, { recursive: true });
+
+if (!apply) {
+  process.stdout.write(
+    "No files changed. Re-run with --apply to install the skills.\n"
+  );
+}
+
+async function exists(target) {
+  try {
+    await fs.access(target);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
+}
