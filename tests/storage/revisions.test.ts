@@ -122,6 +122,31 @@ describe("RevisionStore", () => {
 
     await expect(store.read()).rejects.toThrow("cyclic revision graph");
   });
+
+  it("rejects empty revision identifiers", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-empty-id-")
+    );
+    await writeFile(
+      path.join(directory, "empty.json"),
+      JSON.stringify({
+        schema_version: 1,
+        revision_id: "",
+        parent_revision_ids: [],
+        written_at: new Date().toISOString(),
+        written_by: "desktop",
+        value: { value: "invalid" }
+      })
+    );
+    const store = new RevisionStore<{ value: string }>(
+      directory,
+      "test document",
+      "desktop",
+      normalize
+    );
+
+    await expect(store.read()).rejects.toThrow("Invalid revision envelope");
+  });
 });
 
 function normalize(value: unknown): { value: string } {

@@ -176,9 +176,19 @@ export class RevisionStore<T> {
       );
     let names: string[];
     try {
-      names = (await fs.readdir(this.revisionsDirectory))
-        .filter((name) => name.endsWith(".json"))
-        .sort();
+      const entries = await fs.readdir(this.revisionsDirectory, {
+        withFileTypes: true
+      });
+      names = [];
+      for (const entry of entries) {
+        if (!entry.name.endsWith(".json")) continue;
+        if (!entry.isFile())
+          throw new Error(
+            `Revision must be a regular file: ${path.join(this.revisionsDirectory, entry.name)}`
+          );
+        names.push(entry.name);
+      }
+      names.sort();
     } catch (error) {
       if (isMissing(error)) {
         await this.sharedAccessGuard?.assertAvailable();
@@ -195,7 +205,11 @@ export class RevisionStore<T> {
         if (
           raw.schema_version !== 1 ||
           typeof raw.revision_id !== "string" ||
+          raw.revision_id.length === 0 ||
           !Array.isArray(raw.parent_revision_ids) ||
+          raw.parent_revision_ids.some(
+            (parent) => typeof parent !== "string" || parent.length === 0
+          ) ||
           typeof raw.written_at !== "string" ||
           typeof raw.written_by !== "string"
         ) {
