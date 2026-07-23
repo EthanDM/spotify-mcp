@@ -147,7 +147,7 @@ Use these definitions and thresholds for a general personal build with final cou
 - Include the deterministic check output: unique-primary-artist count, familiar/discovery allocation, new-primary-artist track percentage or `unknown`, historical carryover, maximum exact overlap with one recent comparable build or `unknown`, union exact overlap across recent comparable builds or `unknown`, artist-cap result, and every exception.
 - Include anchor/supported/uncertain counts, rejected weak candidates, potential duplicate-version families and their decisions, ordered-phase result when applicable, and recurring artists across recent general builds.
 - When vocals are constrained, include the vocal policy, vocal-profile counts and vocal-gate result. For shuffle-first builds, describe whole-pool proportions rather than positional distribution.
-- For activity playlists, include the ending intent and a short final-segment utility verdict. Include notable all-credit artist repetition and any accepted ecosystem-concentration tradeoff.
+- For ordered activity playlists, include the ending intent and a short final-segment utility verdict. For shuffle-first activity pools, report whole-pool utility without assigning meaning to the final stored tracks. Include notable all-credit artist repetition and any accepted ecosystem-concentration tradeoff.
 - Keep the artifact as a sidecar. Do not treat it as canonical personalization memory.
 
 11. Close the feedback loop later.

@@ -74,11 +74,13 @@ const forbiddenContent = [
 const failures = [];
 for (const filePath of await listFiles(skillsRoot)) {
   const relativePath = path.relative(repositoryRoot, filePath);
+  const skillRelativePath = path.relative(skillsRoot, filePath);
   const fileName = path.basename(filePath);
   const normalizedFileName = fileName.toLowerCase();
   if (
     forbiddenFileNames.has(normalizedFileName) ||
-    normalizedFileName.startsWith(".env.")
+    normalizedFileName.startsWith(".env.") ||
+    isForbiddenRuntimePath(skillRelativePath)
   ) {
     failures.push(`${relativePath}: forbidden runtime-state filename`);
     continue;
@@ -110,6 +112,17 @@ async function listFiles(directory) {
       );
   }
   return files;
+}
+
+function isForbiddenRuntimePath(relativePath) {
+  const segments = relativePath
+    .split(path.sep)
+    .map((segment) => segment.toLowerCase());
+  return (
+    segments.length >= 2 &&
+    segments.at(-2) === ".docker" &&
+    segments.at(-1) === "config.json"
+  );
 }
 
 function isGenerated(name) {

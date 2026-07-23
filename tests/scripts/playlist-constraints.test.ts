@@ -55,6 +55,27 @@ describe("playlist constraint checker", () => {
     }
   });
 
+  it("rejects whitespace-only selected-track metadata", async () => {
+    for (const [field, value] of [
+      ["name", "   "],
+      ["primary_artist", "\t"]
+    ] as const) {
+      const invalidTrack = {
+        ...track("spotify:track:0000000000000000000001", "close"),
+        [field]: value
+      };
+      const manifest = await writeManifest({
+        target_track_count: 1,
+        tracks: [invalidTrack]
+      });
+      await expect(
+        execute("python3", [checker, manifest])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining(`tracks[1].${field} is required`)
+      });
+    }
+  });
+
   it("accepts an ordered build that starts after the opening phase", async () => {
     const tracks = [
       track("spotify:track:0000000000000000000001", "development"),

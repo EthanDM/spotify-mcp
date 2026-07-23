@@ -324,6 +324,29 @@ describe("skill installer", () => {
     }
   });
 
+  it("rejects Docker credential-store paths", async () => {
+    const fixtureDirectory = path.resolve(
+      "skills",
+      "playlist-review",
+      ".docker"
+    );
+    const fixture = path.join(fixtureDirectory, "config.json");
+    try {
+      await mkdir(fixtureDirectory, { recursive: true });
+      await writeFile(
+        fixture,
+        JSON.stringify({ auths: { "registry.example": { auth: "secret" } } })
+      );
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("forbidden runtime-state filename")
+      });
+    } finally {
+      await rm(fixtureDirectory, { recursive: true, force: true });
+    }
+  });
+
   it("rejects environment variants and generated personalization context", async () => {
     const fixtures = [
       path.resolve("skills", "playlist-review", ".env.production"),

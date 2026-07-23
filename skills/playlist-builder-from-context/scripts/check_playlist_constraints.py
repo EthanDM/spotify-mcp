@@ -148,9 +148,9 @@ def main() -> None:
             fail(f"tracks[{index}].uri is required")
         if not TRACK_URI_PATTERN.fullmatch(uri):
             fail(f"tracks[{index}].uri must be a supported Spotify track URI")
-        if not isinstance(name, str) or not name:
+        if not isinstance(name, str) or not name.strip():
             fail(f"tracks[{index}].name is required")
-        if not isinstance(artist, str) or not artist:
+        if not isinstance(artist, str) or not artist.strip():
             fail(f"tracks[{index}].primary_artist is required")
         allowed_buckets = {"established", "discovery"} if audience_mode == "self_neutral" else {"familiar", "discovery"}
         if bucket not in allowed_buckets:
