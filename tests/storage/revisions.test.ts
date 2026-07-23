@@ -158,6 +158,50 @@ describe("RevisionStore", () => {
     readdir.mockRestore();
   });
 
+  it("rejects a revision directory replaced during enumeration", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-directory-swap-")
+    );
+    const sharedRoot = path.join(root, "shared");
+    const revisions = path.join(sharedRoot, "preferences", "revisions");
+    const original = path.join(root, "original-revisions");
+    const replacement = path.join(root, "replacement-revisions");
+    await mkdir(revisions, { recursive: true });
+    await mkdir(replacement);
+    await writeFile(
+      path.join(revisions, "root.json"),
+      JSON.stringify({
+        schema_version: 1,
+        revision_id: "root",
+        parent_revision_ids: [],
+        written_at: new Date().toISOString(),
+        written_by: "desktop",
+        value: { value: "root" }
+      })
+    );
+    const store = new RevisionStore<{ value: string }>(
+      revisions,
+      "test document",
+      "desktop",
+      normalize,
+      { root: sharedRoot, assertAvailable: async () => undefined }
+    );
+    const readDirectory = fs.readdir.bind(fs);
+    const readdir = vi
+      .spyOn(fs, "readdir")
+      .mockImplementationOnce(async (...args) => {
+        const entries = await readDirectory(...args);
+        await fs.rename(revisions, original);
+        await fs.symlink(replacement, revisions);
+        return entries;
+      });
+
+    await expect(store.read()).rejects.toThrow(
+      "shared revisions path is not a directory"
+    );
+    readdir.mockRestore();
+  });
+
   it("rejects revision graphs with no tips", async () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "spotify-revision-cycle-")

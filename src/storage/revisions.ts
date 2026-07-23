@@ -13,6 +13,11 @@ type SharedAccessGuard = {
   assertAvailable: () => Promise<void>;
 };
 
+type DirectoryIdentity = {
+  device: number;
+  inode: number;
+};
+
 export type RevisionEnvelope<T> = {
   schema_version: 1;
   revision_id: string;
@@ -175,11 +180,20 @@ export class RevisionStore<T> {
           this.revisionsDirectory
         )
       : false;
+    const directoryIdentity = revisionsDirectoryObserved
+      ? await readDirectoryIdentity(this.revisionsDirectory, this.documentName)
+      : null;
     let names: string[];
     try {
       const entries = await fs.readdir(this.revisionsDirectory, {
         withFileTypes: true
       });
+      if (directoryIdentity)
+        await assertDirectoryIdentity(
+          this.revisionsDirectory,
+          this.documentName,
+          directoryIdentity
+        );
       names = [];
       for (const entry of entries) {
         if (!entry.name.endsWith(".json")) continue;
@@ -208,9 +222,21 @@ export class RevisionStore<T> {
     const revisions = await Promise.all(
       names.map(async (name) => {
         const filePath = path.join(this.revisionsDirectory, name);
+        if (directoryIdentity)
+          await assertDirectoryIdentity(
+            this.revisionsDirectory,
+            this.documentName,
+            directoryIdentity
+          );
         const raw = JSON.parse(await readFileNoFollow(filePath)) as Partial<
           RevisionEnvelope<unknown>
         >;
+        if (directoryIdentity)
+          await assertDirectoryIdentity(
+            this.revisionsDirectory,
+            this.documentName,
+            directoryIdentity
+          );
         if (
           raw.schema_version !== 1 ||
           typeof raw.revision_id !== "string" ||
@@ -236,6 +262,30 @@ export class RevisionStore<T> {
       throw new Error(`${this.documentName} contains duplicate revision IDs.`);
     return revisions;
   }
+}
+
+async function readDirectoryIdentity(
+  directory: string,
+  documentName: string
+): Promise<DirectoryIdentity> {
+  const stats = await fs.lstat(directory);
+  if (!stats.isDirectory())
+    throw new Error(
+      `${documentName} shared revisions path is not a directory: ${directory}`
+    );
+  return { device: stats.dev, inode: stats.ino };
+}
+
+async function assertDirectoryIdentity(
+  directory: string,
+  documentName: string,
+  expected: DirectoryIdentity
+): Promise<void> {
+  const actual = await readDirectoryIdentity(directory, documentName);
+  if (actual.device !== expected.device || actual.inode !== expected.inode)
+    throw new Error(
+      `${documentName} shared revisions directory changed during read. Retry after shared storage finishes syncing.`
+    );
 }
 
 function assertAcyclic<T>(
