@@ -400,6 +400,7 @@ describe("skill installer", () => {
       [".kube", "config"],
       [".cargo", "credentials"],
       [".cargo", "credentials.toml"],
+      [".gem", "credentials"],
       [".config", "pip", "pip.conf"],
       ["pip", "pip.ini"]
     ]) {

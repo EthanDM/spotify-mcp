@@ -176,6 +176,7 @@ function isForbiddenRuntimePath(relativePath) {
     (parentDirectory === ".kube" && fileName === "config") ||
     (parentDirectory === ".cargo" &&
       ["credentials", "credentials.toml"].includes(fileName)) ||
+    (parentDirectory === ".gem" && fileName === "credentials") ||
     (parentDirectory === "pip" && ["pip.conf", "pip.ini"].includes(fileName))
   );
 }
