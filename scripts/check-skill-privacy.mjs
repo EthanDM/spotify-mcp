@@ -177,6 +177,7 @@ function isForbiddenRuntimePath(relativePath) {
     (parentDirectory === ".cargo" &&
       ["credentials", "credentials.toml"].includes(fileName)) ||
     (parentDirectory === ".gem" && fileName === "credentials") ||
+    (parentDirectory === ".gradle" && fileName === "gradle.properties") ||
     (parentDirectory === ".m2" && fileName === "settings.xml") ||
     (parentDirectory === ".terraform.d" &&
       fileName === "credentials.tfrc.json") ||

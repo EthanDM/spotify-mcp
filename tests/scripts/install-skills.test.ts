@@ -401,6 +401,7 @@ describe("skill installer", () => {
       [".cargo", "credentials"],
       [".cargo", "credentials.toml"],
       [".gem", "credentials"],
+      [".gradle", "gradle.properties"],
       [".m2", "settings.xml"],
       [".terraform.d", "credentials.tfrc.json"],
       [".cache", "huggingface", "token"],
