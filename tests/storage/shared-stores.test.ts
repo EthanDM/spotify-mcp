@@ -42,6 +42,34 @@ describe("shared stores", () => {
     expect(await desktop.getInteractionLogPaths()).toHaveLength(2);
   });
 
+  it("rejects a personalization directory replaced before append", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-append-"));
+    const store = personalization(root, "desktop");
+    const directory = path.dirname(store.interactionLogPath);
+    const original = path.join(root, "original-events");
+    const replacement = path.join(root, "replacement-events");
+    await mkdir(directory, { recursive: true });
+    await mkdir(replacement);
+    const openFile = fs.open.bind(fs);
+    const open = vi
+      .spyOn(fs, "open")
+      .mockImplementationOnce(async (...args) => {
+        await rename(directory, original);
+        await rename(replacement, directory);
+        return openFile(...args);
+      });
+
+    await expect(
+      store.appendEvent({
+        ts: "2026-01-01T00:00:00.000Z",
+        type: "desktop",
+        details: {}
+      })
+    ).rejects.toThrow("Shared storage directory changed");
+    expect(await readFile(store.interactionLogPath, "utf8")).toBe("");
+    open.mockRestore();
+  });
+
   it("fails when an enumerated personalization stream disappears", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-gone-"));
     const store = personalization(root, "desktop");
@@ -243,6 +271,36 @@ describe("shared stores", () => {
     expect(await desktop.getPlaylistHistoryPaths("friend")).toHaveLength(2);
   });
 
+  it("rejects a playlist-history directory replaced before append", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-history-append-")
+    );
+    const store = people(root, "desktop");
+    const file = store.getPlaylistHistoryPath("friend");
+    const directory = path.dirname(file);
+    const original = path.join(root, "original-history");
+    const replacement = path.join(root, "replacement-history");
+    await mkdir(directory, { recursive: true });
+    await mkdir(replacement);
+    const openFile = fs.open.bind(fs);
+    const open = vi
+      .spyOn(fs, "open")
+      .mockImplementationOnce(async (...args) => {
+        await rename(directory, original);
+        await rename(replacement, directory);
+        return openFile(...args);
+      });
+
+    await expect(
+      store.appendPlaylistRecord(
+        "friend",
+        record("one", "2026-01-01T00:00:00.000Z")
+      )
+    ).rejects.toThrow("Shared storage directory changed");
+    expect(await readFile(file, "utf8")).toBe("");
+    open.mockRestore();
+  });
+
   it("fails when an enumerated playlist-history stream disappears", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-history-gone-"));
     const store = people(root, "desktop");
@@ -397,6 +455,21 @@ describe("shared stores", () => {
     await expect(people(root, "desktop").listProfileIds()).rejects.toThrow(
       "must not contain symlinks"
     );
+  });
+
+  it("reserves profile IDs used only by playlist history", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-id-"));
+    const store = people(root, "desktop");
+    await mkdir(
+      path.join(root, "shared", "people", "friend", "playlist-history"),
+      { recursive: true }
+    );
+
+    const created = await new PeopleProfileService(store).createProfile({
+      name: "Friend"
+    });
+
+    expect(created.profile.id).toBe("friend-2");
   });
 
   it("rejects stale person-profile updates through the same store", async () => {

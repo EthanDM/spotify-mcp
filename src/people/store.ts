@@ -10,6 +10,7 @@ import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
+  readDirectoryIdentity as readSharedDirectoryIdentity,
   readFileNoFollow
 } from "../storage/shared.js";
 import type {
@@ -102,6 +103,20 @@ export class PeopleStore {
   }
 
   async profileExists(profileId: string): Promise<boolean> {
+    if (this.sharedMode) {
+      await this.assertSharedStorageAvailable!();
+      const profileDirectory = this.getProfileDirectoryPath(profileId);
+      const exists = await assertNoSymlinksWithinRoot(
+        this.sharedRoot!,
+        profileDirectory
+      );
+      if (!exists) return false;
+      if (!(await fs.lstat(profileDirectory)).isDirectory())
+        throw new Error(
+          `Shared profile path is not a directory: ${profileDirectory}`
+        );
+      return true;
+    }
     return (await this.readProfile(profileId)) !== null;
   }
   async listProfileIds(): Promise<string[]> {
@@ -282,13 +297,19 @@ export class PeopleStore {
     record: PersonPlaylistRecord
   ): Promise<void> {
     const file = this.getPlaylistHistoryPath(profileId);
+    let directoryIdentity: DirectoryIdentity | undefined;
     if (this.sharedMode) {
       await this.assertSharedStorageAvailable!();
       await ensureDirectoryWithinRoot(this.sharedRoot!, path.dirname(file));
+      directoryIdentity = await readSharedDirectoryIdentity(path.dirname(file));
     } else {
       await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
     }
-    await appendPrivateFile(file, `${JSON.stringify(record)}\n`);
+    await appendPrivateFile(
+      file,
+      `${JSON.stringify(record)}\n`,
+      directoryIdentity
+    );
   }
   async countPlaylistHistory(profileId: string): Promise<number> {
     return (await this.readPlaylistHistory(profileId)).length;

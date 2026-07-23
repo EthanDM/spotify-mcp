@@ -11,6 +11,7 @@ import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
+  readDirectoryIdentity as readSharedDirectoryIdentity,
   readFileNoFollow
 } from "../storage/shared.js";
 import type {
@@ -145,10 +146,14 @@ export class PersonalizationStore {
           schema_version: 1 as const
         }
       : event;
+    let directoryIdentity: DirectoryIdentity | undefined;
     if (this.sharedMode) {
       await this.assertSharedStorageAvailable!();
       await ensureDirectoryWithinRoot(
         this.sharedRoot!,
+        path.dirname(this.interactionLogPath)
+      );
+      directoryIdentity = await readSharedDirectoryIdentity(
         path.dirname(this.interactionLogPath)
       );
     } else {
@@ -159,7 +164,8 @@ export class PersonalizationStore {
     }
     await appendPrivateFile(
       this.interactionLogPath,
-      `${JSON.stringify(persisted)}\n`
+      `${JSON.stringify(persisted)}\n`,
+      directoryIdentity
     );
   }
 

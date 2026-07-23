@@ -5,6 +5,8 @@ import path from "node:path";
 
 import { assertSharedStorageAvailable, type StorageConfig } from "../config.js";
 
+export type DirectoryIdentity = { device: number; inode: number };
+
 type MachineClaim = {
   schema_version: 1;
   machine_id: string;
@@ -142,7 +144,8 @@ export async function ensureDirectoryWithinRoot(
 
 export async function appendPrivateFile(
   file: string,
-  value: string
+  value: string,
+  directoryIdentity?: DirectoryIdentity
 ): Promise<void> {
   try {
     if (!(await fs.lstat(file)).isFile())
@@ -150,23 +153,41 @@ export async function appendPrivateFile(
   } catch (error) {
     if (!isMissing(error)) throw error;
   }
-  const handle = await fs.open(
-    file,
+  const flags =
     constants.O_APPEND |
-      constants.O_CREAT |
-      constants.O_NONBLOCK |
-      constants.O_WRONLY |
-      constants.O_NOFOLLOW,
-    0o600
-  );
+    constants.O_CREAT |
+    constants.O_NONBLOCK |
+    constants.O_WRONLY |
+    constants.O_NOFOLLOW;
+  const handle = await fs.open(file, flags, 0o600);
   try {
     if (!(await handle.stat()).isFile())
       throw new Error(`Storage path must be a regular file: ${file}`);
+    if (directoryIdentity)
+      await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
     await handle.writeFile(value, "utf8");
     await handle.chmod(0o600);
   } finally {
     await handle.close();
   }
+}
+
+export async function readDirectoryIdentity(
+  directory: string
+): Promise<DirectoryIdentity> {
+  const stats = await fs.lstat(directory);
+  if (!stats.isDirectory())
+    throw new Error(`Shared storage path is not a directory: ${directory}`);
+  return { device: stats.dev, inode: stats.ino };
+}
+
+export async function assertDirectoryIdentity(
+  directory: string,
+  expected: DirectoryIdentity
+): Promise<void> {
+  const actual = await readDirectoryIdentity(directory);
+  if (actual.device !== expected.device || actual.inode !== expected.inode)
+    throw new Error(`Shared storage directory changed: ${directory}`);
 }
 
 export async function readFileNoFollow(file: string): Promise<string> {
