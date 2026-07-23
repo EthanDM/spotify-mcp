@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, rm } from "node:fs/promises";
+import { access, mkdir, readFile, rm, symlink } from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,7 +7,10 @@ import { describe, expect, it } from "vitest";
 
 import type { StorageConfig } from "../../src/config.js";
 import { PersonalizationStore } from "../../src/personalization/store.js";
-import { SharedStorageGuard } from "../../src/storage/shared.js";
+import {
+  ensureDirectoryWithinRoot,
+  SharedStorageGuard
+} from "../../src/storage/shared.js";
 
 describe("shared storage guard", () => {
   it("prevents two installations from claiming the same machine ID", async () => {
@@ -72,6 +75,22 @@ describe("shared storage guard", () => {
       })
     ).rejects.toThrow("Configured shared storage is unavailable");
     await expect(access(sharedRoot)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects symlinked directories beneath the shared root", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-shared-link-"));
+    const sharedRoot = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(sharedRoot);
+    await mkdir(outside);
+    await symlink(outside, path.join(sharedRoot, "people"));
+
+    await expect(
+      ensureDirectoryWithinRoot(
+        sharedRoot,
+        path.join(sharedRoot, "people", "friend")
+      )
+    ).rejects.toThrow("must not contain symlinks");
   });
 });
 

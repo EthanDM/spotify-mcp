@@ -289,22 +289,21 @@ describe("shared data migration", () => {
       );
       await runMigration(local, shared, machineId, true);
     }
+    const eventFiles = await readdir(
+      path.join(shared, "personalization", "events")
+    );
     const ids = await Promise.all(
-      ["desktop", "neo"].map(async (machineId) => {
+      eventFiles.map(async (file) => {
         const record = JSON.parse(
           await readFile(
-            path.join(
-              shared,
-              "personalization",
-              "events",
-              `${machineId}.ndjson`
-            ),
+            path.join(shared, "personalization", "events", file),
             "utf8"
           )
         ) as { event_id: string };
         return record.event_id;
       })
     );
+    expect(eventFiles).toHaveLength(1);
     expect(new Set(ids)).toHaveLength(1);
   });
 
@@ -443,6 +442,40 @@ describe("shared data migration", () => {
 
     await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
       stderr: expect.stringContaining("Conflicting entry_id entry")
+    });
+  });
+
+  it("rejects conflicting event IDs from another machine stream", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-id-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const source = {
+      event_id: "shared-id",
+      ts: "2026-01-01T00:00:00.000Z",
+      type: "feedback",
+      details: { value: "source" }
+    };
+    const conflicting = {
+      ...source,
+      machine_id: "other",
+      schema_version: 1,
+      details: { value: "different" }
+    };
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await mkdir(path.join(shared, "personalization", "events"), {
+      recursive: true
+    });
+    await writeFile(
+      path.join(local, "personalization", "interaction-log.ndjson"),
+      `${JSON.stringify(source)}\n`
+    );
+    await writeFile(
+      path.join(shared, "personalization", "events", "other.ndjson"),
+      `${JSON.stringify(conflicting)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("Conflicting event_id shared-id")
     });
   });
 

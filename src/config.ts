@@ -155,12 +155,21 @@ export function toPortableArtifactPath(
   artifactPath: string,
   config: StorageConfig = getStorageConfig()
 ): string {
-  if (!config.sharedMode || !path.isAbsolute(artifactPath)) return artifactPath;
-  if (!isSameOrNested(config.artifactsDirectory, artifactPath))
+  if (!config.sharedMode) return artifactPath;
+  const expandedPath =
+    artifactPath === "~"
+      ? homedir()
+      : artifactPath.startsWith("~/")
+        ? path.join(homedir(), artifactPath.slice(2))
+        : artifactPath;
+  if (
+    !path.isAbsolute(expandedPath) ||
+    !isSameOrNested(config.artifactsDirectory, expandedPath)
+  )
     return artifactPath;
   return path.join(
     "artifacts",
-    path.relative(config.artifactsDirectory, artifactPath)
+    path.relative(config.artifactsDirectory, expandedPath)
   );
 }
 

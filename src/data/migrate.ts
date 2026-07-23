@@ -362,7 +362,7 @@ async function validateNdjson(
     if (!id) throw new Error(`Missing ${idField} at ${source}:${index + 1}.`);
     validateRecord(value, idField);
     const existing = records.get(id);
-    const normalized = stable(value);
+    const normalized = stable(comparisonValue(value, idField));
     if (existing && existing !== normalized)
       throw new Error(
         `Conflicting ${idField} ${id} while migrating ${source}.`
@@ -459,7 +459,7 @@ async function migrateNdjson(
       };
     }
     value = transform(value);
-    const normalized = stable(value);
+    const normalized = stable(comparisonValue(value, idField));
     const id = String(value[idField] ?? "");
     if (!id) throw new Error(`Missing ${idField} at ${source}:${index + 1}.`);
     validateRecord(value, idField);
@@ -508,7 +508,7 @@ function addRecord(
   const id = String(value[idField] ?? "");
   if (!id) throw new Error(`Missing ${idField} at ${file}:${lineNumber}.`);
   validateRecord(value, idField);
-  const normalized = stable(value);
+  const normalized = stable(comparisonValue(value, idField));
   const existing = records.get(id);
   if (existing && existing !== normalized)
     throw new Error(`Conflicting ${idField} ${id} in ${file}.`);
@@ -521,12 +521,7 @@ async function addDestinationRecords(
   idField: string,
   transform: (value: Record<string, unknown>) => Record<string, unknown>
 ): Promise<void> {
-  const files =
-    idField === "entry_id"
-      ? await ndjsonFiles(path.dirname(destination))
-      : (await exists(destination))
-        ? [destination]
-        : [];
+  const files = await ndjsonFiles(path.dirname(destination));
   for (const file of files) {
     const lines = (await fs.readFile(file, "utf8"))
       .split("\n")
@@ -616,6 +611,16 @@ function identityRecord(
   value: Record<string, unknown>
 ): Record<string, unknown> {
   return value;
+}
+
+function comparisonValue(
+  value: Record<string, unknown>,
+  idField: string
+): Record<string, unknown> {
+  if (idField !== "event_id") return value;
+  const { machine_id, ...semanticValue } = value;
+  void machine_id;
+  return semanticValue;
 }
 
 function validateRecord(value: unknown, idField: string): void {

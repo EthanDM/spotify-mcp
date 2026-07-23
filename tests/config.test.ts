@@ -104,14 +104,15 @@ describe("storage configuration", () => {
   });
 
   it("stores shared artifact paths relative to the shared root", () => {
+    const sharedRoot = path.join(os.homedir(), "Shared", "spotify-mcp");
     const config = getStorageConfig({
       SPOTIFY_MCP_DATA_DIR: "/tmp/local",
-      SPOTIFY_MCP_SHARED_DATA_DIR: "/Volumes/iCloud/spotify-mcp",
+      SPOTIFY_MCP_SHARED_DATA_DIR: sharedRoot,
       SPOTIFY_MCP_MACHINE_ID: "neo"
     });
     expect(
       toPortableArtifactPath(
-        "/Volumes/iCloud/spotify-mcp/artifacts/people/friend/review.md",
+        "~/Shared/spotify-mcp/artifacts/people/friend/review.md",
         config
       )
     ).toBe(path.join("artifacts", "people", "friend", "review.md"));

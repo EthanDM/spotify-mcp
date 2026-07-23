@@ -126,7 +126,12 @@ export async function ensureDirectoryWithinRoot(
       await fs.mkdir(current, { mode: 0o700 });
     } catch (error) {
       if (!isAlreadyExists(error)) throw error;
-      if (!(await fs.stat(current)).isDirectory())
+      const stats = await fs.lstat(current);
+      if (stats.isSymbolicLink())
+        throw new Error(
+          `Shared storage path must not contain symlinks: ${current}`
+        );
+      if (!stats.isDirectory())
         throw new Error(`Shared storage path is not a directory: ${current}`);
     }
   }
