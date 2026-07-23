@@ -82,8 +82,8 @@ Do not create, add, replace, or reorder playlist items until every applicable ch
 6. Create and verify.
 
 - Create a new private playlist with `spotify_create_playlist` unless the user explicitly wants an existing playlist replaced or public.
-- Add tracks with `spotify_add_playlist_items`.
-- If the user wants an exact ordered body, use `spotify_replace_playlist_items`.
+- For a new playlist, add tracks with `spotify_add_playlist_items`.
+- For every requested refresh or overwrite of an existing playlist, use `spotify_replace_playlist_items` regardless of playback mode.
 - Use `spotify_reorder_playlist_items` when a specific opening, midpoint, or finish sequence matters.
 - Read the completed playlist back and verify the exact final count before claiming success.
 

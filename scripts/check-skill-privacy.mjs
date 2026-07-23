@@ -22,7 +22,7 @@ const forbiddenContent = [
   {
     label: "personal home path",
     pattern:
-      /(?:\/Users\/[^/\s]+\/|\/home\/[^/\s]+\/|\/root\/|[A-Za-z]:\\Users\\[^\\\s]+\\)/
+      /(?:\/Users\/[^/\s]+(?=\/|\s|["'`]|$)|\/home\/[^/\s]+(?=\/|\s|["'`]|$)|\/root(?=\/|\s|["'`]|$)|[A-Za-z]:\\Users\\[^\\\s]+(?=\\|\s|["'`]|$))/
   },
   {
     label: "email address",
@@ -47,7 +47,7 @@ const forbiddenContent = [
   },
   {
     label: "private key",
-    pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/
+    pattern: /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----/
   },
   {
     label: "Spotify credential assignment",

@@ -107,6 +107,41 @@ describe("playlist constraint checker", () => {
       )
     });
   });
+
+  it("rejects non-string comparison-history values", async () => {
+    const invalidUris = await writeManifest({
+      target_track_count: 1,
+      tracks: [track("spotify:track:one", "close")],
+      recent_comparable_builds: [
+        { track_uris: [null], primary_artists: ["Artist"] }
+      ]
+    });
+    await expect(
+      execute("python3", [checker, invalidUris])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "recent_comparable_builds[1].track_uris must contain non-empty strings"
+      )
+    });
+
+    const invalidArtists = await writeManifest({
+      target_track_count: 1,
+      tracks: [track("spotify:track:one", "close")],
+      recent_comparable_builds: [
+        {
+          track_uris: ["spotify:track:history"],
+          primary_artists: [null]
+        }
+      ]
+    });
+    await expect(
+      execute("python3", [checker, invalidArtists])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "recent_comparable_builds[1].primary_artists must contain non-empty strings"
+      )
+    });
+  });
 });
 
 async function writeManifest(

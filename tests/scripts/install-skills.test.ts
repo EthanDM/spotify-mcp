@@ -137,15 +137,42 @@ describe("skill installer", () => {
     try {
       await writeFile(
         fixture,
-        ["/home/alice/private/file", String.raw`C:\Users\alice\private`].join(
-          "\n"
-        )
+        [
+          "/home/alice/private/file",
+          String.raw`C:\Users\alice\private`,
+          "/Users/alice",
+          "/home/alice",
+          String.raw`C:\Users\alice`
+        ].join("\n")
       );
       await expect(
         execute("node", ["scripts/check-skill-privacy.mjs"])
       ).rejects.toMatchObject({
         stderr: expect.stringContaining("personal home path")
       });
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects standard private-key PEM headers", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "privacy-key-fixture.md"
+    );
+    try {
+      for (const header of [
+        "-----BEGIN DSA PRIVATE KEY-----",
+        "-----BEGIN ENCRYPTED PRIVATE KEY-----"
+      ]) {
+        await writeFile(fixture, header);
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("private key")
+        });
+      }
     } finally {
       await rm(fixture, { force: true });
     }

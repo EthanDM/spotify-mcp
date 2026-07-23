@@ -26,6 +26,13 @@ def require_list(value: Any, name: str) -> list[Any]:
     return value
 
 
+def require_nonempty_strings(value: Any, name: str) -> list[str]:
+    items = require_list(value, name)
+    if not items or any(not isinstance(item, str) or not item for item in items):
+        fail(f"{name} must contain non-empty strings")
+    return items
+
+
 VERSION_TERMS = re.compile(
     r"\b(remix|remaster(?:ed)?|radio edit|edit|live|acoustic|sped up|slowed|version|mix)\b",
     re.IGNORECASE,
@@ -209,9 +216,9 @@ def main() -> None:
         if not isinstance(ref, dict):
             fail(f"historical_references[{index}] must be an object")
         ref_id = str(ref.get("id", f"reference-{index}"))
-        ref_uri_list = require_list(ref.get("track_uris"), f"historical_references[{index}].track_uris")
-        if not ref_uri_list or any(not isinstance(uri, str) or not uri for uri in ref_uri_list):
-            fail(f"historical_references[{index}].track_uris must contain non-empty strings")
+        ref_uri_list = require_nonempty_strings(
+            ref.get("track_uris"), f"historical_references[{index}].track_uris"
+        )
         ref_uris = set(ref_uri_list)
         overlap = final_uri_set & ref_uris
         historical_union |= ref_uris
@@ -228,10 +235,18 @@ def main() -> None:
         if not isinstance(build, dict):
             fail(f"recent_comparable_builds[{index}] must be an object")
         build_id = str(build.get("id", f"recent-{index}"))
-        build_uris = set(require_list(build.get("track_uris", []), f"recent_comparable_builds[{index}].track_uris"))
-        build_artists = set(require_list(build.get("primary_artists", []), f"recent_comparable_builds[{index}].primary_artists"))
-        if not build_uris or not build_artists:
-            fail(f"recent_comparable_builds[{index}] must contain complete non-empty track_uris and primary_artists")
+        build_uris = set(
+            require_nonempty_strings(
+                build.get("track_uris", []),
+                f"recent_comparable_builds[{index}].track_uris",
+            )
+        )
+        build_artists = set(
+            require_nonempty_strings(
+                build.get("primary_artists", []),
+                f"recent_comparable_builds[{index}].primary_artists",
+            )
+        )
         prior_primary_artists |= build_artists
         recent_uri_union |= build_uris
         overlap_count = len(final_uri_set & build_uris)
@@ -245,9 +260,12 @@ def main() -> None:
     for index, build in enumerate(recent_general, start=1):
         if not isinstance(build, dict):
             fail(f"recent_general_builds[{index}] must be an object")
-        build_artists = set(require_list(build.get("primary_artists", []), f"recent_general_builds[{index}].primary_artists"))
-        if not build_artists:
-            fail(f"recent_general_builds[{index}] must contain non-empty primary_artists")
+        build_artists = set(
+            require_nonempty_strings(
+                build.get("primary_artists", []),
+                f"recent_general_builds[{index}].primary_artists",
+            )
+        )
         recent_general_artist_build_counts.update(build_artists)
     recurring_recent_general_artists = {
         artist: count
