@@ -146,14 +146,17 @@ export class PersonalizationService {
   async getState(input: {
     recentEventLimit: number;
   }): Promise<PersonalizationStateResult> {
-    const currentContext = await this.getContext();
-    const [snapshot, preferencesState, recentEvents, eventCount] =
-      await Promise.all([
-        this.store.readSnapshot(),
-        this.store.readPreferencesVersioned(),
-        this.store.readRecentEvents(input.recentEventLimit),
-        this.store.countEvents()
-      ]);
+    const [snapshot, preferencesState, events] = await Promise.all([
+      this.store.readSnapshot(),
+      this.store.readPreferencesVersioned(),
+      this.store.readAllEvents()
+    ]);
+    const context = buildPersonalizationContext({
+      snapshot,
+      preferences: preferencesState.value,
+      events: events.slice(-50)
+    });
+    await this.store.writeContext(context);
 
     return {
       snapshot_path: this.store.snapshotPath,
@@ -164,9 +167,9 @@ export class PersonalizationService {
       context_path: this.store.contextPath,
       snapshot,
       preferences: preferencesState.value,
-      interaction_event_count: eventCount,
-      recent_events: recentEvents,
-      context: currentContext.context
+      interaction_event_count: events.length,
+      recent_events: events.slice(-input.recentEventLimit),
+      context
     };
   }
 

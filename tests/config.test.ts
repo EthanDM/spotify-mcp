@@ -118,6 +118,10 @@ describe("storage configuration", () => {
     expect(() => getTokenFilePath()).toThrow(
       "refusing to expose the token path"
     );
+    vi.stubEnv("SPOTIFY_MCP_DATA_DIR", path.join(localLink, "missing"));
+    expect(() => getTokenFilePath()).toThrow(
+      "refusing to expose the token path"
+    );
   });
 
   it("stores shared artifact paths relative to the shared root", async () => {

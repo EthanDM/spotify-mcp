@@ -817,6 +817,27 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects explicit unsupported event schema versions", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-schema-"));
+    const local = path.join(root, "local");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await writeFile(
+      path.join(local, "personalization", "interaction-log.ndjson"),
+      `${JSON.stringify({
+        schema_version: 2,
+        ts: "2026-01-01T00:00:00.000Z",
+        type: "event",
+        details: {}
+      })}\n`
+    );
+
+    await expect(
+      runMigration(local, path.join(root, "shared"), "desktop")
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("schema_version must be 1")
+    });
+  });
+
   it("inspects resolutions without claiming a machine ID", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-resolve-"));
     const local = path.join(root, "local");

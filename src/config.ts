@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { constants, existsSync, lstatSync, realpathSync } from "node:fs";
+import { constants, lstatSync, realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -133,13 +133,9 @@ function rejectExplicitEmpty(
 
 export function getTokenFilePath(): string {
   const config = getStorageConfig();
-  if (
-    config.sharedRoot &&
-    existsSync(config.localRoot) &&
-    existsSync(config.sharedRoot)
-  ) {
-    const physicalLocalRoot = realpathSync(config.localRoot);
-    const physicalSharedRoot = realpathSync(config.sharedRoot);
+  if (config.sharedRoot) {
+    const physicalLocalRoot = resolvePhysicalPathSync(config.localRoot);
+    const physicalSharedRoot = resolvePhysicalPathSync(config.sharedRoot);
     if (
       isSameOrNested(physicalLocalRoot, physicalSharedRoot) ||
       isSameOrNested(physicalSharedRoot, physicalLocalRoot)
@@ -149,6 +145,25 @@ export function getTokenFilePath(): string {
       );
   }
   return config.tokenFile;
+}
+
+function resolvePhysicalPathSync(target: string): string {
+  const missingSegments: string[] = [];
+  let existing = target;
+  while (true) {
+    try {
+      return path.join(realpathSync(existing), ...missingSegments.reverse());
+    } catch (error) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      )
+        throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw error;
+      missingSegments.push(path.basename(existing));
+      existing = parent;
+    }
+  }
 }
 
 export function getPersonalizationDirectoryPath(): string {

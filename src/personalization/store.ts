@@ -189,7 +189,7 @@ export class PersonalizationStore {
     );
   }
 
-  private async readAllEvents(): Promise<PersonalizationEvent[]> {
+  async readAllEvents(): Promise<PersonalizationEvent[]> {
     const files = await this.getInteractionLogPaths();
     const byId = new Map<
       string,

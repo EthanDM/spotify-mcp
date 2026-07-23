@@ -331,4 +331,6 @@ function requireStringArray(value: unknown, label: string): void {
     value.some((item) => typeof item !== "string" || !item.trim())
   )
     throw new Error(`${label} must be an array of non-empty strings.`);
+  if (new Set(value).size !== value.length)
+    throw new Error(`${label} must not contain duplicate values.`);
 }

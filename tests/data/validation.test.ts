@@ -113,6 +113,12 @@ describe("conflict resolution document validation", () => {
         preferred_artists: [" "]
       })
     ).toThrow("non-empty strings");
+    expect(() =>
+      validatePreferencesDocument({
+        ...preferences(),
+        preferred_artists: ["Artist", "Artist"]
+      })
+    ).toThrow("duplicate values");
   });
 
   it("rejects invalid ages and use-case track ranges", () => {

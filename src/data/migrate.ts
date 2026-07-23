@@ -409,7 +409,7 @@ async function validateNdjson(
             : deterministicId(value),
         machine_id:
           typeof value.machine_id === "string" ? value.machine_id : machineId,
-        schema_version: 1
+        schema_version: "schema_version" in value ? value.schema_version : 1
       };
     }
     value = transform(value);
@@ -562,7 +562,7 @@ async function migrateNdjson(
             : deterministicId(value),
         machine_id:
           typeof value.machine_id === "string" ? value.machine_id : machineId,
-        schema_version: 1
+        schema_version: "schema_version" in value ? value.schema_version : 1
       };
     }
     value = transform(value);
