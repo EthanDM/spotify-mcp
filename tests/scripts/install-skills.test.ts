@@ -140,6 +140,7 @@ describe("skill installer", () => {
         [
           "/home/alice/private/file",
           String.raw`C:\Users\alice\private`,
+          String.raw`C:\users\alice\private`,
           "/Users/alice",
           "/home/alice",
           String.raw`C:\Users\alice`

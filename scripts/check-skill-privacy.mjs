@@ -23,7 +23,7 @@ const forbiddenContent = [
   {
     label: "personal home path",
     pattern:
-      /(?:\/Users\/[^/\s]+(?=\/|\s|["'`]|$)|\/home\/[^/\s]+(?=\/|\s|["'`]|$)|\/root(?=\/|\s|["'`]|$)|[A-Za-z]:\\Users\\[^\\\s]+(?=\\|\s|["'`]|$))/
+      /(?:\/Users\/[^/\s]+(?=\/|\s|["'`]|$)|\/home\/[^/\s]+(?=\/|\s|["'`]|$)|\/root(?=\/|\s|["'`]|$)|[A-Za-z]:\\Users\\[^\\\s]+(?=\\|\s|["'`]|$))/i
   },
   {
     label: "email address",
