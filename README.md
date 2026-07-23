@@ -199,7 +199,7 @@ pnpm data:resolve -- --document preferences --from-revision <revision-id> --appl
 pnpm data:resolve -- --document people/<profile-id> --from-file /absolute/path/to/merged-profile.json --apply
 ```
 
-Resolution preserves all earlier revisions. Removing the shared variables restores legacy local behavior using the untouched local files; newer shared activity is not copied back automatically. Give shared artifacts unique or timestamped names because differing files at the same relative path are treated as collisions during migration.
+Resolution preserves all earlier revisions. Removing the shared variables restores legacy local behavior using the untouched local files; newer shared activity is not copied back automatically. Give shared artifacts unique or timestamped names because differing files at the same relative path are treated as collisions during migration. In shared mode, durable playlist history stores artifact references relative to the shared root (for example, `artifacts/people/sample-listener/review.md`) so they remain valid when each Mac mounts iCloud at a different absolute path.
 
 ## Example Calls
 

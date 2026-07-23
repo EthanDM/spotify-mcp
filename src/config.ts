@@ -104,6 +104,15 @@ export async function assertSharedStorageAvailable(
   try {
     const stats = await fs.stat(config.sharedRoot);
     if (!stats.isDirectory()) throw new Error("not a directory");
+    const [physicalLocalRoot, physicalSharedRoot] = await Promise.all([
+      resolvePhysicalPath(config.localRoot),
+      resolvePhysicalPath(config.sharedRoot)
+    ]);
+    if (
+      isSameOrNested(physicalLocalRoot, physicalSharedRoot) ||
+      isSameOrNested(physicalSharedRoot, physicalLocalRoot)
+    )
+      throw new Error("local and shared roots resolve to nested directories");
     await fs.access(config.sharedRoot, constants.R_OK | constants.W_OK);
   } catch (error) {
     const detail = error instanceof Error ? ` (${error.message})` : "";
@@ -142,6 +151,19 @@ export function getPersonArtifactsDirectoryPath(profileId: string): string {
   return path.join(getArtifactsDirectoryPath(), "people", profileId);
 }
 
+export function toPortableArtifactPath(
+  artifactPath: string,
+  config: StorageConfig = getStorageConfig()
+): string {
+  if (!config.sharedMode || !path.isAbsolute(artifactPath)) return artifactPath;
+  if (!isSameOrNested(config.artifactsDirectory, artifactPath))
+    return artifactPath;
+  return path.join(
+    "artifacts",
+    path.relative(config.artifactsDirectory, artifactPath)
+  );
+}
+
 function resolveConfiguredPath(
   value: string | undefined,
   fallback: string | undefined,
@@ -171,4 +193,26 @@ function isSameOrNested(parent: string, candidate: string): boolean {
       relative !== ".." &&
       !path.isAbsolute(relative))
   );
+}
+
+async function resolvePhysicalPath(target: string): Promise<string> {
+  const missingSegments: string[] = [];
+  let existing = target;
+  while (true) {
+    try {
+      return path.join(
+        await fs.realpath(existing),
+        ...missingSegments.reverse()
+      );
+    } catch (error) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      )
+        throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw error;
+      missingSegments.push(path.basename(existing));
+      existing = parent;
+    }
+  }
 }

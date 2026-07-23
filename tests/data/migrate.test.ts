@@ -108,7 +108,7 @@ describe("shared data migration", () => {
       )
     ) as { artifact_paths: string[] };
     expect(migratedPlaylist.artifact_paths).toEqual([
-      path.join(shared, "artifacts", "note.md")
+      path.join("artifacts", "note.md")
     ]);
     await expect(readFile(path.join(shared, "auth.json"))).rejects.toThrow();
     await expect(
@@ -379,6 +379,36 @@ describe("shared data migration", () => {
         await readFile(path.join(shared, "artifacts", "note.md"), "utf8")
       )
     ).toBe(true);
+  });
+
+  it("treats equivalent NDJSON records as equal across key order", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-record-order-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const source = playlistRecord("entry");
+    const reordered = Object.fromEntries(Object.entries(source).reverse());
+    await mkdir(path.join(local, "people", "friend"), { recursive: true });
+    await mkdir(path.join(shared, "people", "friend", "playlist-history"), {
+      recursive: true
+    });
+    await writeFile(
+      path.join(local, "people", "friend", "playlist-history.ndjson"),
+      `${JSON.stringify(source)}\n`
+    );
+    await writeFile(
+      path.join(
+        shared,
+        "people",
+        "friend",
+        "playlist-history",
+        "desktop.ndjson"
+      ),
+      `${JSON.stringify(reordered)}\n`
+    );
+
+    await expect(
+      runMigration(local, shared, "desktop", true)
+    ).resolves.toBeTruthy();
   });
 });
 

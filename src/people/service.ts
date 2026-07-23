@@ -1,4 +1,7 @@
-import { getPersonArtifactsDirectoryPath } from "../config.js";
+import {
+  getPersonArtifactsDirectoryPath,
+  toPortableArtifactPath
+} from "../config.js";
 import { PeopleStore } from "./store.js";
 import type {
   PersonPlaylistRecord,
@@ -630,7 +633,9 @@ function normalizePlaylistRecord(
     workflow_learning: normalizeNullableString(record.workflow_learning),
     winning_traits: uniqueValues(record.winning_traits),
     losing_traits: uniqueValues(record.losing_traits),
-    artifact_paths: uniqueValues(record.artifact_paths),
+    artifact_paths: uniqueValues(record.artifact_paths).map((artifactPath) =>
+      toPortableArtifactPath(artifactPath)
+    ),
     notes: uniqueValues(record.notes)
   };
 }

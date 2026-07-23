@@ -337,7 +337,7 @@ async function validateNdjson(
     (await readText(destination))?.split("\n").filter((line) => line.trim()) ??
     [];
   for (const [index, line] of destinationLines.entries())
-    addRecord(records, line, idField, destination, index + 1);
+    addRecord(records, line, idField, destination, index + 1, transform);
   const sourceLines = (await fs.readFile(source, "utf8"))
     .split("\n")
     .filter((line) => line.trim());
@@ -365,7 +365,7 @@ async function validateNdjson(
     if (!id) throw new Error(`Missing ${idField} at ${source}:${index + 1}.`);
     validateRecord(value, idField);
     const existing = records.get(id);
-    const normalized = JSON.stringify(value);
+    const normalized = stable(value);
     if (existing && existing !== normalized)
       throw new Error(
         `Conflicting ${idField} ${id} while migrating ${source}.`
@@ -443,7 +443,7 @@ async function migrateNdjson(
     [];
   const records = new Map<string, string>();
   for (const [index, line] of destinationLines.entries())
-    addRecord(records, line, idField, destination, index + 1);
+    addRecord(records, line, idField, destination, index + 1, transform);
   let added = 0;
   const additions: string[] = [];
   for (const [index, line] of sourceLines.entries()) {
@@ -466,7 +466,7 @@ async function migrateNdjson(
       };
     }
     value = transform(value);
-    const normalized = JSON.stringify(value);
+    const normalized = stable(value);
     const id = String(value[idField] ?? "");
     if (!id) throw new Error(`Missing ${idField} at ${source}:${index + 1}.`);
     validateRecord(value, idField);
@@ -477,7 +477,7 @@ async function migrateNdjson(
       );
     if (!existing) {
       records.set(id, normalized);
-      additions.push(normalized);
+      additions.push(JSON.stringify(value));
       added += 1;
     }
   }
@@ -500,7 +500,10 @@ function addRecord(
   line: string,
   idField: string,
   file: string,
-  lineNumber: number
+  lineNumber: number,
+  transform: (
+    value: Record<string, unknown>
+  ) => Record<string, unknown> = identityRecord
 ): void {
   let value: Record<string, unknown>;
   try {
@@ -508,10 +511,11 @@ function addRecord(
   } catch {
     throw new Error(`Malformed NDJSON at ${file}:${lineNumber}.`);
   }
+  value = transform(value);
   const id = String(value[idField] ?? "");
   if (!id) throw new Error(`Missing ${idField} at ${file}:${lineNumber}.`);
   validateRecord(value, idField);
-  const normalized = JSON.stringify(value);
+  const normalized = stable(value);
   const existing = records.get(id);
   if (existing && existing !== normalized)
     throw new Error(`Conflicting ${idField} ${id} in ${file}.`);
@@ -569,17 +573,23 @@ function rewriteArtifactPaths(
     artifact_paths: value.artifact_paths.map((artifactPath) => {
       if (typeof artifactPath !== "string" || !path.isAbsolute(artifactPath))
         return artifactPath;
-      const relative = path.relative(sourceArtifactsRoot, artifactPath);
-      if (
-        relative === "" ||
-        (!relative.startsWith(`..${path.sep}`) &&
-          relative !== ".." &&
-          !path.isAbsolute(relative))
-      )
-        return path.join(sharedArtifactsRoot, relative);
+      const relative =
+        relativeWithin(sourceArtifactsRoot, artifactPath) ??
+        relativeWithin(sharedArtifactsRoot, artifactPath);
+      if (relative !== null) return path.join("artifacts", relative);
       return artifactPath;
     })
   };
+}
+
+function relativeWithin(root: string, candidate: string): string | null {
+  const relative = path.relative(root, candidate);
+  return relative === "" ||
+    (!relative.startsWith(`..${path.sep}`) &&
+      relative !== ".." &&
+      !path.isAbsolute(relative))
+    ? relative
+    : null;
 }
 
 function identityRecord(

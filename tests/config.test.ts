@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertSharedStorageAvailable,
-  getStorageConfig
+  getStorageConfig,
+  toPortableArtifactPath
 } from "../src/config.js";
 
 describe("storage configuration", () => {
@@ -84,5 +85,38 @@ describe("storage configuration", () => {
     );
     await mkdir(shared);
     await expect(assertSharedStorageAvailable(config)).resolves.toBeUndefined();
+  });
+
+  it("rejects roots that become nested after resolving symlinks", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-config-link-"));
+    const local = path.join(root, "local");
+    const sharedLink = path.join(root, "shared-link");
+    await mkdir(local);
+    await symlink(local, sharedLink);
+    const config = getStorageConfig({
+      SPOTIFY_MCP_DATA_DIR: local,
+      SPOTIFY_MCP_SHARED_DATA_DIR: sharedLink,
+      SPOTIFY_MCP_MACHINE_ID: "neo"
+    });
+    await expect(assertSharedStorageAvailable(config)).rejects.toThrow(
+      "resolve to nested directories"
+    );
+  });
+
+  it("stores shared artifact paths relative to the shared root", () => {
+    const config = getStorageConfig({
+      SPOTIFY_MCP_DATA_DIR: "/tmp/local",
+      SPOTIFY_MCP_SHARED_DATA_DIR: "/Volumes/iCloud/spotify-mcp",
+      SPOTIFY_MCP_MACHINE_ID: "neo"
+    });
+    expect(
+      toPortableArtifactPath(
+        "/Volumes/iCloud/spotify-mcp/artifacts/people/friend/review.md",
+        config
+      )
+    ).toBe(path.join("artifacts", "people", "friend", "review.md"));
+    expect(toPortableArtifactPath("/tmp/unrelated.md", config)).toBe(
+      "/tmp/unrelated.md"
+    );
   });
 });
