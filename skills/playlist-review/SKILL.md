@@ -91,8 +91,8 @@ If the user did not provide a use case, infer the playlist's likely purpose from
 - Prefer replayability over completeness.
 - A playlist with fewer stronger tracks is usually better than a long playlist with filler.
 - Repeated artists are acceptable when they strengthen the lane; they are a problem when they make the playlist feel narrow or lazy.
-- The first 3-5 tracks matter disproportionately.
-- The last 2-3 tracks matter if the playlist is meant to feel complete instead of endless.
+- When order is claimed or materially important, the first 3-5 tracks matter disproportionately.
+- When order is claimed or materially important, the last 2-3 tracks matter if the playlist is meant to feel complete instead of endless.
 - Sudden jumps in intensity, era, polish, or genre should be treated as potential defects unless the playlist clearly aims for contrast.
 - Gift playlists and mood playlists should bias toward coherence and hit rate over novelty.
 - If the playlist use case implies a duration or attention window, optimize for that instead of maximizing coverage.

@@ -170,9 +170,9 @@ Use these definitions and thresholds for a general personal build with final cou
 3. Search in focused batches
 4. Inspect recent comparable build records or URI-complete fallback exports when available
 5. Build a candidate set with the same applicable recent-overlap and discovery controls used by fast personal mode
-6. Run the deterministic constraint check
-7. Create a new private playlist
-8. Tighten weak or redundant tracks
+6. Tighten weak or redundant tracks
+7. Run the deterministic constraint check
+8. Create a new private playlist
 9. Return the playlist and suggest evaluation criteria
 10. Record feedback later once the user has listened
 
@@ -199,10 +199,11 @@ Use `spotify_get_personalization_state` only when the compact context is not eno
 4. Build for that listener's stated goals, not the user's default taste
 5. Use only that person's references and prior person-specific artifacts
 6. Bias toward coherence, generosity, and replayability
-7. Create the playlist
-8. Save any human-readable notes if helpful
-9. Record the outcome with `spotify_record_person_playlist`
-10. If the result reveals a durable taste learning, record it with `spotify_record_person_feedback`
+7. Tighten weak or redundant tracks and run the deterministic constraint check
+8. Create the playlist only after every applicable check passes
+9. Save any human-readable notes if helpful
+10. Record the outcome with `spotify_record_person_playlist`
+11. If the result reveals a durable taste learning, record it with `spotify_record_person_feedback`
 
 ## Track Count Heuristics
 

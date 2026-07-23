@@ -93,6 +93,30 @@ describe("skill installer", () => {
     }
   });
 
+  it("runs the privacy gate before installing skill contents", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      ".env.installer-test"
+    );
+    try {
+      await writeFile(fixture, "UNRECOGNIZED_SECRET=value");
+      await expect(
+        execute("node", ["scripts/install-skills.mjs", "--apply"], {
+          env: { ...process.env, CODEX_HOME: codexHome }
+        })
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("forbidden runtime-state filename")
+      });
+      await expect(
+        access(path.join(codexHome, "skills", "playlist-review"))
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
   it("rejects CODEX_HOME paths that resolve to the filesystem root", async () => {
     await expect(
       execute("node", ["scripts/install-skills.mjs"], {

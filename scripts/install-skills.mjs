@@ -1,9 +1,12 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
+const execute = promisify(execFile);
 const skillNames = [
   "playlist-builder-from-context",
   "playlist-builder-quality-loop",
@@ -18,6 +21,10 @@ const repositoryRoot = path.resolve(
 );
 const configuredCodexHome =
   process.env.CODEX_HOME?.trim() || path.join(os.homedir(), ".codex");
+
+await execute(process.execPath, [
+  path.join(repositoryRoot, "scripts", "check-skill-privacy.mjs")
+]);
 
 if (!path.isAbsolute(configuredCodexHome)) {
   throw new Error("CODEX_HOME must be a safe absolute directory.");
