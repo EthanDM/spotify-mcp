@@ -40,6 +40,7 @@ import {
   removePlaylistItemsSchema,
   reorderPlaylistItemsSchema,
   searchTracksSchema,
+  trackIdSchema,
   updatePersonProfileInputSchema
 } from "./tools.js";
 
@@ -100,6 +101,16 @@ server.registerTool(
     inputSchema: playlistItemsSchema.shape
   },
   handlers.getPlaylistItems
+);
+
+server.registerTool(
+  "spotify_get_track",
+  {
+    title: "Get Spotify Track",
+    description: "Returns normalized metadata for one track by Spotify ID.",
+    inputSchema: trackIdSchema.shape
+  },
+  handlers.getTrack
 );
 
 server.registerTool(

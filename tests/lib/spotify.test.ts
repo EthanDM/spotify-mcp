@@ -73,6 +73,35 @@ describe("SpotifyClient", () => {
     expect(result.items[0]?.tracks_total).toBe(42);
   });
 
+  it("reads and normalizes one track by Spotify ID", async () => {
+    const store = createTokenStore();
+    const fetchMock = createRouterFetchMock({
+      "GET https://api.spotify.com/v1/tracks/track%2Fid": () =>
+        jsonResponse({
+          id: "track/id",
+          uri: "spotify:track:track-id",
+          name: "Seed Track",
+          artists: [{ name: "Seed Artist" }],
+          album: { name: "Seed Album" },
+          duration_ms: 203000,
+          explicit: false
+        })
+    });
+    const client = new SpotifyClient(store, fetchMock as typeof fetch);
+
+    const track = await client.getTrack("track/id");
+
+    expect(track).toEqual({
+      id: "track/id",
+      uri: "spotify:track:track-id",
+      name: "Seed Track",
+      artists: ["Seed Artist"],
+      album: "Seed Album",
+      duration_ms: 203000,
+      explicit: false
+    });
+  });
+
   it("refreshes and retries after a 401", async () => {
     const store = createTokenStore();
     const fetchMock = vi

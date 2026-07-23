@@ -22,6 +22,13 @@ export const playlistIdSchema = z.object({
 });
 
 /**
+ * Single-track identifier used by exact catalog reads.
+ */
+export const trackIdSchema = z.object({
+  trackId: z.string().min(1)
+});
+
+/**
  * Validation for reading one page of playlist items.
  */
 export const playlistItemsSchema = z.object({
@@ -469,6 +476,12 @@ export function createToolHandlers(
     async getPlaylistItems(args: unknown) {
       return withParsedArgs(playlistItemsSchema, args, (input) =>
         spotify.getPlaylistItems(input.playlistId, input.limit, input.offset)
+      );
+    },
+
+    async getTrack(args: unknown) {
+      return withParsedArgs(trackIdSchema, args, (input) =>
+        spotify.getTrack(input.trackId)
       );
     },
 

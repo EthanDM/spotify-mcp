@@ -4,6 +4,7 @@ This directory is the canonical source for the Codex skills that operate against
 
 - `playlist-builder-from-context`
 - `playlist-builder-quality-loop`
+- `playlist-radio-from-seed`
 - `playlist-prompt-studio`
 - `playlist-review`
 
@@ -23,6 +24,6 @@ Apply it:
 pnpm skills:install -- --apply
 ```
 
-`CODEX_HOME` may select another absolute Codex directory. The installer copies only the four allowlisted skill packages and does not read or copy Spotify runtime data.
+`CODEX_HOME` may select another absolute Codex directory. The installer copies only the five allowlisted skill packages and does not read or copy Spotify runtime data.
 
 Artifact instructions in these skills honor the current Spotify MCP storage contract and use `$HOME/.config/spotify-mcp/artifacts`.

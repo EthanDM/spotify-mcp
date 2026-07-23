@@ -12,6 +12,7 @@ The server exposes these tools:
 - `spotify_list_playlists`
 - `spotify_get_playlist`
 - `spotify_get_playlist_items`
+- `spotify_get_track`
 - `spotify_search_tracks`
 - `spotify_create_playlist`
 - `spotify_change_playlist_details`
@@ -144,7 +145,7 @@ args = ["--dir", "/absolute/path/to/spotify-mcp", "dev"]
 
 ## Codex Skills
 
-The repository includes four Codex skills under `skills/` for playlist prompting, building, review, and builder-quality evaluation. These repository copies are canonical and contain workflow instructions and deterministic validation code only; credentials, personalization, listener profiles, histories, and generated artifacts stay outside Git.
+The repository includes five Codex skills under `skills/` for playlist prompting, building, seed-radio generation, review, and builder-quality evaluation. These repository copies are canonical and contain workflow instructions and deterministic validation code only; credentials, personalization, listener profiles, histories, and generated artifacts stay outside Git.
 
 Preview installation into `~/.codex/skills`:
 

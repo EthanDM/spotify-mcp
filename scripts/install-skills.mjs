@@ -10,6 +10,7 @@ const execute = promisify(execFile);
 const skillNames = [
   "playlist-builder-from-context",
   "playlist-builder-quality-loop",
+  "playlist-radio-from-seed",
   "playlist-prompt-studio",
   "playlist-review"
 ];
