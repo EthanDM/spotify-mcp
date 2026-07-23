@@ -243,7 +243,9 @@ describe("skill installer", () => {
     try {
       for (const value of [
         { accessToken: "access-value", refreshToken: "refresh-value" },
-        { access_token: "access-value", refresh_token: "refresh-value" }
+        { access_token: "access-value", refresh_token: "refresh-value" },
+        { client_secret: "secret-value" },
+        { clientSecret: "secret-value" }
       ]) {
         await writeFile(fixture, JSON.stringify(value));
         await expect(

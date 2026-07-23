@@ -61,7 +61,8 @@ const forbiddenContent = [
   },
   {
     label: "stored Spotify token field",
-    pattern: /"(?:accessToken|refreshToken|access_token|refresh_token)"\s*:/
+    pattern:
+      /"(?:accessToken|refreshToken|access_token|refresh_token|clientSecret|client_secret)"\s*:/
   }
 ];
 

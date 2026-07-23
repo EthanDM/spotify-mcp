@@ -33,6 +33,16 @@ def require_nonempty_strings(value: Any, name: str) -> list[str]:
     return items
 
 
+TRACK_URI_PATTERN = re.compile(r"spotify:track:[A-Za-z0-9]{22}")
+
+
+def require_track_uris(value: Any, name: str) -> list[str]:
+    items = require_nonempty_strings(value, name)
+    if any(not TRACK_URI_PATTERN.fullmatch(item) for item in items):
+        fail(f"{name} must contain supported Spotify track URIs")
+    return items
+
+
 VERSION_TERMS = re.compile(
     r"\b(remix|remaster(?:ed)?|radio edit|edit|live|acoustic|sped up|slowed|version|mix)\b",
     re.IGNORECASE,
@@ -134,7 +144,7 @@ def main() -> None:
         phase = track.get("phase")
         if not isinstance(uri, str) or not uri:
             fail(f"tracks[{index}].uri is required")
-        if not re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", uri):
+        if not TRACK_URI_PATTERN.fullmatch(uri):
             fail(f"tracks[{index}].uri must be a supported Spotify track URI")
         if not isinstance(name, str) or not name:
             fail(f"tracks[{index}].name is required")
@@ -218,7 +228,7 @@ def main() -> None:
         if not isinstance(ref, dict):
             fail(f"historical_references[{index}] must be an object")
         ref_id = str(ref.get("id", f"reference-{index}"))
-        ref_uri_list = require_nonempty_strings(
+        ref_uri_list = require_track_uris(
             ref.get("track_uris"), f"historical_references[{index}].track_uris"
         )
         ref_uris = set(ref_uri_list)
@@ -238,7 +248,7 @@ def main() -> None:
             fail(f"recent_comparable_builds[{index}] must be an object")
         build_id = str(build.get("id", f"recent-{index}"))
         build_uris = set(
-            require_nonempty_strings(
+            require_track_uris(
                 build.get("track_uris", []),
                 f"recent_comparable_builds[{index}].track_uris",
             )

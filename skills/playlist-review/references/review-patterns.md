@@ -78,6 +78,8 @@ What to recommend:
 
 ### Energy whiplash
 
+Apply transition and reordering remedies only when order is claimed or materially important.
+
 Symptoms:
 
 - abrupt jumps in intensity, polish, tempo, or genre

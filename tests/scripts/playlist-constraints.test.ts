@@ -167,6 +167,21 @@ describe("playlist constraint checker", () => {
         "recent_comparable_builds[1].primary_artists must contain non-empty strings"
       )
     });
+
+    const malformedUris = await writeManifest({
+      target_track_count: 1,
+      tracks: [track("spotify:track:0000000000000000000001", "close")],
+      recent_comparable_builds: [
+        { track_uris: ["not-a-uri"], primary_artists: ["Artist"] }
+      ]
+    });
+    await expect(
+      execute("python3", [checker, malformedUris])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "recent_comparable_builds[1].track_uris must contain supported Spotify track URIs"
+      )
+    });
   });
 });
 
