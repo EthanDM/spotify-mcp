@@ -260,6 +260,8 @@ describe("skill installer", () => {
   it("rejects environment variants and generated personalization context", async () => {
     const fixtures = [
       path.resolve("skills", "playlist-review", ".env.production"),
+      path.resolve("skills", "playlist-review", ".ENV.production"),
+      path.resolve("skills", "playlist-review", "AUTH.JSON"),
       path.resolve("skills", "playlist-review", "personalization-context.md")
     ];
     try {

@@ -110,7 +110,7 @@ Use these definitions and thresholds for a general personal build with final cou
 - Separately inspect primary-artist presence across up to 10 recent general MCP builds, even when they are not semantically comparable. Report artists appearing in multiple recent builds; keep this ecosystem check qualitative in V1.
 - Prefer standalone hit rate and texture distribution for shuffle-first playlists. Measure familiar, discovery, vocal-profile, and experimental-lane proportions across the complete body; never justify a shuffle pool using an opening third, back half, or other positional allocation.
 - For an ordered build, assign each track one phase: `opening`, `development`, `peak`, `descent`, or `close`. Keep phases in that order, require a closing phase, and verify the final five tracks support the claimed ending. Sequence quality outranks filling a phase mechanically.
-- For any activity playlist, declare an `ending_intent` of `sustain`, `cooldown`, or `resolve`. Review the final three to five tracks as a functional unit. When the activity is expected to continue through the end, reject tracks whose intros, energy drop, or emotional turn materially interrupt utility. Use `cooldown` only when the prompt, duration, or inferred session shape supports it; emotional coherence alone does not justify weakening the activity finish.
+- For any ordered activity playlist, declare an `ending_intent` of `sustain`, `cooldown`, or `resolve`. Review the final three to five tracks as a functional unit. When the activity is expected to continue through the end, reject tracks whose intros, energy drop, or emotional turn materially interrupt utility. Use `cooldown` only when the prompt, duration, or inferred session shape supports it; emotional coherence alone does not justify weakening the activity finish.
 
 7. Recover from an undersized pool once.
 
@@ -131,8 +131,8 @@ Use these definitions and thresholds for a general personal build with final cou
 
 - Generate a concise title that preserves the prompt's intent.
 - Generate a one-sentence description naming the functional lane without claiming unsupported precision.
-- Create the playlist private unless the user explicitly requests public visibility.
-- Add the exact selected URI list.
+- For a new request, create the playlist private unless the user explicitly requests public visibility, then add the exact selected URI list.
+- For a requested refresh or overwrite, keep the existing playlist and replace its items with the exact selected URI list regardless of playback mode.
 - Read the playlist metadata and every item page back.
 - Verify the title is present, the description is nonempty, and the fetched count equals both the intended count and Spotify's reported total.
 - Verify exact order for ordered builds. For private requests, report Spotify's returned visibility without claiming stronger privacy than the readback supports.

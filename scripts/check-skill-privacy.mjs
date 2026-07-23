@@ -65,7 +65,11 @@ const failures = [];
 for (const filePath of await listFiles(skillsRoot)) {
   const relativePath = path.relative(repositoryRoot, filePath);
   const fileName = path.basename(filePath);
-  if (forbiddenFileNames.has(fileName) || fileName.startsWith(".env.")) {
+  const normalizedFileName = fileName.toLowerCase();
+  if (
+    forbiddenFileNames.has(normalizedFileName) ||
+    normalizedFileName.startsWith(".env.")
+  ) {
     failures.push(`${relativePath}: forbidden runtime-state filename`);
     continue;
   }

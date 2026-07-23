@@ -43,7 +43,7 @@ If the user did not provide a use case, infer the playlist's likely purpose from
 
 - Use `spotify_get_playlist`.
 - Use `spotify_get_playlist_items`.
-- If the playlist is large, page until you have enough context to review the actual full body, not just the first handful of tracks.
+- Page through every playlist item before applying whole-playlist diagnostics.
 
 2. Establish the review frame.
 
