@@ -50,6 +50,7 @@ async function main(): Promise<void> {
     return;
   }
 
+  const sourceHashesBefore = await buildSourceHashes(config.localRoot);
   const sharedStorage = new SharedStorageGuard(config);
   await sharedStorage.claimMachineId();
   const revisionGuard = {
@@ -164,12 +165,17 @@ async function main(): Promise<void> {
     true,
     sharedStorage
   );
+  const sourceHashesAfter = await buildSourceHashes(config.localRoot);
+  if (stable(sourceHashesBefore) !== stable(sourceHashesAfter))
+    throw new Error(
+      "Local migration sources changed while migration was running. Stop the legacy server and retry."
+    );
   const manifest = {
     schema_version: 1,
     migrated_at: new Date().toISOString(),
     machine_id: config.machineId,
     counts,
-    source_hashes: await buildSourceHashes(config.localRoot)
+    source_hashes: sourceHashesBefore
   };
   const manifestPath = path.join(
     config.sharedRoot,
@@ -245,6 +251,14 @@ async function validateMigration(
   machineId: string
 ): Promise<string[]> {
   const warnings: string[] = [];
+  const personalizationDirectory = path.join(localRoot, "personalization");
+  if (
+    (await exists(personalizationDirectory)) &&
+    (await fs.lstat(personalizationDirectory)).isSymbolicLink()
+  )
+    throw new Error(
+      `Personalization migration does not allow symlinks: ${personalizationDirectory}`
+    );
   const preferencesDocument = await readJson<unknown>(
     path.join(localRoot, "personalization", "user-preferences.json")
   );
@@ -393,6 +407,7 @@ async function validateNdjson(
   const sourceLines = ((await readText(source)) ?? "")
     .split("\n")
     .filter((line) => line.trim());
+  const occurrences = new Map<string, number>();
   for (const [index, line] of sourceLines.entries()) {
     let value: Record<string, unknown>;
     try {
@@ -406,7 +421,7 @@ async function validateNdjson(
         event_id:
           typeof value.event_id === "string"
             ? value.event_id
-            : deterministicId(value),
+            : deterministicId(value, occurrences),
         machine_id:
           typeof value.machine_id === "string" ? value.machine_id : machineId,
         schema_version: "schema_version" in value ? value.schema_version : 1
@@ -537,7 +552,7 @@ async function migrateNdjson(
     sharedStorage.sharedRoot,
     path.dirname(destination)
   );
-  const sourceLines = (await fs.readFile(source, "utf8"))
+  const sourceLines = ((await readText(source)) ?? "")
     .split("\n")
     .filter((line) => line.trim());
   const records = new Map<string, string>();
@@ -549,6 +564,7 @@ async function migrateNdjson(
   );
   let added = 0;
   const additions: string[] = [];
+  const occurrences = new Map<string, number>();
   for (const [index, line] of sourceLines.entries()) {
     let value: Record<string, unknown>;
     try {
@@ -562,7 +578,7 @@ async function migrateNdjson(
         event_id:
           typeof value.event_id === "string"
             ? value.event_id
-            : deterministicId(value),
+            : deterministicId(value, occurrences),
         machine_id:
           typeof value.machine_id === "string" ? value.machine_id : machineId,
         schema_version: "schema_version" in value ? value.schema_version : 1
@@ -806,12 +822,21 @@ function validateRecord(value: unknown, idField: string): void {
   if (idField === "event_id") validatePersonalizationEventDocument(value);
   else if (idField === "entry_id") validatePersonPlaylistRecordDocument(value);
 }
-function deterministicId(value: Record<string, unknown>): string {
+function deterministicId(
+  value: Record<string, unknown>,
+  occurrences: Map<string, number>
+): string {
   const { event_id, machine_id, schema_version, ...content } = value;
   void event_id;
   void machine_id;
   void schema_version;
-  return `legacy-${createHash("sha256").update(stable(content)).digest("hex").slice(0, 32)}`;
+  const digest = createHash("sha256")
+    .update(stable(content))
+    .digest("hex")
+    .slice(0, 32);
+  const occurrence = (occurrences.get(digest) ?? 0) + 1;
+  occurrences.set(digest, occurrence);
+  return `legacy-${digest}-${occurrence}`;
 }
 function hash(value: Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");

@@ -22,7 +22,10 @@ export class TokenStore implements TokenStoreLike {
    * The store is path-based so tests can redirect persistence without mocking
    * the filesystem API itself.
    */
-  constructor(private readonly filePath: string) {}
+  constructor(
+    private readonly filePath: string,
+    private readonly assertStorageAvailable?: () => Promise<void>
+  ) {}
 
   /**
    * Reads stored tokens if they exist. Missing files are treated as "not logged in".
@@ -54,6 +57,7 @@ export class TokenStore implements TokenStoreLike {
    * both the directory and file private to the current user.
    */
   async write(tokens: StoredTokens): Promise<void> {
+    await this.assertStorageAvailable?.();
     await fs.mkdir(path.dirname(this.filePath), {
       recursive: true,
       mode: 0o700

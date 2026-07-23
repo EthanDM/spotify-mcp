@@ -74,6 +74,7 @@ export class RevisionStore<T> {
 
   async readTips(): Promise<Array<RevisionEnvelope<T>>> {
     const revisions = await this.readAll();
+    assertAcyclic(revisions, this.documentName);
     const parents = new Set(
       revisions.flatMap((revision) => revision.parent_revision_ids)
     );
@@ -211,6 +212,28 @@ export class RevisionStore<T> {
       throw new Error(`${this.documentName} contains duplicate revision IDs.`);
     return revisions;
   }
+}
+
+function assertAcyclic<T>(
+  revisions: Array<RevisionEnvelope<T>>,
+  documentName: string
+): void {
+  const byId = new Map(
+    revisions.map((revision) => [revision.revision_id, revision])
+  );
+  const visited = new Set<string>();
+  const active = new Set<string>();
+  const visit = (id: string): void => {
+    if (active.has(id))
+      throw new Error(`${documentName} contains a cyclic revision graph.`);
+    if (visited.has(id)) return;
+    active.add(id);
+    for (const parent of byId.get(id)?.parent_revision_ids ?? [])
+      if (byId.has(parent)) visit(parent);
+    active.delete(id);
+    visited.add(id);
+  };
+  for (const id of byId.keys()) visit(id);
 }
 
 function isMissing(error: unknown): boolean {

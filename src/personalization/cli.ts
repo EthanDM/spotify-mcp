@@ -24,7 +24,12 @@ async function main(): Promise<void> {
     ? new SharedStorageGuard(storage)
     : null;
   await sharedStorage?.claimMachineId();
-  const spotify = new SpotifyClient(new TokenStore(storage.tokenFile));
+  const spotify = new SpotifyClient(
+    new TokenStore(
+      storage.tokenFile,
+      sharedStorage ? () => sharedStorage.assertWritable() : undefined
+    )
+  );
   const personalization = new PersonalizationService(
     spotify,
     storage.sharedMode

@@ -247,6 +247,7 @@ export class PeopleStore {
   }
   async writeContext(profileId: string, context: string): Promise<void> {
     const contextPath = this.getContextPath(profileId);
+    await this.assertSharedStorageAvailable?.();
     await assertNoSymlinksWithinRoot(this.localDirectory, contextPath);
     await writePrivate(contextPath, context);
   }
@@ -273,10 +274,17 @@ async function listFiles(
   assertSharedStorageAvailable?: () => Promise<void>
 ): Promise<string[]> {
   try {
-    return (await fs.readdir(directory))
-      .filter((name) => name.endsWith(suffix))
-      .sort()
-      .map((name) => path.join(directory, name));
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    const files: string[] = [];
+    for (const entry of entries) {
+      if (!entry.name.endsWith(suffix)) continue;
+      if (!entry.isFile())
+        throw new Error(
+          `Shared stream must be a regular file: ${path.join(directory, entry.name)}`
+        );
+      files.push(path.join(directory, entry.name));
+    }
+    return files.sort();
   } catch (error) {
     if (isMissing(error)) {
       await assertSharedStorageAvailable?.();

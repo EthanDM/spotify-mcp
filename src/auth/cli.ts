@@ -4,11 +4,12 @@ import { URL } from "node:url";
 
 import {
   DEFAULT_SCOPES,
+  getStorageConfig,
   getSpotifyClientId,
-  getSpotifyRedirectUri,
-  getTokenFilePath
+  getSpotifyRedirectUri
 } from "../config.js";
 import { SpotifyMcpError } from "../errors.js";
+import { SharedStorageGuard } from "../storage/shared.js";
 import { createPkcePair, createState } from "./pkce.js";
 import { SpotifyOAuthClient } from "./oauth.js";
 import { TokenStore } from "./token-store.js";
@@ -27,7 +28,15 @@ async function main(): Promise<void> {
   assertSupportedRedirectUri(redirect);
 
   const oauthClient = new SpotifyOAuthClient(clientId, redirectUri);
-  const tokenStore = new TokenStore(getTokenFilePath());
+  const storage = getStorageConfig();
+  const sharedStorage = storage.sharedMode
+    ? new SharedStorageGuard(storage)
+    : null;
+  await sharedStorage?.claimMachineId();
+  const tokenStore = new TokenStore(
+    storage.tokenFile,
+    sharedStorage ? () => sharedStorage.assertWritable() : undefined
+  );
   const { codeVerifier, codeChallenge } = createPkcePair();
   const state = createState();
   const authorizeUrl = oauthClient.createAuthorizeUrl({
@@ -45,7 +54,7 @@ async function main(): Promise<void> {
 
   await tokenStore.write(tokens);
 
-  console.log(`Saved Spotify tokens to ${getTokenFilePath()}`);
+  console.log(`Saved Spotify tokens to ${storage.tokenFile}`);
 }
 
 /**
