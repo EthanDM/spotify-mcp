@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
-import { constants as fsConstants } from "node:fs";
+import { constants as fsConstants, existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -628,7 +628,16 @@ function rewriteArtifactPaths(
       const relative =
         relativeWithin(sourceArtifactsRoot, expandedPath) ??
         relativeWithin(sharedArtifactsRoot, expandedPath);
-      if (relative !== null) return path.join("artifacts", relative);
+      if (relative !== null) {
+        if (
+          !existsSync(path.join(sourceArtifactsRoot, relative)) &&
+          !existsSync(path.join(sharedArtifactsRoot, relative))
+        )
+          throw new Error(
+            `Referenced artifact does not exist: ${artifactPath}`
+          );
+        return path.join("artifacts", relative);
+      }
       throw new Error(
         `Unportable artifact path in playlist history: ${artifactPath}`
       );

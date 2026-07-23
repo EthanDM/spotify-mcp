@@ -51,6 +51,7 @@ export class SharedStorageGuard {
   async assertWritable(): Promise<void> {
     await assertSharedStorageAvailable(this.config);
     const installationId = await this.getInstallationId();
+    await assertNoSymlinksWithinRoot(this.sharedRoot, this.claimPath);
     let claim: MachineClaim;
     try {
       claim = JSON.parse(

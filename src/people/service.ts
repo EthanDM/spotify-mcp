@@ -87,7 +87,7 @@ export class PeopleProfileService {
     await this.store.writeProfile(profile, null);
     await this.rebuildContext(profile.id, profile, []);
 
-    return this.buildProfileResult(profile, 0);
+    return this.buildProfileResult(profile);
   }
 
   /**
@@ -157,7 +157,7 @@ export class PeopleProfileService {
     const history = await this.store.readPlaylistHistory(profileId);
     await this.rebuildContext(profileId, updated, history);
 
-    return this.buildProfileResult(updated, history.length);
+    return this.buildProfileResult(updated);
   }
 
   /**
@@ -183,8 +183,7 @@ export class PeopleProfileService {
    */
   async getProfile(profileId: string): Promise<PersonProfileResult> {
     const profile = await this.requireProfile(profileId);
-    const historyCount = await this.store.countPlaylistHistory(profileId);
-    return this.buildProfileResult(profile, historyCount);
+    return this.buildProfileResult(profile);
   }
 
   /**
@@ -221,7 +220,7 @@ export class PeopleProfileService {
     const history = await this.store.readPlaylistHistory(input.profileId);
     await this.rebuildContext(input.profileId, updated, history);
 
-    return this.buildProfileResult(updated, history.length);
+    return this.buildProfileResult(updated);
   }
 
   /**
@@ -332,15 +331,13 @@ export class PeopleProfileService {
   }
 
   private async buildProfileResult(
-    profile: PersonProfile,
-    playlistHistoryCount?: number
+    profile: PersonProfile
   ): Promise<PersonProfileResult> {
     const profileState = await this.store.readProfileVersioned(profile.id);
     if (!profileState.value)
       throw new Error(`Unknown person profile: ${profile.id}`);
-    const historyCount =
-      playlistHistoryCount ??
-      (await this.store.countPlaylistHistory(profile.id));
+    const history = await this.store.readPlaylistHistory(profile.id);
+    await this.rebuildContext(profile.id, profileState.value, history);
 
     return {
       profile: profileState.value,
@@ -352,7 +349,7 @@ export class PeopleProfileService {
       ),
       context_path: this.store.getContextPath(profile.id),
       artifacts_directory_path: getPersonArtifactsDirectoryPath(profile.id),
-      playlist_history_count: historyCount
+      playlist_history_count: history.length
     };
   }
 

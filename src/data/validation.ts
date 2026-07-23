@@ -13,6 +13,11 @@ export function validatePersonalizationEventDocument(
   value: unknown
 ): PersonalizationEvent {
   const event = requireObject(value, "personalization event");
+  requireKnownKeys(
+    event,
+    ["event_id", "machine_id", "schema_version", "ts", "type", "details"],
+    "personalization event"
+  );
   requireString(event.ts, "personalization event.ts");
   requireString(event.type, "personalization event.type");
   requireObject(event.details, "personalization event.details");
@@ -29,6 +34,28 @@ export function validatePersonPlaylistRecordDocument(
   value: unknown
 ): PersonPlaylistRecord {
   const record = requireObject(value, "playlist history record");
+  requireKnownKeys(
+    record,
+    [
+      "entry_id",
+      "recorded_at",
+      "playlist_id",
+      "playlist_name",
+      "playlist_url",
+      "brief",
+      "use_case",
+      "track_count",
+      "runtime_minutes",
+      "score",
+      "verdict",
+      "winning_traits",
+      "losing_traits",
+      "workflow_learning",
+      "artifact_paths",
+      "notes"
+    ],
+    "playlist history record"
+  );
   for (const field of ["entry_id", "recorded_at", "playlist_name"])
     requireString(record[field], `playlist history record.${field}`);
   for (const field of [
@@ -39,8 +66,21 @@ export function validatePersonPlaylistRecordDocument(
     "workflow_learning"
   ])
     requireNullableString(record[field], `playlist history record.${field}`);
-  for (const field of ["track_count", "runtime_minutes", "score"])
-    requireNullableNumber(record[field], `playlist history record.${field}`);
+  for (const field of ["track_count", "runtime_minutes"]) {
+    const amount = record[field];
+    if (
+      amount !== null &&
+      (typeof amount !== "number" || !Number.isInteger(amount) || amount < 1)
+    )
+      throw new Error(
+        `playlist history record.${field} must be a positive integer or null.`
+      );
+  }
+  if (
+    record.score !== null &&
+    (typeof record.score !== "number" || record.score < 0 || record.score > 10)
+  )
+    throw new Error("playlist history record.score must be 0-10 or null.");
   if (
     record.verdict !== null &&
     !["success", "mixed", "reject"].includes(String(record.verdict))
@@ -60,6 +100,22 @@ export function validatePreferencesDocument(
   value: unknown
 ): PersonalizationPreferences {
   const document = requireObject(value, "preferences");
+  requireKnownKeys(
+    document,
+    [
+      "preferred_artists",
+      "avoided_artists",
+      "preferred_genres",
+      "avoided_genres",
+      "preferred_traits",
+      "avoided_traits",
+      "discovery_level",
+      "notes",
+      "use_cases",
+      "updated_at"
+    ],
+    "preferences"
+  );
   for (const field of [
     "preferred_artists",
     "avoided_artists",
@@ -88,6 +144,31 @@ export function validatePersonProfileDocument(
   expectedId: string
 ): PersonProfile {
   const document = requireObject(value, "person profile");
+  requireKnownKeys(
+    document,
+    [
+      "id",
+      "name",
+      "relationship",
+      "age",
+      "age_range",
+      "created_at",
+      "updated_at",
+      "life_context",
+      "preferred_artists",
+      "avoided_artists",
+      "preferred_genres",
+      "avoided_genres",
+      "preferred_traits",
+      "avoided_traits",
+      "reference_playlists",
+      "reference_tracks",
+      "reference_artists",
+      "playlist_goals",
+      "notes"
+    ],
+    "person profile"
+  );
   if (document.id !== expectedId)
     throw new Error(`Person profile id must be ${expectedId}.`);
   for (const field of ["name", "created_at", "updated_at"])
@@ -128,6 +209,23 @@ function validateUseCase(value: unknown, label: string): void {
     value,
     label
   ) as PersonalizationUseCasePreferences;
+  requireKnownKeys(
+    useCase as unknown as Record<string, unknown>,
+    [
+      "preferred_artists",
+      "avoided_artists",
+      "preferred_genres",
+      "avoided_genres",
+      "preferred_traits",
+      "avoided_traits",
+      "playback_mode",
+      "ideal_track_count_range",
+      "discovery_level",
+      "notes",
+      "updated_at"
+    ],
+    label
+  );
   for (const field of [
     "preferred_artists",
     "avoided_artists",
@@ -157,6 +255,7 @@ function validateUseCase(value: unknown, label: string): void {
       useCase.ideal_track_count_range,
       `${label}.ideal_track_count_range`
     );
+    requireKnownKeys(range, ["min", "max"], `${label}.ideal_track_count_range`);
     if (typeof range.min !== "number" || typeof range.max !== "number")
       throw new Error(
         `${label}.ideal_track_count_range must contain numeric min and max.`
@@ -166,6 +265,11 @@ function validateUseCase(value: unknown, label: string): void {
 
 function validateReference(value: unknown, label: string): void {
   const reference = requireObject(value, label) as PersonTasteReference;
+  requireKnownKeys(
+    reference as unknown as Record<string, unknown>,
+    ["name", "spotify_id", "spotify_uri", "url", "note"],
+    label
+  );
   requireString(reference.name, `${label}.name`);
   for (const field of ["spotify_id", "spotify_uri", "url", "note"])
     requireNullableString(
@@ -179,16 +283,20 @@ function requireObject(value: unknown, label: string): Record<string, unknown> {
     throw new Error(`${label} must be an object.`);
   return value as Record<string, unknown>;
 }
+function requireKnownKeys(
+  value: Record<string, unknown>,
+  allowed: string[],
+  label: string
+): void {
+  const unknown = Object.keys(value).find((key) => !allowed.includes(key));
+  if (unknown) throw new Error(`${label}.${unknown} is not supported.`);
+}
 function requireString(value: unknown, label: string): void {
   if (typeof value !== "string") throw new Error(`${label} must be a string.`);
 }
 function requireNullableString(value: unknown, label: string): void {
   if (value !== null && typeof value !== "string")
     throw new Error(`${label} must be a string or null.`);
-}
-function requireNullableNumber(value: unknown, label: string): void {
-  if (value !== null && typeof value !== "number")
-    throw new Error(`${label} must be a number or null.`);
 }
 function requireStringArray(value: unknown, label: string): void {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string"))

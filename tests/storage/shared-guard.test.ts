@@ -103,6 +103,25 @@ describe("shared storage guard", () => {
     ).rejects.toThrow("must not contain symlinks");
   });
 
+  it("rejects a symlinked machine-claim directory after startup", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-claim-link-"));
+    const sharedRoot = path.join(root, "shared");
+    const localRoot = path.join(root, "local");
+    const outside = path.join(root, "outside");
+    await mkdir(sharedRoot);
+    const guard = new SharedStorageGuard(
+      config(localRoot, sharedRoot, "desktop")
+    );
+    await guard.claimMachineId();
+    await mkdir(outside);
+    await rm(path.join(sharedRoot, "machines"), { recursive: true });
+    await symlink(outside, path.join(sharedRoot, "machines"));
+
+    await expect(guard.assertWritable()).rejects.toThrow(
+      "must not contain symlinks"
+    );
+  });
+
   it("appends without following symlinks and restores private permissions", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-append-"));
     const file = path.join(root, "history.ndjson");
