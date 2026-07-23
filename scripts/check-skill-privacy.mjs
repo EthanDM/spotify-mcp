@@ -61,6 +61,10 @@ const forbiddenContent = [
       /SPOTIFY_(?:CLIENT_ID|CLIENT_SECRET|ACCESS_TOKEN|REFRESH_TOKEN)\s*=/
   },
   {
+    label: "AWS credential assignment",
+    pattern: /(?:^|\n)\s*aws_(?:access_key_id|secret_access_key)\s*=/i
+  },
+  {
     label: "stored Spotify token field",
     pattern:
       /"(?:accessToken|refreshToken|access_token|refresh_token|clientSecret|client_secret)"\s*:/

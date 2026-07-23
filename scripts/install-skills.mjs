@@ -45,22 +45,22 @@ const stagingRoot = apply
   ? await fs.mkdtemp(path.join(codexHome, ".spotify-mcp-skills-"))
   : null;
 
-if (stagingRoot) {
-  for (const skillName of skillNames) {
-    await fs.cp(
-      path.join(repositoryRoot, "skills", skillName),
-      path.join(stagingRoot, skillName),
-      {
-        recursive: true,
-        preserveTimestamps: true,
-        filter: shouldInstall
-      }
-    );
-  }
-}
-
 const replacements = [];
 try {
+  if (stagingRoot) {
+    for (const skillName of skillNames) {
+      await fs.cp(
+        path.join(repositoryRoot, "skills", skillName),
+        path.join(stagingRoot, skillName),
+        {
+          recursive: true,
+          preserveTimestamps: true,
+          filter: shouldInstall
+        }
+      );
+    }
+  }
+
   for (const skillName of skillNames) {
     const source = path.join(repositoryRoot, "skills", skillName);
     const destination = path.join(skillsRoot, skillName);
@@ -84,9 +84,9 @@ try {
       await fs.rename(replacement.backup, replacement.destination);
   }
   throw error;
+} finally {
+  if (stagingRoot) await fs.rm(stagingRoot, { recursive: true, force: true });
 }
-
-if (stagingRoot) await fs.rm(stagingRoot, { recursive: true });
 
 if (!apply) {
   process.stdout.write(

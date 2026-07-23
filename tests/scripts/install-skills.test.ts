@@ -79,6 +79,23 @@ describe("skill installer", () => {
     ).toEqual([]);
   });
 
+  it("removes staging files when the skills root is not a directory", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    await writeFile(path.join(codexHome, "skills"), "not a directory");
+
+    await expect(
+      execute("node", ["scripts/install-skills.mjs", "--apply"], {
+        env: { ...process.env, CODEX_HOME: codexHome }
+      })
+    ).rejects.toBeDefined();
+
+    expect(
+      (await readdir(codexHome)).filter((name) =>
+        name.startsWith(".spotify-mcp-skills-")
+      )
+    ).toEqual([]);
+  });
+
   it("excludes generated skill work from installed packages", async () => {
     const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
     const workDirectory = path.resolve(
@@ -277,6 +294,31 @@ describe("skill installer", () => {
           stderr: expect.stringContaining("stored Spotify token field")
         });
       }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects AWS credential assignments under arbitrary filenames", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "cloud-profile.ini"
+    );
+    try {
+      await writeFile(
+        fixture,
+        [
+          "[default]",
+          "aws_access_key_id = example",
+          "aws_secret_access_key = example"
+        ].join("\n")
+      );
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("AWS credential assignment")
+      });
     } finally {
       await rm(fixture, { force: true });
     }
