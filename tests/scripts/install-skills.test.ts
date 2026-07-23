@@ -403,6 +403,7 @@ describe("skill installer", () => {
       [".gem", "credentials"],
       [".m2", "settings.xml"],
       [".terraform.d", "credentials.tfrc.json"],
+      [".nuget", "NuGet", "NuGet.Config"],
       [".config", "pip", "pip.conf"],
       ["pip", "pip.ini"]
     ]) {
