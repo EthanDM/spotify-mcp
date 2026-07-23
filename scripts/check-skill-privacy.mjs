@@ -10,6 +10,7 @@ const repositoryRoot = path.resolve(
 const skillsRoot = path.join(repositoryRoot, "skills");
 const forbiddenFileNames = new Set([
   ".env",
+  ".npmrc",
   "auth.json",
   "interaction-log.ndjson",
   "playlist-history.ndjson",

@@ -73,6 +73,7 @@ If the user did not provide a use case, infer the playlist's likely purpose from
 
 5. Offer optional next actions.
 
+- If any local-file item is present, do not offer MCP dedupe or URI-based removal for the playlist; recommend manual cleanup in Spotify instead.
 - `spotify_dedupe_playlist` when duplicates are present.
 - `spotify_remove_playlist_items` for clearly weak candidates.
 - `spotify_reorder_playlist_items` when a specific sequence fix is obvious.

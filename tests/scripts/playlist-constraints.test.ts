@@ -38,7 +38,8 @@ describe("playlist constraint checker", () => {
   it("rejects unsupported playlist item URIs", async () => {
     for (const uri of [
       "spotify:local:artist:album:track",
-      "spotify:album:one"
+      "spotify:album:one",
+      "spotify:track:notarealid"
     ]) {
       const manifest = await writeManifest({
         target_track_count: 1,
@@ -56,8 +57,8 @@ describe("playlist constraint checker", () => {
 
   it("accepts an ordered build that starts after the opening phase", async () => {
     const tracks = [
-      track("spotify:track:one", "development"),
-      track("spotify:track:two", "close")
+      track("spotify:track:0000000000000000000001", "development"),
+      track("spotify:track:0000000000000000000002", "close")
     ];
     const manifest = await writeManifest({
       target_track_count: 2,
@@ -77,7 +78,10 @@ describe("playlist constraint checker", () => {
 
   it("validates and applies the artist-specific derivative flag", async () => {
     const tracks = [1, 2, 3, 4].map((index) => ({
-      ...track(`spotify:track:${index}`, "development"),
+      ...track(
+        `spotify:track:${String(index).padStart(22, "0")}`,
+        "development"
+      ),
       primary_artist: "Artist"
     }));
     const manifest = await writeManifest({
@@ -104,7 +108,10 @@ describe("playlist constraint checker", () => {
 
   it("requires mode fields and complete historical references", async () => {
     const missingMode = await writeManifest(
-      { target_track_count: 1, tracks: [track("spotify:track:one", "close")] },
+      {
+        target_track_count: 1,
+        tracks: [track("spotify:track:0000000000000000000001", "close")]
+      },
       false
     );
     await expect(
@@ -115,7 +122,7 @@ describe("playlist constraint checker", () => {
 
     const missingUris = await writeManifest({
       target_track_count: 1,
-      tracks: [track("spotify:track:one", "close")],
+      tracks: [track("spotify:track:0000000000000000000001", "close")],
       historical_references: [{ id: "reference" }]
     });
     await expect(
@@ -130,7 +137,7 @@ describe("playlist constraint checker", () => {
   it("rejects non-string comparison-history values", async () => {
     const invalidUris = await writeManifest({
       target_track_count: 1,
-      tracks: [track("spotify:track:one", "close")],
+      tracks: [track("spotify:track:0000000000000000000001", "close")],
       recent_comparable_builds: [
         { track_uris: [null], primary_artists: ["Artist"] }
       ]
@@ -145,10 +152,10 @@ describe("playlist constraint checker", () => {
 
     const invalidArtists = await writeManifest({
       target_track_count: 1,
-      tracks: [track("spotify:track:one", "close")],
+      tracks: [track("spotify:track:0000000000000000000001", "close")],
       recent_comparable_builds: [
         {
-          track_uris: ["spotify:track:history"],
+          track_uris: ["spotify:track:0000000000000000000002"],
           primary_artists: [null]
         }
       ]

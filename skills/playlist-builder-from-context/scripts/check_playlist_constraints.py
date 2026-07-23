@@ -134,7 +134,7 @@ def main() -> None:
         phase = track.get("phase")
         if not isinstance(uri, str) or not uri:
             fail(f"tracks[{index}].uri is required")
-        if not re.fullmatch(r"spotify:track:[A-Za-z0-9]+", uri):
+        if not re.fullmatch(r"spotify:track:[A-Za-z0-9]{22}", uri):
             fail(f"tracks[{index}].uri must be a supported Spotify track URI")
         if not isinstance(name, str) or not name:
             fail(f"tracks[{index}].name is required")
