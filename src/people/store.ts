@@ -2,7 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RevisionStore } from "../storage/revisions.js";
-import { ensureDirectoryWithinRoot } from "../storage/shared.js";
+import {
+  appendPrivateFile,
+  ensureDirectoryWithinRoot
+} from "../storage/shared.js";
 import type {
   PersonPlaylistRecord,
   PersonProfile,
@@ -206,10 +209,7 @@ export class PeopleStore {
     } else {
       await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
     }
-    await fs.appendFile(file, `${JSON.stringify(record)}\n`, {
-      encoding: "utf8",
-      mode: 0o600
-    });
+    await appendPrivateFile(file, `${JSON.stringify(record)}\n`);
   }
   async countPlaylistHistory(profileId: string): Promise<number> {
     return (await this.readPlaylistHistory(profileId)).length;

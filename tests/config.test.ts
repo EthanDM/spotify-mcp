@@ -116,8 +116,8 @@ describe("storage configuration", () => {
         config
       )
     ).toBe(path.join("artifacts", "people", "friend", "review.md"));
-    expect(toPortableArtifactPath("/tmp/unrelated.md", config)).toBe(
-      "/tmp/unrelated.md"
+    expect(() => toPortableArtifactPath("/tmp/unrelated.md", config)).toThrow(
+      "Shared artifact paths must be inside"
     );
   });
 });

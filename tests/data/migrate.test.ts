@@ -122,11 +122,17 @@ describe("shared data migration", () => {
     ).rejects.toThrow();
     const manifest = JSON.parse(
       await readFile(path.join(shared, "migrations", "desktop.json"), "utf8")
-    ) as { source_hashes: Record<string, string> };
+    ) as {
+      source_hashes: Record<string, string>;
+      source_root?: string;
+      destination_root?: string;
+    };
     expect(
       manifest.source_hashes["personalization/user-preferences.json"]
     ).toBeTruthy();
     expect(Object.keys(manifest.source_hashes)).not.toContain("auth.json");
+    expect(manifest.source_root).toBeUndefined();
+    expect(manifest.destination_root).toBeUndefined();
 
     const neoLocal = path.join(root, "neo-local");
     await mkdir(path.join(neoLocal, "personalization"), { recursive: true });
@@ -363,6 +369,24 @@ describe("shared data migration", () => {
       stderr: expect.stringContaining(
         "Artifact migration does not allow symlinks"
       )
+    });
+  });
+
+  it("rejects symlinked shared artifact destinations", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-artifact-destination-link-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const outside = path.join(root, "outside.md");
+    await mkdir(path.join(local, "artifacts"), { recursive: true });
+    await mkdir(path.join(shared, "artifacts"), { recursive: true });
+    await writeFile(path.join(local, "artifacts", "note.md"), "artifact");
+    await writeFile(outside, "artifact");
+    await symlink(outside, path.join(shared, "artifacts", "note.md"));
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("must not contain symlinks")
     });
   });
 

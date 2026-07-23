@@ -9,6 +9,8 @@ import { getStorageConfig } from "../config.js";
 import { normalizePreferences } from "../personalization/store.js";
 import { RevisionStore } from "../storage/revisions.js";
 import {
+  appendPrivateFile,
+  assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
   SharedStorageGuard
 } from "../storage/shared.js";
@@ -156,8 +158,6 @@ async function main(): Promise<void> {
     schema_version: 1,
     migrated_at: new Date().toISOString(),
     machine_id: config.machineId,
-    source_root: config.localRoot,
-    destination_root: config.sharedRoot,
     counts,
     source_hashes: await buildSourceHashes(config.localRoot)
   };
@@ -301,7 +301,8 @@ async function validateMigration(
   );
   await validateArtifactCollisions(
     path.join(localRoot, "artifacts"),
-    path.join(sharedRoot, "artifacts")
+    path.join(sharedRoot, "artifacts"),
+    sharedRoot
   );
   return warnings;
 }
@@ -373,7 +374,8 @@ async function validateNdjson(
 
 async function validateArtifactCollisions(
   source: string,
-  destination: string
+  destination: string,
+  sharedRoot: string
 ): Promise<void> {
   if (!(await exists(source))) return;
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
@@ -381,7 +383,9 @@ async function validateArtifactCollisions(
     const to = path.join(destination, entry.name);
     if (entry.isSymbolicLink())
       throw new Error(`Artifact migration does not allow symlinks: ${from}`);
-    if (entry.isDirectory()) await validateArtifactCollisions(from, to);
+    await assertNoSymlinksWithinRoot(sharedRoot, to);
+    if (entry.isDirectory())
+      await validateArtifactCollisions(from, to, sharedRoot);
     else if (entry.isFile()) {
       const target = await readBytes(to);
       if (target && hash(target) !== hash(await fs.readFile(from)))
@@ -482,10 +486,7 @@ async function migrateNdjson(
       sharedStorage.sharedRoot,
       path.dirname(destination)
     );
-    await fs.appendFile(destination, `${additions.join("\n")}\n`, {
-      encoding: "utf8",
-      mode: 0o600
-    });
+    await appendPrivateFile(destination, `${additions.join("\n")}\n`);
   }
   return added;
 }
@@ -545,6 +546,7 @@ async function copyArtifacts(
     const to = path.join(destination, entry.name);
     if (entry.isSymbolicLink())
       throw new Error(`Artifact migration does not allow symlinks: ${from}`);
+    await assertNoSymlinksWithinRoot(sharedStorage.sharedRoot, to);
     if (entry.isDirectory())
       copied += await copyArtifacts(from, to, sharedStorage);
     else if (entry.isFile()) {

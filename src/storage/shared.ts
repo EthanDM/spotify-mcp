@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -133,6 +134,52 @@ export async function ensureDirectoryWithinRoot(
         );
       if (!stats.isDirectory())
         throw new Error(`Shared storage path is not a directory: ${current}`);
+    }
+  }
+}
+
+export async function appendPrivateFile(
+  file: string,
+  value: string
+): Promise<void> {
+  const handle = await fs.open(
+    file,
+    constants.O_APPEND |
+      constants.O_CREAT |
+      constants.O_WRONLY |
+      constants.O_NOFOLLOW,
+    0o600
+  );
+  try {
+    await handle.writeFile(value, "utf8");
+    await handle.chmod(0o600);
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function assertNoSymlinksWithinRoot(
+  root: string,
+  target: string
+): Promise<void> {
+  const relative = path.relative(root, target);
+  if (
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  )
+    throw new Error(`Shared path escapes its configured root: ${target}`);
+  let current = root;
+  for (const segment of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    try {
+      if ((await fs.lstat(current)).isSymbolicLink())
+        throw new Error(
+          `Shared storage path must not contain symlinks: ${current}`
+        );
+    } catch (error) {
+      if (isMissing(error)) return;
+      throw error;
     }
   }
 }

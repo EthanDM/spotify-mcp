@@ -1,4 +1,13 @@
-import { access, mkdir, readFile, rm, symlink } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  mkdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import type { StorageConfig } from "../../src/config.js";
 import { PersonalizationStore } from "../../src/personalization/store.js";
 import {
+  appendPrivateFile,
   ensureDirectoryWithinRoot,
   SharedStorageGuard
 } from "../../src/storage/shared.js";
@@ -91,6 +101,23 @@ describe("shared storage guard", () => {
         path.join(sharedRoot, "people", "friend")
       )
     ).rejects.toThrow("must not contain symlinks");
+  });
+
+  it("appends without following symlinks and restores private permissions", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-append-"));
+    const file = path.join(root, "history.ndjson");
+    await writeFile(file, "first\n");
+    await chmod(file, 0o644);
+    await appendPrivateFile(file, "second\n");
+    expect(await readFile(file, "utf8")).toBe("first\nsecond\n");
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+
+    const outside = path.join(root, "outside.ndjson");
+    const linked = path.join(root, "linked.ndjson");
+    await writeFile(outside, "outside\n");
+    await symlink(outside, linked);
+    await expect(appendPrivateFile(linked, "escaped\n")).rejects.toBeTruthy();
+    expect(await readFile(outside, "utf8")).toBe("outside\n");
   });
 });
 

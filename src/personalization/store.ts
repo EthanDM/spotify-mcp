@@ -3,7 +3,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RevisionStore } from "../storage/revisions.js";
-import { ensureDirectoryWithinRoot } from "../storage/shared.js";
+import {
+  appendPrivateFile,
+  ensureDirectoryWithinRoot
+} from "../storage/shared.js";
 import type {
   PersonalizationContextResult,
   PersonalizationEvent,
@@ -134,10 +137,9 @@ export class PersonalizationStore {
         mode: 0o700
       });
     }
-    await fs.appendFile(
+    await appendPrivateFile(
       this.interactionLogPath,
-      `${JSON.stringify(persisted)}\n`,
-      { encoding: "utf8", mode: 0o600 }
+      `${JSON.stringify(persisted)}\n`
     );
   }
 

@@ -162,15 +162,22 @@ export function toPortableArtifactPath(
       : artifactPath.startsWith("~/")
         ? path.join(homedir(), artifactPath.slice(2))
         : artifactPath;
-  if (
-    !path.isAbsolute(expandedPath) ||
-    !isSameOrNested(config.artifactsDirectory, expandedPath)
-  )
-    return artifactPath;
-  return path.join(
-    "artifacts",
-    path.relative(config.artifactsDirectory, expandedPath)
-  );
+  if (path.isAbsolute(expandedPath)) {
+    if (!isSameOrNested(config.artifactsDirectory, expandedPath))
+      throw new Error(
+        `Shared artifact paths must be inside ${config.artifactsDirectory}.`
+      );
+    return path.join(
+      "artifacts",
+      path.relative(config.artifactsDirectory, expandedPath)
+    );
+  }
+  const normalized = path.normalize(expandedPath);
+  if (!isSameOrNested("artifacts", normalized))
+    throw new Error(
+      `Shared artifact paths must be relative to the shared artifacts directory.`
+    );
+  return normalized;
 }
 
 function resolveConfiguredPath(
