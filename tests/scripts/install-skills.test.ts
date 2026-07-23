@@ -409,6 +409,7 @@ describe("skill installer", () => {
       path.resolve("skills", "playlist-review", ".netrc"),
       path.resolve("skills", "playlist-review", ".node_repl_history"),
       path.resolve("skills", "playlist-review", ".npmrc"),
+      path.resolve("skills", "playlist-review", ".pgpass"),
       path.resolve("skills", "playlist-review", ".pry_history"),
       path.resolve("skills", "playlist-review", ".pypirc"),
       path.resolve("skills", "playlist-review", ".psql_history"),

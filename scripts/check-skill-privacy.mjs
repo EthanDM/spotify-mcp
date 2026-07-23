@@ -19,6 +19,7 @@ const forbiddenFileNames = new Set([
   ".netrc",
   ".node_repl_history",
   ".npmrc",
+  ".pgpass",
   ".pry_history",
   ".pypirc",
   ".psql_history",
