@@ -627,7 +627,8 @@ function addRecord(
   lineNumber: number,
   transform: (
     value: Record<string, unknown>
-  ) => Record<string, unknown> = identityRecord
+  ) => Record<string, unknown> = identityRecord,
+  expectedEventMachineId?: string
 ): void {
   let value: Record<string, unknown>;
   try {
@@ -639,6 +640,13 @@ function addRecord(
   const id = String(value[idField] ?? "");
   if (!id) throw new Error(`Missing ${idField} at ${file}:${lineNumber}.`);
   validateRecord(value, idField);
+  if (
+    expectedEventMachineId !== undefined &&
+    (value.machine_id !== expectedEventMachineId || value.schema_version !== 1)
+  )
+    throw new Error(
+      `Shared event metadata must use machine_id ${expectedEventMachineId} and schema_version 1 at ${file}:${lineNumber}.`
+    );
   const normalized = stable(comparisonValue(value, idField));
   const existing = records.get(id);
   if (existing && existing !== normalized)
@@ -658,7 +666,15 @@ async function addDestinationRecords(
       .split("\n")
       .filter((line) => line.trim());
     for (const [index, line] of lines.entries())
-      addRecord(records, line, idField, file, index + 1, transform);
+      addRecord(
+        records,
+        line,
+        idField,
+        file,
+        index + 1,
+        transform,
+        idField === "event_id" ? path.basename(file, ".ndjson") : undefined
+      );
   }
 }
 

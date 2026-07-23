@@ -919,6 +919,53 @@ describe("shared data migration", () => {
     });
   });
 
+  it.each([
+    [
+      "missing",
+      {
+        event_id: "existing",
+        ts: "2026-01-01T00:00:00.000Z",
+        type: "feedback",
+        details: {}
+      }
+    ],
+    [
+      "mismatched",
+      {
+        event_id: "existing",
+        machine_id: "laptop",
+        schema_version: 1,
+        ts: "2026-01-01T00:00:00.000Z",
+        type: "feedback",
+        details: {}
+      }
+    ]
+  ])("rejects %s destination event identity metadata", async (_, event) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-meta-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await mkdir(path.join(shared, "personalization", "events"), {
+      recursive: true
+    });
+    await writeFile(
+      path.join(local, "personalization", "interaction-log.ndjson"),
+      `${JSON.stringify({
+        ts: "2026-01-02T00:00:00.000Z",
+        type: "feedback",
+        details: {}
+      })}\n`
+    );
+    await writeFile(
+      path.join(shared, "personalization", "events", "desktop.ndjson"),
+      `${JSON.stringify(event)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("machine_id desktop and schema_version 1")
+    });
+  });
+
   it("rejects explicit unsupported event schema versions", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-schema-"));
     const local = path.join(root, "local");
