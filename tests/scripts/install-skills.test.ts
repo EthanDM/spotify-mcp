@@ -241,18 +241,17 @@ describe("skill installer", () => {
       "oauth-backup.json"
     );
     try {
-      await writeFile(
-        fixture,
-        JSON.stringify({
-          accessToken: "access-value",
-          refreshToken: "refresh-value"
-        })
-      );
-      await expect(
-        execute("node", ["scripts/check-skill-privacy.mjs"])
-      ).rejects.toMatchObject({
-        stderr: expect.stringContaining("stored Spotify token field")
-      });
+      for (const value of [
+        { accessToken: "access-value", refreshToken: "refresh-value" },
+        { access_token: "access-value", refresh_token: "refresh-value" }
+      ]) {
+        await writeFile(fixture, JSON.stringify(value));
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("stored Spotify token field")
+        });
+      }
     } finally {
       await rm(fixture, { force: true });
     }

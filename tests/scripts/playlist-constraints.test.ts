@@ -35,6 +35,25 @@ describe("playlist constraint checker", () => {
     );
   });
 
+  it("rejects unsupported playlist item URIs", async () => {
+    for (const uri of [
+      "spotify:local:artist:album:track",
+      "spotify:album:one"
+    ]) {
+      const manifest = await writeManifest({
+        target_track_count: 1,
+        tracks: [track(uri, "close")]
+      });
+      await expect(
+        execute("python3", [checker, manifest])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining(
+          "tracks[1].uri must be a supported Spotify track URI"
+        )
+      });
+    }
+  });
+
   it("accepts an ordered build that starts after the opening phase", async () => {
     const tracks = [
       track("spotify:track:one", "development"),
