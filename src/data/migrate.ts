@@ -12,6 +12,7 @@ import {
   appendPrivateFile,
   assertDirectoryIdentity,
   assertNoSymlinksWithinRoot,
+  type DirectoryIdentity,
   ensureDirectoryWithinRoot,
   readDirectoryIdentity,
   readFileNoFollow,
@@ -827,20 +828,22 @@ async function copyArtifacts(
         throw new Error(`Artifact collision with different content: ${to}`);
       if (!target) {
         await sharedStorage.assertWritable();
-        await ensureDirectoryWithinRoot(
-          sharedStorage.sharedRoot,
-          path.dirname(to)
+        const directory = path.dirname(to);
+        await ensureDirectoryWithinRoot(sharedStorage.sharedRoot, directory);
+        const directoryIdentity = await readDirectoryIdentity(directory);
+        const created = await writeBytesExclusive(
+          to,
+          sourceBytes,
+          directoryIdentity
         );
-        try {
-          await fs.writeFile(to, sourceBytes, { mode: 0o600, flag: "wx" });
-        } catch (error) {
-          if (!hasCode(error, "EEXIST")) throw error;
+        if (!created) {
+          await assertDirectoryIdentity(directory, directoryIdentity);
           const concurrentTarget = await readBytesNoFollow(to);
+          await assertDirectoryIdentity(directory, directoryIdentity);
           if (hash(concurrentTarget) !== hash(sourceBytes))
             throw new Error(`Artifact collision with different content: ${to}`);
           continue;
         }
-        await fs.chmod(to, 0o600);
         copied += 1;
       }
     } else
@@ -1036,6 +1039,39 @@ async function directoryNames(directory: string): Promise<string[]> {
     throw error;
   }
 }
+
+async function writeBytesExclusive(
+  file: string,
+  value: Uint8Array,
+  directoryIdentity: DirectoryIdentity
+): Promise<boolean> {
+  let handle: Awaited<ReturnType<typeof fs.open>>;
+  try {
+    handle = await fs.open(
+      file,
+      fsConstants.O_CREAT |
+        fsConstants.O_EXCL |
+        fsConstants.O_NONBLOCK |
+        fsConstants.O_WRONLY |
+        fsConstants.O_NOFOLLOW,
+      0o600
+    );
+  } catch (error) {
+    if (hasCode(error, "EEXIST")) return false;
+    throw error;
+  }
+  try {
+    if (!(await handle.stat()).isFile())
+      throw new Error(`Artifact destination must be a regular file: ${file}`);
+    await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
+    await handle.writeFile(value);
+    await handle.chmod(0o600);
+    await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
+    return true;
+  } finally {
+    await handle.close();
+  }
+}
 async function ndjsonFiles(
   directory: string,
   directoryIdentity: { device: number; inode: number } | null
@@ -1055,7 +1091,13 @@ async function ndjsonFiles(
     }
     return files.sort();
   } catch (error) {
-    if (isMissing(error)) return [];
+    if (isMissing(error)) {
+      if (directoryIdentity)
+        throw new Error(
+          `Shared migration stream directory disappeared after validation: ${directory}`
+        );
+      return [];
+    }
     throw error;
   }
 }
