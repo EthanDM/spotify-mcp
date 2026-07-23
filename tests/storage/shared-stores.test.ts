@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink } from "node:fs/promises";
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -31,6 +31,19 @@ describe("shared stores", () => {
     ).toEqual(["desktop", "neo"]);
     expect(await neo.countEvents()).toBe(2);
     expect(await desktop.getInteractionLogPaths()).toHaveLength(2);
+  });
+
+  it("rejects symlinked personalization stream directories", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-link-"));
+    const sharedRoot = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(path.join(sharedRoot, "personalization"), { recursive: true });
+    await mkdir(outside);
+    await symlink(outside, path.join(sharedRoot, "personalization", "events"));
+
+    await expect(
+      personalization(root, "desktop").getInteractionLogPaths()
+    ).rejects.toThrow("must not contain symlinks");
   });
 
   it("deduplicates migrated events whose only difference is machine provenance", async () => {
@@ -113,6 +126,22 @@ describe("shared stores", () => {
       (await desktop.readPlaylistHistory("friend")).map((item) => item.entry_id)
     ).toEqual(["one", "two"]);
     expect(await desktop.getPlaylistHistoryPaths("friend")).toHaveLength(2);
+  });
+
+  it("rejects symlinked playlist-history directories", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-history-link-"));
+    const sharedRoot = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(path.join(sharedRoot, "people", "friend"), { recursive: true });
+    await mkdir(outside);
+    await symlink(
+      outside,
+      path.join(sharedRoot, "people", "friend", "playlist-history")
+    );
+
+    await expect(
+      people(root, "desktop").getPlaylistHistoryPaths("friend")
+    ).rejects.toThrow("must not contain symlinks");
   });
 
   it("rejects stale person-profile updates through the same store", async () => {

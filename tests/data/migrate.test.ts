@@ -279,6 +279,38 @@ describe("shared data migration", () => {
     });
   });
 
+  it.each([
+    { preferred_artists: null },
+    { use_cases: false },
+    { use_cases: { workout: null } }
+  ])(
+    "rejects malformed fields in legacy preferences: %j",
+    async (malformed) => {
+      const root = await mkdtemp(
+        path.join(os.tmpdir(), "spotify-malformed-preferences-")
+      );
+      const local = path.join(root, "local");
+      await mkdir(path.join(local, "personalization"), { recursive: true });
+      await writeFile(
+        path.join(local, "personalization", "user-preferences.json"),
+        JSON.stringify({
+          preferred_artists: [],
+          avoided_artists: [],
+          preferred_genres: [],
+          avoided_genres: [],
+          discovery_level: null,
+          notes: [],
+          updated_at: null,
+          ...malformed
+        })
+      );
+
+      await expect(
+        runMigration(local, path.join(root, "shared"), "desktop")
+      ).rejects.toBeTruthy();
+    }
+  );
+
   it("uses content-stable event IDs across local roots", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-ids-"));
     const shared = path.join(root, "shared");

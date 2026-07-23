@@ -4,6 +4,7 @@ import path from "node:path";
 import { RevisionStore } from "../storage/revisions.js";
 import {
   appendPrivateFile,
+  assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
   readFileNoFollow
 } from "../storage/shared.js";
@@ -72,6 +73,10 @@ export class PeopleStore {
   async getPlaylistHistoryPaths(profileId: string): Promise<string[]> {
     if (!this.sharedMode) return [this.getPlaylistHistoryPath(profileId)];
     await this.assertSharedStorageAvailable!();
+    await assertNoSymlinksWithinRoot(
+      this.sharedRoot!,
+      path.join(this.getProfileDirectoryPath(profileId), "playlist-history")
+    );
     return listFiles(
       path.join(this.getProfileDirectoryPath(profileId), "playlist-history"),
       ".ndjson",

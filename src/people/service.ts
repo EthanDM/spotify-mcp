@@ -335,13 +335,17 @@ export class PeopleProfileService {
     profile: PersonProfile,
     playlistHistoryCount?: number
   ): Promise<PersonProfileResult> {
+    const profileState = await this.store.readProfileVersioned(profile.id);
+    if (!profileState.value)
+      throw new Error(`Unknown person profile: ${profile.id}`);
     const historyCount =
       playlistHistoryCount ??
       (await this.store.countPlaylistHistory(profile.id));
 
     return {
-      profile,
-      profile_path: await this.store.getProfileDocumentPath(profile.id),
+      profile: profileState.value,
+      profile_path:
+        profileState.revisionPath ?? this.store.getProfilePath(profile.id),
       playlist_history_path: this.store.getPlaylistHistoryPath(profile.id),
       playlist_history_paths: await this.store.getPlaylistHistoryPaths(
         profile.id

@@ -147,23 +147,23 @@ export class PersonalizationService {
     recentEventLimit: number;
   }): Promise<PersonalizationStateResult> {
     const currentContext = await this.getContext();
-    const [snapshot, preferences, recentEvents, eventCount] = await Promise.all(
-      [
+    const [snapshot, preferencesState, recentEvents, eventCount] =
+      await Promise.all([
         this.store.readSnapshot(),
-        this.store.readPreferences(),
+        this.store.readPreferencesVersioned(),
         this.store.readRecentEvents(input.recentEventLimit),
         this.store.countEvents()
-      ]
-    );
+      ]);
 
     return {
       snapshot_path: this.store.snapshotPath,
-      preferences_path: await this.store.getPreferencesDocumentPath(),
+      preferences_path:
+        preferencesState.revisionPath ?? this.store.preferencesPath,
       interaction_log_path: this.store.interactionLogPath,
       interaction_log_paths: await this.store.getInteractionLogPaths(),
       context_path: this.store.contextPath,
       snapshot,
-      preferences,
+      preferences: preferencesState.value,
       interaction_event_count: eventCount,
       recent_events: recentEvents,
       context: currentContext.context

@@ -421,9 +421,34 @@ function normalizeMigratedPreferences(
 ): ReturnType<typeof normalizePreferences> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return validatePreferencesDocument(value);
-  return validatePreferencesDocument(
-    normalizePreferences(value as ReturnType<typeof normalizePreferences>)
-  );
+  const document = value as Record<string, unknown>;
+  const defaults = normalizePreferences(null);
+  let useCases: unknown = {};
+  if (document.use_cases !== undefined) {
+    if (
+      !document.use_cases ||
+      typeof document.use_cases !== "object" ||
+      Array.isArray(document.use_cases)
+    )
+      useCases = document.use_cases;
+    else
+      useCases = Object.fromEntries(
+        Object.entries(document.use_cases).map(([name, useCase]) => {
+          if (!useCase || typeof useCase !== "object" || Array.isArray(useCase))
+            return [name, useCase];
+          const normalized = normalizePreferences({
+            ...defaults,
+            use_cases: { [name]: useCase }
+          } as ReturnType<typeof normalizePreferences>);
+          return [name, normalized.use_cases[name]];
+        })
+      );
+  }
+  return validatePreferencesDocument({
+    ...defaults,
+    ...document,
+    use_cases: useCases
+  });
 }
 
 async function migrateNdjson(

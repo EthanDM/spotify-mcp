@@ -5,6 +5,7 @@ import path from "node:path";
 import { RevisionStore } from "../storage/revisions.js";
 import {
   appendPrivateFile,
+  assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
   readFileNoFollow
 } from "../storage/shared.js";
@@ -65,6 +66,10 @@ export class PersonalizationStore {
   async getInteractionLogPaths(): Promise<string[]> {
     if (!this.sharedMode) return [this.interactionLogPath];
     await this.assertSharedStorageAvailable!();
+    await assertNoSymlinksWithinRoot(
+      this.sharedRoot!,
+      path.join(this.sharedDirectory, "events")
+    );
     return listFiles(
       path.join(this.sharedDirectory, "events"),
       ".ndjson",
