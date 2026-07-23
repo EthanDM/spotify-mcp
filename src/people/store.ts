@@ -149,7 +149,23 @@ export class PeopleStore {
 
   async readAllProfiles(): Promise<PersonProfile[]> {
     const profiles = await Promise.all(
-      (await this.listProfileIds()).map((id) => this.readProfile(id))
+      (await this.listProfileIds()).map(async (id) => {
+        const profile = await this.readProfile(id);
+        if (profile === null && this.sharedMode) {
+          try {
+            await fs.lstat(this.getProfileDirectoryPath(id));
+          } catch (error) {
+            if (isMissing(error)) {
+              await this.assertSharedStorageAvailable!();
+              throw new Error(
+                `Shared profile disappeared after enumeration: ${id}`
+              );
+            }
+            throw error;
+          }
+        }
+        return profile;
+      })
     );
     return profiles.filter(
       (profile): profile is PersonProfile => profile !== null

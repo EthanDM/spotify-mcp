@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +12,8 @@ import {
   getTokenFilePath,
   toPortableArtifactPath
 } from "../src/config.js";
+
+const execute = promisify(execFile);
 
 describe("storage configuration", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -185,6 +189,12 @@ describe("storage configuration", () => {
         config
       )
     ).toThrow("must not contain symlinks");
+
+    const stream = path.join(sharedRoot, "artifacts", "stream");
+    await execute("mkfifo", [stream]);
+    expect(() => toPortableArtifactPath(stream, config)).toThrow(
+      "must reference a regular file or directory"
+    );
   });
 
   it("rejects an artifacts directory linked outside the shared root", async () => {

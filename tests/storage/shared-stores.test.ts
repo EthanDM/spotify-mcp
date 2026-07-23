@@ -307,6 +307,23 @@ describe("shared stores", () => {
       "Person profile id must be bob"
     );
   });
+
+  it("fails when an enumerated shared profile disappears", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-gone-"));
+    const store = people(root, "desktop");
+    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    const profileIds = await store.listProfileIds();
+    vi.spyOn(store, "listProfileIds").mockImplementation(async () => {
+      await rm(store.getProfileDirectoryPath(profileIds[0]), {
+        recursive: true
+      });
+      return profileIds;
+    });
+
+    await expect(store.readAllProfiles()).rejects.toThrow(
+      "Shared profile disappeared after enumeration: friend"
+    );
+  });
 });
 
 function personalization(

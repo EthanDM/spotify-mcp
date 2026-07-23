@@ -220,6 +220,7 @@ export function toPortableArtifactPath(
       throw new Error(
         `Shared artifact paths must not traverse outside ${config.artifactsDirectory}.`
       );
+    assertRegularArtifactTarget(physicalArtifactPath);
     return path.join(
       "artifacts",
       path.relative(config.artifactsDirectory, expandedPath)
@@ -247,7 +248,16 @@ export function toPortableArtifactPath(
     throw new Error(
       `Shared artifact paths must not traverse outside ${config.artifactsDirectory}.`
     );
+  assertRegularArtifactTarget(physicalArtifactPath);
   return normalized;
+}
+
+function assertRegularArtifactTarget(artifactPath: string): void {
+  const stats = lstatSync(artifactPath);
+  if (!stats.isFile() && !stats.isDirectory())
+    throw new Error(
+      `Shared artifact paths must reference a regular file or directory: ${artifactPath}`
+    );
 }
 
 function assertNoSymlinkSegments(root: string, target: string): void {
