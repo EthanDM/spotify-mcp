@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 
 import { getStorageConfig } from "../config.js";
@@ -333,11 +334,7 @@ async function validateNdjson(
 ): Promise<void> {
   if (!(await exists(source))) return;
   const records = new Map<string, string>();
-  const destinationLines =
-    (await readText(destination))?.split("\n").filter((line) => line.trim()) ??
-    [];
-  for (const [index, line] of destinationLines.entries())
-    addRecord(records, line, idField, destination, index + 1, transform);
+  await addDestinationRecords(records, destination, idField, transform);
   const sourceLines = (await fs.readFile(source, "utf8"))
     .split("\n")
     .filter((line) => line.trim());
@@ -438,12 +435,8 @@ async function migrateNdjson(
   const sourceLines = (await fs.readFile(source, "utf8"))
     .split("\n")
     .filter((line) => line.trim());
-  const destinationLines =
-    (await readText(destination))?.split("\n").filter((line) => line.trim()) ??
-    [];
   const records = new Map<string, string>();
-  for (const [index, line] of destinationLines.entries())
-    addRecord(records, line, idField, destination, index + 1, transform);
+  await addDestinationRecords(records, destination, idField, transform);
   let added = 0;
   const additions: string[] = [];
   for (const [index, line] of sourceLines.entries()) {
@@ -522,6 +515,27 @@ function addRecord(
   records.set(id, normalized);
 }
 
+async function addDestinationRecords(
+  records: Map<string, string>,
+  destination: string,
+  idField: string,
+  transform: (value: Record<string, unknown>) => Record<string, unknown>
+): Promise<void> {
+  const files =
+    idField === "entry_id"
+      ? await ndjsonFiles(path.dirname(destination))
+      : (await exists(destination))
+        ? [destination]
+        : [];
+  for (const file of files) {
+    const lines = (await fs.readFile(file, "utf8"))
+      .split("\n")
+      .filter((line) => line.trim());
+    for (const [index, line] of lines.entries())
+      addRecord(records, line, idField, file, index + 1, transform);
+  }
+}
+
 async function copyArtifacts(
   source: string,
   destination: string,
@@ -571,11 +585,17 @@ function rewriteArtifactPaths(
   return {
     ...value,
     artifact_paths: value.artifact_paths.map((artifactPath) => {
-      if (typeof artifactPath !== "string" || !path.isAbsolute(artifactPath))
-        return artifactPath;
+      if (typeof artifactPath !== "string") return artifactPath;
+      const expandedPath =
+        artifactPath === "~"
+          ? homedir()
+          : artifactPath.startsWith("~/")
+            ? path.join(homedir(), artifactPath.slice(2))
+            : artifactPath;
+      if (!path.isAbsolute(expandedPath)) return artifactPath;
       const relative =
-        relativeWithin(sourceArtifactsRoot, artifactPath) ??
-        relativeWithin(sharedArtifactsRoot, artifactPath);
+        relativeWithin(sourceArtifactsRoot, expandedPath) ??
+        relativeWithin(sharedArtifactsRoot, expandedPath);
       if (relative !== null) return path.join("artifacts", relative);
       return artifactPath;
     })
@@ -628,6 +648,17 @@ async function directoryNames(directory: string): Promise<string[]> {
     return (await fs.readdir(directory, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
+      .sort();
+  } catch (error) {
+    if (isMissing(error)) return [];
+    throw error;
+  }
+}
+async function ndjsonFiles(directory: string): Promise<string[]> {
+  try {
+    return (await fs.readdir(directory, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".ndjson"))
+      .map((entry) => path.join(directory, entry.name))
       .sort();
   } catch (error) {
     if (isMissing(error)) return [];

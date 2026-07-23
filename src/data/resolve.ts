@@ -2,7 +2,7 @@ import "dotenv/config";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { getStorageConfig } from "../config.js";
+import { assertSharedStorageAvailable, getStorageConfig } from "../config.js";
 import { normalizePreferences } from "../personalization/store.js";
 import { RevisionStore } from "../storage/revisions.js";
 import { SharedStorageGuard } from "../storage/shared.js";
@@ -13,43 +13,33 @@ import {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const target = validateTarget(args);
   const config = getStorageConfig();
   if (!config.sharedRoot || !config.machineId)
     throw new Error("Shared storage configuration is required.");
   const sharedStorage = new SharedStorageGuard(config);
-  await sharedStorage.claimMachineId();
-  if (!args.document)
-    throw new Error(
-      "Use --document preferences or --document people/<profile-id>."
-    );
-  const isPreferences = args.document === "preferences";
-  const profileId = args.document.startsWith("people/")
-    ? args.document.slice(7)
-    : null;
-  if (!isPreferences && !profileId)
-    throw new Error(
-      "Use --document preferences or --document people/<profile-id>."
-    );
-  const revisionsDirectory = isPreferences
+  await assertSharedStorageAvailable(config);
+  const revisionsDirectory = target.isPreferences
     ? path.join(
         config.sharedRoot,
         "personalization",
         "preferences",
         "revisions"
       )
-    : path.join(config.sharedRoot, "people", profileId!, "revisions");
-  const normalize = isPreferences
+    : path.join(config.sharedRoot, "people", target.profileId!, "revisions");
+  const normalize = target.isPreferences
     ? (value: unknown) =>
         normalizePreferences(validatePreferencesDocument(value))
-    : (value: unknown) => validatePersonProfileDocument(value, profileId!);
+    : (value: unknown) =>
+        validatePersonProfileDocument(value, target.profileId!);
   const store = new RevisionStore<unknown>(
     revisionsDirectory,
-    args.document,
+    target.document,
     config.machineId,
     normalize,
     {
       root: sharedStorage.sharedRoot,
-      assertAvailable: () => sharedStorage.assertWritable()
+      assertAvailable: () => assertSharedStorageAvailable(config)
     }
   );
   const tips = await store.readTips();
@@ -98,13 +88,47 @@ async function main(): Promise<void> {
       throw new Error("--from-file must be absolute.");
     value = normalize(JSON.parse(await fs.readFile(args.fromFile, "utf8")));
   } else throw new Error("Resolution requires --from-revision or --from-file.");
-  const revision = await store.resolve(
+  await sharedStorage.claimMachineId();
+  const writeStore = new RevisionStore<unknown>(
+    revisionsDirectory,
+    target.document,
+    config.machineId,
+    normalize,
+    {
+      root: sharedStorage.sharedRoot,
+      assertAvailable: () => sharedStorage.assertWritable()
+    }
+  );
+  const revision = await writeStore.resolve(
     value,
     tips.map((tip) => tip.revision_id)
   );
   process.stdout.write(
     `Resolved ${args.document} as revision ${revision.revision_id}. Previous revisions were preserved.\n`
   );
+}
+
+function validateTarget(args: {
+  document?: string;
+  fromRevision?: string;
+  fromFile?: string;
+  apply: boolean;
+}): { document: string; isPreferences: boolean; profileId: string | null } {
+  if (!args.document)
+    throw new Error(
+      "Use --document preferences or --document people/<profile-id>."
+    );
+  const isPreferences = args.document === "preferences";
+  const profileId = args.document.startsWith("people/")
+    ? args.document.slice(7)
+    : null;
+  if (!isPreferences && !profileId)
+    throw new Error(
+      "Use --document preferences or --document people/<profile-id>."
+    );
+  if (args.fromFile && !path.isAbsolute(args.fromFile))
+    throw new Error("--from-file must be absolute.");
+  return { document: args.document, isPreferences, profileId };
 }
 
 function compareTips(values: unknown[]): Record<string, unknown[]> {

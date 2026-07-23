@@ -42,7 +42,12 @@ describe("shared data migration", () => {
     );
     const playlist = {
       ...playlistRecord("entry"),
-      artifact_paths: [path.join(local, "artifacts", "note.md")]
+      artifact_paths: [
+        `~/${path.relative(
+          os.homedir(),
+          path.join(local, "artifacts", "note.md")
+        )}`
+      ]
     };
     await writeFile(
       path.join(local, "people", "friend", "playlist-history.ndjson"),
@@ -409,6 +414,64 @@ describe("shared data migration", () => {
     await expect(
       runMigration(local, shared, "desktop", true)
     ).resolves.toBeTruthy();
+  });
+
+  it("rejects conflicting IDs from another machine stream", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-record-id-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const source = playlistRecord("entry");
+    const conflicting = { ...source, playlist_name: "Different" };
+    await mkdir(path.join(local, "people", "friend"), { recursive: true });
+    await mkdir(path.join(shared, "people", "friend", "playlist-history"), {
+      recursive: true
+    });
+    await writeFile(
+      path.join(local, "people", "friend", "playlist-history.ndjson"),
+      `${JSON.stringify(source)}\n`
+    );
+    await writeFile(
+      path.join(
+        shared,
+        "people",
+        "friend",
+        "playlist-history",
+        "other-machine.ndjson"
+      ),
+      `${JSON.stringify(conflicting)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("Conflicting entry_id entry")
+    });
+  });
+
+  it("inspects resolutions without claiming a machine ID", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-resolve-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    await mkdir(shared);
+
+    const result = await execute(
+      path.resolve("node_modules/.bin/tsx"),
+      ["src/data/resolve.ts", "--document", "preferences"],
+      {
+        env: {
+          ...process.env,
+          SPOTIFY_MCP_DATA_DIR: local,
+          SPOTIFY_MCP_SHARED_DATA_DIR: shared,
+          SPOTIFY_MCP_MACHINE_ID: "desktop"
+        }
+      }
+    );
+
+    expect(result.stdout).toContain("No files changed");
+    await expect(
+      readFile(path.join(local, "installation-id"))
+    ).rejects.toThrow();
+    await expect(
+      readFile(path.join(shared, "machines", "desktop.json"))
+    ).rejects.toThrow();
   });
 });
 
