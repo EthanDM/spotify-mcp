@@ -87,6 +87,12 @@ async function main(): Promise<void> {
     counts.preferences = 1;
   }
 
+  counts.artifacts = await copyArtifacts(
+    path.join(config.localRoot, "artifacts"),
+    path.join(config.sharedRoot, "artifacts"),
+    sharedStorage
+  );
+
   for (const profileId of await directoryNames(
     path.join(config.localRoot, "people")
   )) {
@@ -158,12 +164,6 @@ async function main(): Promise<void> {
     true,
     sharedStorage
   );
-  counts.artifacts = await copyArtifacts(
-    path.join(config.localRoot, "artifacts"),
-    path.join(config.sharedRoot, "artifacts"),
-    sharedStorage
-  );
-
   const manifest = {
     schema_version: 1,
     migrated_at: new Date().toISOString(),
