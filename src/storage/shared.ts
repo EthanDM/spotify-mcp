@@ -26,6 +26,7 @@ export class SharedStorageGuard {
 
   async claimMachineId(): Promise<void> {
     await assertSharedStorageAvailable(this.config);
+    await assertNoSymlinksWithinRoot(this.sharedRoot, this.sharedRoot);
     const installationId = await this.getInstallationId();
     const claimsDirectory = path.join(this.sharedRoot, "machines");
     await ensureDirectoryWithinRoot(this.sharedRoot, claimsDirectory);

@@ -3,7 +3,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RevisionStore } from "../storage/revisions.js";
-import { validatePreferencesDocument } from "../data/validation.js";
+import {
+  validatePersonalizationEventDocument,
+  validatePreferencesDocument
+} from "../data/validation.js";
 import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
@@ -215,20 +218,12 @@ export class PersonalizationStore {
         if (!line.trim()) continue;
         let event: PersonalizationEvent;
         try {
-          event = JSON.parse(line) as PersonalizationEvent;
+          event = validatePersonalizationEventDocument(JSON.parse(line));
         } catch {
-          throw new Error(
-            `Malformed personalization event at ${file}:${index + 1}.`
-          );
-        }
-        if (
-          typeof event.ts !== "string" ||
-          typeof event.type !== "string" ||
-          typeof event.details !== "object"
-        )
           throw new Error(
             `Invalid personalization event at ${file}:${index + 1}.`
           );
+        }
         const id = event.event_id ?? `legacy:${file}:${index + 1}`;
         const { machine_id: ignoredMachineId, ...semanticEvent } = event;
         void ignoredMachineId;

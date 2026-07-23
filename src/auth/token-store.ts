@@ -1,6 +1,11 @@
+import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import {
+  assertNoSymlinksWithinRoot,
+  readFileNoFollow
+} from "../storage/shared.js";
 import type { StoredTokens } from "../types.js";
 
 export type TokenStoreLike = {
@@ -24,7 +29,11 @@ export class TokenStore implements TokenStoreLike {
    */
   async read(): Promise<StoredTokens | null> {
     try {
-      const raw = await fs.readFile(this.filePath, "utf8");
+      await assertNoSymlinksWithinRoot(
+        path.dirname(this.filePath),
+        this.filePath
+      );
+      const raw = await readFileNoFollow(this.filePath);
       return JSON.parse(raw) as StoredTokens;
     } catch (error) {
       const isMissingFile =
@@ -49,10 +58,23 @@ export class TokenStore implements TokenStoreLike {
       recursive: true,
       mode: 0o700
     });
-    await fs.writeFile(this.filePath, JSON.stringify(tokens, null, 2), {
-      encoding: "utf8",
-      mode: 0o600
-    });
-    await fs.chmod(this.filePath, 0o600);
+    await assertNoSymlinksWithinRoot(
+      path.dirname(this.filePath),
+      this.filePath
+    );
+    const handle = await fs.open(
+      this.filePath,
+      constants.O_CREAT |
+        constants.O_TRUNC |
+        constants.O_WRONLY |
+        constants.O_NOFOLLOW,
+      0o600
+    );
+    try {
+      await handle.writeFile(JSON.stringify(tokens, null, 2), "utf8");
+      await handle.chmod(0o600);
+    } finally {
+      await handle.close();
+    }
   }
 }

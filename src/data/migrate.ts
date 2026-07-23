@@ -823,6 +823,8 @@ function stable(value: unknown): string {
 }
 async function directoryNames(directory: string): Promise<string[]> {
   try {
+    if ((await fs.lstat(directory)).isSymbolicLink())
+      throw new Error(`People migration does not allow symlinks: ${directory}`);
     const entries = await fs.readdir(directory, { withFileTypes: true });
     const names: string[] = [];
     for (const entry of entries) {

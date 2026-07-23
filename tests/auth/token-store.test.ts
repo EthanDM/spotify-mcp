@@ -33,4 +33,26 @@ describe("TokenStore", () => {
 
     await expect(store.read()).resolves.toBeNull();
   });
+
+  it("refuses to write through a symlinked token file", async () => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "spotify-mcp-token-link-")
+    );
+    const outside = path.join(tempDir, "outside.json");
+    const tokenFile = path.join(tempDir, "auth.json");
+    await fs.writeFile(outside, "outside");
+    await fs.symlink(outside, tokenFile);
+    const store = new TokenStore(tokenFile);
+
+    await expect(
+      store.write({
+        accessToken: "access",
+        refreshToken: "refresh",
+        expiresAt: 123,
+        scope: "playlist-read-private",
+        tokenType: "Bearer"
+      })
+    ).rejects.toThrow("must not contain symlinks");
+    await expect(fs.readFile(outside, "utf8")).resolves.toBe("outside");
+  });
 });

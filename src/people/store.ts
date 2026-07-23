@@ -2,7 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RevisionStore } from "../storage/revisions.js";
-import { validatePersonProfileDocument } from "../data/validation.js";
+import {
+  validatePersonPlaylistRecordDocument,
+  validatePersonProfileDocument
+} from "../data/validation.js";
 import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
@@ -100,10 +103,18 @@ export class PeopleStore {
       await assertNoSymlinksWithinRoot(this.sharedRoot!, this.sharedDirectory);
     }
     try {
-      return (await fs.readdir(this.sharedDirectory, { withFileTypes: true }))
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .sort();
+      const entries = await fs.readdir(this.sharedDirectory, {
+        withFileTypes: true
+      });
+      const profileIds: string[] = [];
+      for (const entry of entries) {
+        if (entry.isSymbolicLink())
+          throw new Error(
+            `Shared people directory must not contain symlinks: ${path.join(this.sharedDirectory, entry.name)}`
+          );
+        if (entry.isDirectory()) profileIds.push(entry.name);
+      }
+      return profileIds.sort();
     } catch (error) {
       if (isMissing(error)) {
         await this.assertSharedStorageAvailable?.();
@@ -179,17 +190,10 @@ export class PeopleStore {
         if (!line.trim()) continue;
         let value: PersonPlaylistRecord;
         try {
-          value = JSON.parse(line) as PersonPlaylistRecord;
+          value = validatePersonPlaylistRecordDocument(JSON.parse(line));
         } catch {
-          throw new Error(
-            `Malformed playlist history at ${file}:${index + 1}.`
-          );
-        }
-        if (
-          typeof value.entry_id !== "string" ||
-          typeof value.recorded_at !== "string"
-        )
           throw new Error(`Invalid playlist history at ${file}:${index + 1}.`);
+        }
         const canonical = canonicalJson(value);
         const existing = records.get(value.entry_id);
         if (existing && existing.raw !== canonical)

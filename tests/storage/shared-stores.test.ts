@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rename, symlink } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -44,6 +51,22 @@ describe("shared stores", () => {
     await expect(
       personalization(root, "desktop").getInteractionLogPaths()
     ).rejects.toThrow("must not contain symlinks");
+  });
+
+  it("rejects malformed shared personalization events", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-event-invalid-")
+    );
+    const events = path.join(root, "shared", "personalization", "events");
+    await mkdir(events, { recursive: true });
+    await writeFile(
+      path.join(events, "desktop.ndjson"),
+      `${JSON.stringify({ ts: "2026-01-01T00:00:00.000Z", type: "test", details: null })}\n`
+    );
+
+    await expect(
+      personalization(root, "desktop").readRecentEvents(10)
+    ).rejects.toThrow("Invalid personalization event");
   });
 
   it("deduplicates migrated events whose only difference is machine provenance", async () => {
@@ -128,6 +151,28 @@ describe("shared stores", () => {
     expect(await desktop.getPlaylistHistoryPaths("friend")).toHaveLength(2);
   });
 
+  it("rejects incomplete shared playlist-history records", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-history-invalid-")
+    );
+    const history = path.join(
+      root,
+      "shared",
+      "people",
+      "friend",
+      "playlist-history"
+    );
+    await mkdir(history, { recursive: true });
+    await writeFile(
+      path.join(history, "desktop.ndjson"),
+      `${JSON.stringify({ entry_id: "entry", recorded_at: "2026-01-01T00:00:00.000Z" })}\n`
+    );
+
+    await expect(
+      people(root, "desktop").readPlaylistHistory("friend")
+    ).rejects.toThrow("Invalid playlist history");
+  });
+
   it("rejects symlinked playlist-history directories", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-history-link-"));
     const sharedRoot = path.join(root, "shared");
@@ -151,6 +196,19 @@ describe("shared stores", () => {
     await mkdir(sharedRoot);
     await mkdir(outside);
     await symlink(outside, path.join(sharedRoot, "people"));
+
+    await expect(people(root, "desktop").listProfileIds()).rejects.toThrow(
+      "must not contain symlinks"
+    );
+  });
+
+  it("rejects symlinked profile entries while listing people", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-link-"));
+    const sharedPeople = path.join(root, "shared", "people");
+    const outside = path.join(root, "outside");
+    await mkdir(sharedPeople, { recursive: true });
+    await mkdir(outside);
+    await symlink(outside, path.join(sharedPeople, "friend"));
 
     await expect(people(root, "desktop").listProfileIds()).rejects.toThrow(
       "must not contain symlinks"
