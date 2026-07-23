@@ -87,7 +87,7 @@ export class SharedStorageGuard {
     if (this.installationId) return this.installationId;
     const file = path.join(this.config.localRoot, "installation-id");
     try {
-      this.installationId = (await fs.readFile(file, "utf8")).trim();
+      this.installationId = (await readFileNoFollow(file)).trim();
     } catch (error) {
       if (!isMissing(error)) throw error;
       await fs.mkdir(this.config.localRoot, { recursive: true, mode: 0o700 });
@@ -100,7 +100,7 @@ export class SharedStorageGuard {
       } catch (writeError) {
         if (!isAlreadyExists(writeError)) throw writeError;
       }
-      this.installationId = (await fs.readFile(file, "utf8")).trim();
+      this.installationId = (await readFileNoFollow(file)).trim();
     }
     if (!this.installationId)
       throw new Error(`Invalid empty installation identity: ${file}`);

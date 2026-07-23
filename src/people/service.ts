@@ -85,8 +85,6 @@ export class PeopleProfileService {
     });
 
     await this.store.writeProfile(profile, null);
-    await this.rebuildContext(profile.id, profile, []);
-
     return this.buildProfileResult(profile);
   }
 
@@ -154,9 +152,6 @@ export class PeopleProfileService {
     });
 
     await this.store.writeProfile(updated, existingState.revisionId);
-    const history = await this.store.readPlaylistHistory(profileId);
-    await this.rebuildContext(profileId, updated, history);
-
     return this.buildProfileResult(updated);
   }
 
@@ -217,9 +212,6 @@ export class PeopleProfileService {
     const updated = applyFeedback(profile, input);
 
     await this.store.writeProfile(updated, profileState.revisionId);
-    const history = await this.store.readPlaylistHistory(input.profileId);
-    await this.rebuildContext(input.profileId, updated, history);
-
     return this.buildProfileResult(updated);
   }
 

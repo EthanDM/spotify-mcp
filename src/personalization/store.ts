@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { RevisionStore } from "../storage/revisions.js";
+import { validatePreferencesDocument } from "../data/validation.js";
 import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
@@ -87,6 +88,7 @@ export class PersonalizationStore {
     return readJson(this.snapshotPath);
   }
   async writeSnapshot(snapshot: PersonalizationSnapshot): Promise<void> {
+    await assertNoSymlinksWithinRoot(this.localDirectory, this.snapshotPath);
     await writePrivateJson(this.snapshotPath, snapshot);
   }
 
@@ -107,7 +109,9 @@ export class PersonalizationStore {
       };
     const state = await this.preferenceRevisions().read();
     return {
-      value: normalizePreferences(state?.value ?? null),
+      value: state
+        ? normalizePreferences(validatePreferencesDocument(state.value))
+        : normalizePreferences(null),
       revisionId: state?.revisionId ?? null,
       revisionPath: state?.revisionPath ?? null
     };
@@ -170,6 +174,7 @@ export class PersonalizationStore {
     }
   }
   async writeContext(context: string): Promise<void> {
+    await assertNoSymlinksWithinRoot(this.localDirectory, this.contextPath);
     await writePrivate(this.contextPath, context);
   }
 

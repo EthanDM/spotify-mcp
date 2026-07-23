@@ -242,7 +242,9 @@ export class PeopleStore {
     }
   }
   async writeContext(profileId: string, context: string): Promise<void> {
-    await writePrivate(this.getContextPath(profileId), context);
+    const contextPath = this.getContextPath(profileId);
+    await assertNoSymlinksWithinRoot(this.localDirectory, contextPath);
+    await writePrivate(contextPath, context);
   }
 
   private profileRevisions(profileId: string): RevisionStore<PersonProfile> {

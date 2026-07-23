@@ -115,7 +115,9 @@ export async function assertSharedStorageAvailable(
       throw new Error("local and shared roots resolve to nested directories");
     for (const localPath of [
       config.tokenFile,
+      path.join(config.localRoot, "installation-id"),
       config.localPersonalizationDirectory,
+      path.join(config.localPersonalizationDirectory, "profile-snapshot.json"),
       config.localPeopleDirectory
     ]) {
       const physicalLocalPath = await resolvePhysicalPath(localPath);
