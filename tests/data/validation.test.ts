@@ -22,6 +22,12 @@ describe("conflict resolution document validation", () => {
     expect(() =>
       validatePersonProfileDocument({ ...profile(), name: " " }, "friend")
     ).toThrow("non-empty string");
+    expect(() =>
+      validatePersonProfileDocument(
+        { ...profile(), relationship: " " },
+        "friend"
+      )
+    ).toThrow("non-empty string or null");
   });
 
   it("rejects incomplete history and event records", () => {

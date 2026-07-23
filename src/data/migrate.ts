@@ -432,6 +432,8 @@ async function validateArtifactCollisions(
   sharedRoot: string
 ): Promise<void> {
   if (!(await exists(source))) return;
+  if ((await fs.lstat(source)).isSymbolicLink())
+    throw new Error(`Artifact migration does not allow symlinks: ${source}`);
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
@@ -639,6 +641,8 @@ async function copyArtifacts(
   sharedStorage: SharedStorageGuard
 ): Promise<number> {
   if (!(await exists(source))) return 0;
+  if ((await fs.lstat(source)).isSymbolicLink())
+    throw new Error(`Artifact migration does not allow symlinks: ${source}`);
   let copied = 0;
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
@@ -650,7 +654,7 @@ async function copyArtifacts(
       copied += await copyArtifacts(from, to, sharedStorage);
     else if (entry.isFile()) {
       const sourceBytes = await fs.readFile(from);
-      const target = await readBytes(to);
+      const target = await readBytesNoFollowIfExists(to);
       if (target && hash(target) !== hash(sourceBytes))
         throw new Error(`Artifact collision with different content: ${to}`);
       if (!target) {
@@ -863,6 +867,14 @@ async function readBytesNoFollow(file: string): Promise<Buffer> {
     return await handle.readFile();
   } finally {
     await handle.close();
+  }
+}
+async function readBytesNoFollowIfExists(file: string): Promise<Buffer | null> {
+  try {
+    return await readBytesNoFollow(file);
+  } catch (error) {
+    if (isMissing(error)) return null;
+    throw error;
   }
 }
 async function readText(file: string): Promise<string | null> {

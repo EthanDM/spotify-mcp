@@ -322,8 +322,8 @@ function requireCanonicalTimestamp(value: unknown, label: string): void {
     throw new Error(`${label} must be a canonical ISO timestamp.`);
 }
 function requireNullableString(value: unknown, label: string): void {
-  if (value !== null && typeof value !== "string")
-    throw new Error(`${label} must be a string or null.`);
+  if (value !== null && (typeof value !== "string" || !value.trim()))
+    throw new Error(`${label} must be a non-empty string or null.`);
 }
 function requireStringArray(value: unknown, label: string): void {
   if (

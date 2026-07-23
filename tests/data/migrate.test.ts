@@ -433,6 +433,25 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects a symlinked legacy artifacts root", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-artifact-root-link-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(local);
+    await mkdir(outside);
+    await writeFile(path.join(outside, "private.md"), "private");
+    await symlink(outside, path.join(local, "artifacts"));
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "Artifact migration does not allow symlinks"
+      )
+    });
+  });
+
   it("rejects symlinked shared artifact destinations", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-artifact-destination-link-")

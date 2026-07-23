@@ -2,15 +2,17 @@ import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   assertSharedStorageAvailable,
   getStorageConfig,
+  getTokenFilePath,
   toPortableArtifactPath
 } from "../src/config.js";
 
 describe("storage configuration", () => {
+  afterEach(() => vi.unstubAllEnvs());
   it("preserves the legacy local-only paths by default", () => {
     const config = getStorageConfig({});
     const root = path.join(os.homedir(), ".config", "spotify-mcp");
@@ -100,6 +102,21 @@ describe("storage configuration", () => {
     });
     await expect(assertSharedStorageAvailable(config)).rejects.toThrow(
       "resolve to nested directories"
+    );
+  });
+
+  it("refuses token paths when local storage resolves into shared storage", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-token-link-"));
+    const shared = path.join(root, "shared");
+    const localLink = path.join(root, "local-link");
+    await mkdir(shared);
+    await symlink(shared, localLink);
+    vi.stubEnv("SPOTIFY_MCP_DATA_DIR", localLink);
+    vi.stubEnv("SPOTIFY_MCP_SHARED_DATA_DIR", shared);
+    vi.stubEnv("SPOTIFY_MCP_MACHINE_ID", "desktop");
+
+    expect(() => getTokenFilePath()).toThrow(
+      "refusing to expose the token path"
     );
   });
 

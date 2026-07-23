@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { constants, lstatSync, realpathSync } from "node:fs";
+import { constants, existsSync, lstatSync, realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -132,7 +132,23 @@ function rejectExplicitEmpty(
 }
 
 export function getTokenFilePath(): string {
-  return getStorageConfig().tokenFile;
+  const config = getStorageConfig();
+  if (
+    config.sharedRoot &&
+    existsSync(config.localRoot) &&
+    existsSync(config.sharedRoot)
+  ) {
+    const physicalLocalRoot = realpathSync(config.localRoot);
+    const physicalSharedRoot = realpathSync(config.sharedRoot);
+    if (
+      isSameOrNested(physicalLocalRoot, physicalSharedRoot) ||
+      isSameOrNested(physicalSharedRoot, physicalLocalRoot)
+    )
+      throw new Error(
+        "Local and shared storage resolve to nested directories; refusing to expose the token path."
+      );
+  }
+  return config.tokenFile;
 }
 
 export function getPersonalizationDirectoryPath(): string {
