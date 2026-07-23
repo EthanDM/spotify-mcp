@@ -672,6 +672,8 @@ async function copyArtifacts(
   if (!(await exists(source))) return 0;
   if ((await fs.lstat(source)).isSymbolicLink())
     throw new Error(`Artifact migration does not allow symlinks: ${source}`);
+  await sharedStorage.assertWritable();
+  await ensureDirectoryWithinRoot(sharedStorage.sharedRoot, destination);
   let copied = 0;
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);

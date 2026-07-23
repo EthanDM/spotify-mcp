@@ -188,8 +188,7 @@ export class PersonalizationStore {
       this.preferencesPath,
       "personalization preferences",
       this.machineId,
-      (value) =>
-        normalizePreferences(value as PersonalizationPreferences | null),
+      (value) => normalizePreferences(validatePreferencesDocument(value)),
       this.sharedMode
         ? {
             root: this.sharedRoot!,

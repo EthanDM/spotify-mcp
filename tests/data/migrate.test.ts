@@ -5,6 +5,7 @@ import {
   mkdir,
   readdir,
   readFile,
+  stat,
   symlink,
   writeFile
 } from "node:fs/promises";
@@ -55,6 +56,7 @@ describe("shared data migration", () => {
       `${JSON.stringify(playlist)}\n`
     );
     await writeFile(path.join(local, "artifacts", "note.md"), "artifact");
+    await mkdir(path.join(local, "artifacts", "empty"));
     await writeFile(
       path.join(local, "artifacts", "profile-context.md"),
       "durable artifact"
@@ -105,6 +107,9 @@ describe("shared data migration", () => {
     expect(
       await readFile(path.join(shared, "artifacts", "note.md"), "utf8")
     ).toBe("artifact");
+    expect(
+      (await stat(path.join(shared, "artifacts", "empty"))).isDirectory()
+    ).toBe(true);
     const migratedPlaylist = JSON.parse(
       await readFile(
         path.join(
