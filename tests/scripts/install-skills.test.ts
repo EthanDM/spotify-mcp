@@ -1,0 +1,502 @@
+import { execFile } from "node:child_process";
+import {
+  access,
+  mkdtemp,
+  mkdir,
+  readdir,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+
+import { describe, expect, it } from "vitest";
+
+const execute = promisify(execFile);
+
+describe("skill installer", () => {
+  it("replaces installed packages instead of retaining stale files", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    const environment = { ...process.env, CODEX_HOME: codexHome };
+
+    await execute("node", ["scripts/install-skills.mjs", "--apply"], {
+      env: environment
+    });
+    const staleFile = path.join(
+      codexHome,
+      "skills",
+      "playlist-review",
+      "stale-file.md"
+    );
+    await writeFile(staleFile, "stale");
+
+    await execute("node", ["scripts/install-skills.mjs", "--apply"], {
+      env: environment
+    });
+
+    await expect(access(staleFile)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      access(path.join(codexHome, "skills", "playlist-review", "SKILL.md"))
+    ).resolves.toBeUndefined();
+  });
+
+  it("replaces dangling destination symlinks without losing the entry", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    const destination = path.join(codexHome, "skills", "playlist-review");
+    await mkdir(path.dirname(destination), { recursive: true });
+    await symlink(path.join(codexHome, "missing-skill"), destination);
+
+    await execute("node", ["scripts/install-skills.mjs", "--apply"], {
+      env: { ...process.env, CODEX_HOME: codexHome }
+    });
+
+    await expect(
+      access(path.join(destination, "SKILL.md"))
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects a dangling skills-root link before creating staging files", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    await symlink(
+      path.join(codexHome, "missing-skills"),
+      path.join(codexHome, "skills")
+    );
+
+    await expect(
+      execute("node", ["scripts/install-skills.mjs", "--apply"], {
+        env: { ...process.env, CODEX_HOME: codexHome }
+      })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("must not be a dangling symbolic link")
+    });
+
+    expect(
+      (await readdir(codexHome)).filter((name) =>
+        name.startsWith(".spotify-mcp-skills-")
+      )
+    ).toEqual([]);
+  });
+
+  it("removes staging files when the skills root is not a directory", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    await writeFile(path.join(codexHome, "skills"), "not a directory");
+
+    await expect(
+      execute("node", ["scripts/install-skills.mjs", "--apply"], {
+        env: { ...process.env, CODEX_HOME: codexHome }
+      })
+    ).rejects.toBeDefined();
+
+    expect(
+      (await readdir(codexHome)).filter((name) =>
+        name.startsWith(".spotify-mcp-skills-")
+      )
+    ).toEqual([]);
+  });
+
+  it("excludes generated skill work from installed packages", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    const workDirectory = path.resolve(
+      "skills",
+      "playlist-review",
+      ".skill-work"
+    );
+    await mkdir(workDirectory, { recursive: true });
+    await writeFile(
+      path.join(workDirectory, "private.json"),
+      "spotify:track:generated"
+    );
+    try {
+      await execute("node", ["scripts/install-skills.mjs", "--apply"], {
+        env: { ...process.env, CODEX_HOME: codexHome }
+      });
+      await expect(
+        access(
+          path.join(
+            codexHome,
+            "skills",
+            "playlist-review",
+            ".skill-work",
+            "private.json"
+          )
+        )
+      ).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).resolves.toMatchObject({
+        stdout: expect.stringContaining("Skill privacy check passed")
+      });
+    } finally {
+      await rm(workDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects tracked generated skill work", async () => {
+    const fixtureRelative = path.join(
+      "skills",
+      "playlist-review",
+      ".skill-work",
+      "tracked.json"
+    );
+    const fixture = path.resolve(fixtureRelative);
+    await mkdir(path.dirname(fixture), { recursive: true });
+    await writeFile(fixture, "generated private data");
+    try {
+      await execute("git", ["add", "-f", "--", fixtureRelative]);
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("tracked generated paths are forbidden")
+      });
+    } finally {
+      await execute("git", ["rm", "--cached", "-f", "--", fixtureRelative]);
+      await rm(path.dirname(fixture), { recursive: true, force: true });
+    }
+  });
+
+  it("runs the privacy gate before installing skill contents", async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), "spotify-skills-"));
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      ".env.installer-test"
+    );
+    try {
+      await writeFile(fixture, "UNRECOGNIZED_SECRET=value");
+      await expect(
+        execute("node", ["scripts/install-skills.mjs", "--apply"], {
+          env: { ...process.env, CODEX_HOME: codexHome }
+        })
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("forbidden runtime-state filename")
+      });
+      await expect(
+        access(path.join(codexHome, "skills", "playlist-review"))
+      ).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects CODEX_HOME paths that resolve to the filesystem root", async () => {
+    await expect(
+      execute("node", ["scripts/install-skills.mjs"], {
+        env: { ...process.env, CODEX_HOME: "/tmp/.." }
+      })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("safe absolute directory")
+    });
+
+    const directory = await mkdtemp(path.join(os.tmpdir(), "spotify-link-"));
+    const rootLink = path.join(directory, "root");
+    await symlink(path.parse(directory).root, rootLink);
+    await expect(
+      execute("node", ["scripts/install-skills.mjs"], {
+        env: { ...process.env, CODEX_HOME: rootLink }
+      })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("safe absolute directory")
+    });
+
+    const codexHome = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-skills-link-")
+    );
+    await symlink(path.parse(codexHome).root, path.join(codexHome, "skills"));
+    await expect(
+      execute("node", ["scripts/install-skills.mjs"], {
+        env: { ...process.env, CODEX_HOME: codexHome }
+      })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "skills must resolve inside the configured Codex home"
+      )
+    });
+  });
+
+  it("rejects Linux and Windows personal home paths", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "privacy-path-fixture.md"
+    );
+    try {
+      await writeFile(
+        fixture,
+        [
+          "/home/alice/private/file",
+          String.raw`C:\Users\alice\private`,
+          String.raw`C:\users\alice\private`,
+          "/Users/alice",
+          "/home/alice",
+          String.raw`C:\Users\alice`
+        ].join("\n")
+      );
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("personal home path")
+      });
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects standard private-key PEM headers", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "privacy-key-fixture.md"
+    );
+    try {
+      for (const header of [
+        "-----BEGIN DSA PRIVATE KEY-----",
+        "-----BEGIN ENCRYPTED PRIVATE KEY-----"
+      ]) {
+        await writeFile(fixture, header);
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("private key")
+        });
+      }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects fine-grained GitHub tokens and symbolic links", async () => {
+    const tokenFixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "privacy-token-fixture.md"
+    );
+    const linkFixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "privacy-link-fixture"
+    );
+    try {
+      await writeFile(tokenFixture, "github_pat_example_credential");
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("GitHub token")
+      });
+      await rm(tokenFixture, { force: true });
+      await symlink("/home/alice/private/profile.json", linkFixture);
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("symbolic links are forbidden")
+      });
+    } finally {
+      await rm(tokenFixture, { force: true });
+      await rm(linkFixture, { force: true });
+    }
+  });
+
+  it("rejects OpenAI API keys", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "openai-key-fixture.md"
+    );
+    try {
+      for (const token of [
+        "sk-proj-abcdefghijklmnopqrstuvwxyz123456",
+        "sk-svcacct-abcdefghijklmnopqrstuvwxyz123456",
+        "sk-abcdefghijklmnopqrstuvwxyz123456"
+      ]) {
+        await writeFile(fixture, token);
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("OpenAI API key")
+        });
+      }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects stored Spotify token fields under arbitrary filenames", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "oauth-backup.json"
+    );
+    try {
+      for (const value of [
+        { accessToken: "access-value", refreshToken: "refresh-value" },
+        { access_token: "access-value", refresh_token: "refresh-value" },
+        { client_secret: "secret-value" },
+        { clientSecret: "secret-value" }
+      ]) {
+        await writeFile(fixture, JSON.stringify(value));
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("stored Spotify token field")
+        });
+      }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects AWS credential assignments under arbitrary filenames", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "cloud-profile.ini"
+    );
+    try {
+      await writeFile(
+        fixture,
+        [
+          "[default]",
+          "aws_access_key_id = example",
+          "aws_secret_access_key = example"
+        ].join("\n")
+      );
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("AWS credential assignment")
+      });
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects Yarn credential assignments", async () => {
+    const fixture = path.resolve("skills", "playlist-review", ".yarnrc.yml");
+    try {
+      for (const assignment of [
+        "npmAuthToken: npm_example",
+        "npmAuthIdent: user:password"
+      ]) {
+        await writeFile(fixture, assignment);
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("Yarn credential assignment")
+        });
+      }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects case-insensitive Spotify credential assignments", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "spotify-credentials.txt"
+    );
+    try {
+      for (const assignment of [
+        "spotify_client_secret=secret",
+        "Spotify_Access_Token=token"
+      ]) {
+        await writeFile(fixture, assignment);
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("Spotify credential assignment")
+        });
+      }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
+  it("rejects credential-store paths", async () => {
+    for (const pathSegments of [
+      [".azure", "msal_token_cache.json"],
+      [".docker", "config.json"],
+      [".kube", "config"],
+      [".cargo", "credentials"],
+      [".cargo", "credentials.toml"],
+      [".gem", "credentials"],
+      [".gradle", "gradle.properties"],
+      [".m2", "settings.xml"],
+      [".terraform.d", "credentials.tfrc.json"],
+      [".config", "gcloud", "access_tokens.db"],
+      [".config", "gcloud", "credentials.db"],
+      [".config", "glab-cli", "config.yml"],
+      [".cache", "huggingface", "token"],
+      [".nuget", "NuGet", "NuGet.Config"],
+      [".config", "pip", "pip.conf"],
+      ["pip", "pip.ini"]
+    ]) {
+      const fixture = path.resolve(
+        "skills",
+        "playlist-review",
+        ...pathSegments
+      );
+      const fixtureDirectory = path.dirname(fixture);
+      try {
+        await mkdir(fixtureDirectory, { recursive: true });
+        await writeFile(fixture, "credential: secret");
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("forbidden runtime-state filename")
+        });
+      } finally {
+        await rm(fixtureDirectory, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("rejects environment variants and generated personalization context", async () => {
+    const fixtures = [
+      path.resolve("skills", "playlist-review", ".env.production"),
+      path.resolve("skills", "playlist-review", ".ENV.production"),
+      path.resolve("skills", "playlist-review", ".ash_history"),
+      path.resolve("skills", "playlist-review", ".bash_history"),
+      path.resolve("skills", "playlist-review", ".git-credentials"),
+      path.resolve("skills", "playlist-review", ".irb_history"),
+      path.resolve("skills", "playlist-review", ".ksh_history"),
+      path.resolve("skills", "playlist-review", ".my.cnf"),
+      path.resolve("skills", "playlist-review", ".mylogin.cnf"),
+      path.resolve("skills", "playlist-review", ".mysql_history"),
+      path.resolve("skills", "playlist-review", ".netrc"),
+      path.resolve("skills", "playlist-review", ".node_repl_history"),
+      path.resolve("skills", "playlist-review", ".npmrc"),
+      path.resolve("skills", "playlist-review", ".pgpass"),
+      path.resolve("skills", "playlist-review", ".pry_history"),
+      path.resolve("skills", "playlist-review", ".pypirc"),
+      path.resolve("skills", "playlist-review", ".psql_history"),
+      path.resolve("skills", "playlist-review", ".python_history"),
+      path.resolve("skills", "playlist-review", ".rediscli_history"),
+      path.resolve("skills", "playlist-review", ".Rhistory"),
+      path.resolve("skills", "playlist-review", ".sh_history"),
+      path.resolve("skills", "playlist-review", ".sqlite_history"),
+      path.resolve("skills", "playlist-review", ".zsh_history"),
+      path.resolve("skills", "playlist-review", "_netrc"),
+      path.resolve("skills", "playlist-review", "AUTH.JSON"),
+      path.resolve("skills", "playlist-review", "ConsoleHost_history.txt"),
+      path.resolve("skills", "playlist-review", "fish_history"),
+      path.resolve("skills", "playlist-review", "personalization-context.md")
+    ];
+    try {
+      for (const fixture of fixtures) {
+        await writeFile(fixture, "private runtime value");
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("forbidden runtime-state filename")
+        });
+        await rm(fixture, { force: true });
+      }
+    } finally {
+      await Promise.all(
+        fixtures.map((fixture) => rm(fixture, { force: true }))
+      );
+    }
+  });
+});

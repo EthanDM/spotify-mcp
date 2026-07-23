@@ -71,6 +71,7 @@ The smoke test uses a real Spotify account and creates temporary playlists. Clea
 - Shared mode splits local auth/generated state from iCloud-backed durable state. Never route `auth.json`, snapshots, generated contexts, `.env`, or MCP configuration into the shared root.
 - Each shared installation must use a unique stable `SPOTIFY_MCP_MACHINE_ID`; append only to that machine's own event and playlist-history streams.
 - Use unique or timestamped artifact names when both Macs may create outputs.
+- Treat `skills/` as the canonical source for the bundled Codex skills. Run `pnpm skills:check` after changing them, and never add credentials, runtime state, generated artifacts, or user-specific examples.
 - Update tests alongside behavior changes.
 - If Spotify behavior changes, prefer adjusting normalization and request handling over spreading special cases through call sites.
 

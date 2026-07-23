@@ -13,6 +13,7 @@ import {
   assertDirectoryIdentity,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
+  readBytesNoFollow,
   readDirectoryIdentity,
   readFileNoFollow,
   SharedStorageGuard,
@@ -812,6 +813,7 @@ async function copyArtifacts(
     throw new Error(`Artifact migration does not allow symlinks: ${source}`);
   await sharedStorage.assertWritable();
   await ensureDirectoryWithinRoot(sharedStorage.sharedRoot, destination);
+  const destinationIdentity = await readDirectoryIdentity(destination);
   let copied = 0;
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
     const from = path.join(source, entry.name);
@@ -823,7 +825,7 @@ async function copyArtifacts(
       copied += await copyArtifacts(from, to, sharedStorage);
     else if (entry.isFile()) {
       const sourceBytes = await readBytesNoFollow(from);
-      const target = await readBytesNoFollowIfExists(to);
+      const target = await readBytesNoFollowIfExists(to, destinationIdentity);
       if (target && hash(target) !== hash(sourceBytes))
         throw new Error(`Artifact collision with different content: ${to}`);
       if (!target) {
@@ -838,7 +840,10 @@ async function copyArtifacts(
         );
         if (!created) {
           await assertDirectoryIdentity(directory, directoryIdentity);
-          const concurrentTarget = await readBytesNoFollow(to);
+          const concurrentTarget = await readBytesNoFollow(
+            to,
+            directoryIdentity
+          );
           await assertDirectoryIdentity(directory, directoryIdentity);
           if (hash(concurrentTarget) !== hash(sourceBytes))
             throw new Error(`Artifact collision with different content: ${to}`);
@@ -1076,23 +1081,12 @@ async function readJson<T>(file: string): Promise<T | undefined> {
 async function readBytes(file: string): Promise<Buffer | null> {
   return readBytesNoFollowIfExists(file);
 }
-async function readBytesNoFollow(file: string): Promise<Buffer> {
-  const handle = await fs.open(
-    file,
-    fsConstants.O_RDONLY | fsConstants.O_NONBLOCK | fsConstants.O_NOFOLLOW
-  );
+async function readBytesNoFollowIfExists(
+  file: string,
+  directoryIdentity?: { device: number; inode: number }
+): Promise<Buffer | null> {
   try {
-    const stats = await handle.stat();
-    if (!stats.isFile())
-      throw new Error(`Shared artifact destination is not a file: ${file}`);
-    return await handle.readFile();
-  } finally {
-    await handle.close();
-  }
-}
-async function readBytesNoFollowIfExists(file: string): Promise<Buffer | null> {
-  try {
-    return await readBytesNoFollow(file);
+    return await readBytesNoFollow(file, directoryIdentity);
   } catch (error) {
     if (isMissing(error)) return null;
     throw error;

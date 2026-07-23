@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playlist Review"
+  short_description: "Review and tighten a Spotify playlist"
+  default_prompt: "Use $playlist-review to inspect this Spotify playlist, judge whether it works for its intended use case, identify the weakest tracks or sequencing issues, and propose concrete keep/remove/reorder recommendations before making any mutations."

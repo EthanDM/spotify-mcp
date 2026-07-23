@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playlist Builder From Context"
+  short_description: "Build personalized, neutral, or profile playlists"
+  default_prompt: "Use $playlist-builder-from-context to turn a short prompt into a verified Spotify playlist in personalized-self, taste-neutral-self, or saved-person-profile mode."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playlist Radio From Seed"
+  short_description: "Build a focused radio playlist from one song"
+  default_prompt: "Use $playlist-radio-from-seed to create a balanced radio playlist from this Spotify song."

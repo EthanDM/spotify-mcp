@@ -57,6 +57,12 @@ async function main(): Promise<void> {
 
   const [trackA, trackB, trackC] = seedTracks;
 
+  logStep("get track");
+  const exactTrack = await client.getTrack(trackA.id);
+  if (exactTrack.uri !== trackA.uri) {
+    throw new Error("Exact track lookup did not return the requested seed.");
+  }
+
   logStep("create playlists");
   const target = await client.createPlaylist({
     name: `${smokePrefix} target`,

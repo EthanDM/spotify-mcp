@@ -14,6 +14,7 @@ This repository is a local Spotify MCP server for Codex. Keep changes simple, ex
 - Keep generated user-specific artifacts out of the repo. They belong under `~/.config/spotify-mcp/artifacts/` unless they are deliberate example docs or test fixtures.
 - In shared mode, keep OAuth tokens, snapshots, generated contexts, environment files, and MCP configuration local. Only durable preferences, people data, per-machine histories, and artifacts belong under the configured shared root.
 - Never make two Macs share a machine id or append to the same history stream.
+- Keep bundled Codex skills under `skills/` free of personal names, credentials, runtime state, generated artifacts, and hardcoded machine-specific paths. Run `pnpm skills:check` after changing them.
 
 ## Verification
 

@@ -249,6 +249,28 @@ export async function readFileNoFollow(file: string): Promise<string> {
   }
 }
 
+export async function readBytesNoFollow(
+  file: string,
+  directoryIdentity?: DirectoryIdentity
+): Promise<Buffer> {
+  const handle = await fs.open(
+    file,
+    constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW
+  );
+  try {
+    if (!(await handle.stat()).isFile())
+      throw new Error(`Storage path must be a regular file: ${file}`);
+    if (directoryIdentity)
+      await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
+    const value = await handle.readFile();
+    if (directoryIdentity)
+      await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
+    return value;
+  } finally {
+    await handle.close();
+  }
+}
+
 export async function assertNoSymlinksWithinRoot(
   root: string,
   target: string

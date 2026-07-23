@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playlist Builder Quality Loop"
+  short_description: "Audit playlists and improve the builder safely"
+  default_prompt: "Use $playlist-builder-quality-loop to review this generated Spotify playlist, rate it, and determine whether its builder needs a reusable improvement."

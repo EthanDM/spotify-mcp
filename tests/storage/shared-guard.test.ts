@@ -24,6 +24,7 @@ import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
+  readBytesNoFollow,
   readDirectoryIdentity,
   readFileNoFollow,
   SharedStorageGuard
@@ -238,6 +239,39 @@ describe("shared storage guard", () => {
     await expect(readFileNoFollow(fifo)).rejects.toThrow(
       "must be a regular file"
     );
+  });
+
+  it("rejects a byte read when its directory changes during the read", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-read-swap-"));
+    const directory = path.join(root, "artifacts");
+    const original = path.join(root, "original-artifacts");
+    const replacement = path.join(root, "replacement-artifacts");
+    const file = path.join(directory, "note.md");
+    await mkdir(directory);
+    await mkdir(replacement);
+    await writeFile(file, "artifact");
+    await writeFile(path.join(replacement, "note.md"), "artifact");
+    const directoryIdentity = await readDirectoryIdentity(directory);
+    const openFile = fs.open.bind(fs);
+    const open = vi
+      .spyOn(fs, "open")
+      .mockImplementationOnce(async (...args) => {
+        const handle = await openFile(...args);
+        const read = handle.readFile.bind(handle);
+        vi.spyOn(handle, "readFile").mockImplementationOnce(
+          async (...readArgs) => {
+            await rename(directory, original);
+            await rename(replacement, directory);
+            return read(...readArgs);
+          }
+        );
+        return handle;
+      });
+
+    await expect(readBytesNoFollow(file, directoryIdentity)).rejects.toThrow(
+      "Shared storage directory changed"
+    );
+    open.mockRestore();
   });
 });
 
