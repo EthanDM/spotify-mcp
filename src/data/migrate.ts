@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
-import { constants as fsConstants, existsSync } from "node:fs";
+import { constants as fsConstants, existsSync, lstatSync } from "node:fs";
 import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -651,10 +651,18 @@ function rewriteArtifactPaths(
         const normalized = path.normalize(expandedPath);
         const relative = relativeWithin("artifacts", normalized);
         if (relative !== null) {
-          if (!existsSync(path.join(sharedArtifactsRoot, relative)))
+          const sourceTarget = path.join(sourceArtifactsRoot, relative);
+          const sharedTarget = path.join(sharedArtifactsRoot, relative);
+          const existingTargets = [
+            [path.dirname(sourceArtifactsRoot), sourceTarget],
+            [path.dirname(sharedArtifactsRoot), sharedTarget]
+          ].filter(([, target]) => existsSync(target));
+          if (existingTargets.length === 0)
             throw new Error(
               `Referenced artifact does not exist: ${artifactPath}`
             );
+          for (const [root, target] of existingTargets)
+            assertNoSymlinkSegmentsSync(root, target);
           return normalized;
         }
         throw new Error(
@@ -665,13 +673,22 @@ function rewriteArtifactPaths(
         relativeWithin(sourceArtifactsRoot, expandedPath) ??
         relativeWithin(sharedArtifactsRoot, expandedPath);
       if (relative !== null) {
-        if (
-          !existsSync(path.join(sourceArtifactsRoot, relative)) &&
-          !existsSync(path.join(sharedArtifactsRoot, relative))
-        )
+        const existingTargets = [
+          [
+            path.dirname(sourceArtifactsRoot),
+            path.join(sourceArtifactsRoot, relative)
+          ],
+          [
+            path.dirname(sharedArtifactsRoot),
+            path.join(sharedArtifactsRoot, relative)
+          ]
+        ].filter(([, target]) => existsSync(target));
+        if (existingTargets.length === 0)
           throw new Error(
             `Referenced artifact does not exist: ${artifactPath}`
           );
+        for (const [root, target] of existingTargets)
+          assertNoSymlinkSegmentsSync(root, target);
         return path.join("artifacts", relative);
       }
       throw new Error(
@@ -679,6 +696,18 @@ function rewriteArtifactPaths(
       );
     })
   };
+}
+
+function assertNoSymlinkSegmentsSync(root: string, target: string): void {
+  const relative = path.relative(root, target);
+  let current = root;
+  for (const segment of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    if (lstatSync(current).isSymbolicLink())
+      throw new Error(
+        `Artifact references must not contain symlinks: ${current}`
+      );
+  }
 }
 
 function relativeWithin(root: string, candidate: string): string | null {

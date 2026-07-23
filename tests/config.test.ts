@@ -135,7 +135,17 @@ describe("storage configuration", () => {
         path.join(sharedRoot, "artifacts", "linked.md"),
         config
       )
-    ).toThrow("must not traverse outside");
+    ).toThrow("must not contain symlinks");
+
+    const inside = path.join(sharedRoot, "artifacts", "inside.md");
+    await writeFile(inside, "inside");
+    await symlink(inside, path.join(sharedRoot, "artifacts", "inside-link.md"));
+    expect(() =>
+      toPortableArtifactPath(
+        path.join(sharedRoot, "artifacts", "inside-link.md"),
+        config
+      )
+    ).toThrow("must not contain symlinks");
   });
 
   it("rejects an artifacts directory linked outside the shared root", async () => {

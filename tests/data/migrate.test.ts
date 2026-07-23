@@ -633,6 +633,52 @@ describe("shared data migration", () => {
     });
   });
 
+  it("accepts portable references to local artifacts awaiting copy", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-portable-local-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const record = {
+      ...playlistRecord("entry"),
+      artifact_paths: [path.join("artifacts", "note.md")]
+    };
+    await mkdir(path.join(local, "people", "friend"), { recursive: true });
+    await mkdir(path.join(local, "artifacts"), { recursive: true });
+    await writeFile(path.join(local, "artifacts", "note.md"), "note");
+    await writeFile(
+      path.join(local, "people", "friend", "playlist-history.ndjson"),
+      `${JSON.stringify(record)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).resolves.toBeTruthy();
+  });
+
+  it("rejects portable references to shared symlinks", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-portable-link-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const outside = path.join(root, "outside.md");
+    const record = {
+      ...playlistRecord("entry"),
+      artifact_paths: [path.join("artifacts", "linked.md")]
+    };
+    await mkdir(path.join(local, "people", "friend"), { recursive: true });
+    await mkdir(path.join(shared, "artifacts"), { recursive: true });
+    await writeFile(outside, "outside");
+    await symlink(outside, path.join(shared, "artifacts", "linked.md"));
+    await writeFile(
+      path.join(local, "people", "friend", "playlist-history.ndjson"),
+      `${JSON.stringify(record)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("must not contain symlinks")
+    });
+  });
+
   it("rejects conflicting event IDs from another machine stream", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-id-"));
     const local = path.join(root, "local");

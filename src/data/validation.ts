@@ -303,7 +303,8 @@ function requireKnownKeys(
   if (unknown) throw new Error(`${label}.${unknown} is not supported.`);
 }
 function requireString(value: unknown, label: string): void {
-  if (typeof value !== "string") throw new Error(`${label} must be a string.`);
+  if (typeof value !== "string" || !value.trim())
+    throw new Error(`${label} must be a non-empty string.`);
 }
 function requireNullableString(value: unknown, label: string): void {
   if (value !== null && typeof value !== "string")

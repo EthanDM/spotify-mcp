@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { constants, realpathSync } from "node:fs";
+import { constants, lstatSync, realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -173,6 +173,7 @@ export function toPortableArtifactPath(
       throw new Error(
         `Shared artifacts directory must not traverse outside ${config.sharedRoot}.`
       );
+    assertNoSymlinkSegments(config.sharedRoot!, expandedPath);
     const physicalArtifactPath = realpathSync(expandedPath);
     if (!isSameOrNested(physicalArtifactsDirectory, physicalArtifactPath))
       throw new Error(
@@ -194,6 +195,10 @@ export function toPortableArtifactPath(
     throw new Error(
       `Shared artifacts directory must not traverse outside ${config.sharedRoot}.`
     );
+  assertNoSymlinkSegments(
+    config.sharedRoot!,
+    path.join(config.sharedRoot!, normalized)
+  );
   const physicalArtifactPath = realpathSync(
     path.join(config.sharedRoot!, normalized)
   );
@@ -202,6 +207,18 @@ export function toPortableArtifactPath(
       `Shared artifact paths must not traverse outside ${config.artifactsDirectory}.`
     );
   return normalized;
+}
+
+function assertNoSymlinkSegments(root: string, target: string): void {
+  const relative = path.relative(root, target);
+  let current = root;
+  for (const segment of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    if (lstatSync(current).isSymbolicLink())
+      throw new Error(
+        `Shared artifact paths must not contain symlinks: ${current}`
+      );
+  }
 }
 
 function resolveConfiguredPath(

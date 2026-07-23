@@ -94,7 +94,10 @@ export class PeopleStore {
     return (await this.readProfile(profileId)) !== null;
   }
   async listProfileIds(): Promise<string[]> {
-    if (this.sharedMode) await this.assertSharedStorageAvailable!();
+    if (this.sharedMode) {
+      await this.assertSharedStorageAvailable!();
+      await assertNoSymlinksWithinRoot(this.sharedRoot!, this.sharedDirectory);
+    }
     try {
       return (await fs.readdir(this.sharedDirectory, { withFileTypes: true }))
         .filter((entry) => entry.isDirectory())

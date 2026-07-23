@@ -19,6 +19,9 @@ describe("conflict resolution document validation", () => {
     expect(() =>
       validatePersonProfileDocument({ id: "friend", name: "Friend" }, "friend")
     ).toThrow("created_at");
+    expect(() =>
+      validatePersonProfileDocument({ ...profile(), name: " " }, "friend")
+    ).toThrow("non-empty string");
   });
 
   it("rejects incomplete history and event records", () => {
@@ -28,6 +31,12 @@ describe("conflict resolution document validation", () => {
         recorded_at: "2026-01-01T00:00:00.000Z"
       })
     ).toThrow("playlist_name");
+    expect(() =>
+      validatePersonPlaylistRecordDocument({
+        ...playlistRecord(),
+        playlist_name: " "
+      })
+    ).toThrow("non-empty string");
     expect(() =>
       validatePersonalizationEventDocument({
         ts: "2026-01-01T00:00:00.000Z",
@@ -148,6 +157,27 @@ function profile() {
     reference_tracks: [],
     reference_artists: [],
     playlist_goals: [],
+    notes: []
+  };
+}
+
+function playlistRecord() {
+  return {
+    entry_id: "entry",
+    recorded_at: "2026-01-01T00:00:00.000Z",
+    playlist_id: null,
+    playlist_name: "Playlist",
+    playlist_url: null,
+    brief: null,
+    use_case: null,
+    track_count: null,
+    runtime_minutes: null,
+    score: null,
+    verdict: null,
+    winning_traits: [],
+    losing_traits: [],
+    workflow_learning: null,
+    artifact_paths: [],
     notes: []
   };
 }

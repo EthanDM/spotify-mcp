@@ -144,6 +144,19 @@ describe("shared stores", () => {
     ).rejects.toThrow("must not contain symlinks");
   });
 
+  it("rejects a symlinked shared people directory before listing", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-people-link-"));
+    const sharedRoot = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(sharedRoot);
+    await mkdir(outside);
+    await symlink(outside, path.join(sharedRoot, "people"));
+
+    await expect(people(root, "desktop").listProfileIds()).rejects.toThrow(
+      "must not contain symlinks"
+    );
+  });
+
   it("rejects stale person-profile updates through the same store", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-profile-stale-")
