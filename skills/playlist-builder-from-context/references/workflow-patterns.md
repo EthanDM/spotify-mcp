@@ -172,7 +172,7 @@ Use these definitions and thresholds for a general personal build with final cou
 5. Build a candidate set with the same applicable recent-overlap and discovery controls used by fast personal mode
 6. Tighten weak or redundant tracks
 7. Run the deterministic constraint check
-8. Create a new private playlist
+8. For a refresh or overwrite of an existing playlist, use `spotify_replace_playlist_items`; otherwise create a new private playlist
 9. Return the playlist and suggest evaluation criteria
 10. Record feedback later once the user has listened
 

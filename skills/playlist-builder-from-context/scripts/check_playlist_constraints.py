@@ -171,7 +171,7 @@ def main() -> None:
             fail(f"tracks[{index}].phase is required for ordered playback")
         uris.append(uri)
         names.append(name)
-        artists.append(artist)
+        artists.append(artist.strip())
         buckets.append(bucket)
         evidence_tiers.append(evidence_tier)
         prompt_fits.append(prompt_fit)
@@ -255,12 +255,13 @@ def main() -> None:
                 f"recent_comparable_builds[{index}].track_uris",
             )
         )
-        build_artists = set(
-            require_nonempty_strings(
+        build_artists = {
+            artist.strip()
+            for artist in require_nonempty_strings(
                 build.get("primary_artists", []),
                 f"recent_comparable_builds[{index}].primary_artists",
             )
-        )
+        }
         prior_primary_artists |= build_artists
         recent_uri_union |= build_uris
         overlap_count = len(final_uri_set & build_uris)
@@ -274,12 +275,13 @@ def main() -> None:
     for index, build in enumerate(recent_general, start=1):
         if not isinstance(build, dict):
             fail(f"recent_general_builds[{index}] must be an object")
-        build_artists = set(
-            require_nonempty_strings(
+        build_artists = {
+            artist.strip()
+            for artist in require_nonempty_strings(
                 build.get("primary_artists", []),
                 f"recent_general_builds[{index}].primary_artists",
             )
-        )
+        }
         recent_general_artist_build_counts.update(build_artists)
     recurring_recent_general_artists = {
         artist: count
