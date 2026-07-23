@@ -325,13 +325,16 @@ describe("skill installer", () => {
   });
 
   it("rejects container credential-store paths", async () => {
-    for (const directoryName of [".docker", ".kube"]) {
+    for (const [directoryName, fileName] of [
+      [".docker", "config.json"],
+      [".kube", "config"]
+    ]) {
       const fixtureDirectory = path.resolve(
         "skills",
         "playlist-review",
         directoryName
       );
-      const fixture = path.join(fixtureDirectory, "config.json");
+      const fixture = path.join(fixtureDirectory, fileName);
       try {
         await mkdir(fixtureDirectory, { recursive: true });
         await writeFile(fixture, "credential: secret");

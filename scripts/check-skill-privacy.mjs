@@ -118,10 +118,12 @@ function isForbiddenRuntimePath(relativePath) {
   const segments = relativePath
     .split(path.sep)
     .map((segment) => segment.toLowerCase());
+  if (segments.length < 2) return false;
+  const parentDirectory = segments.at(-2);
+  const fileName = segments.at(-1);
   return (
-    segments.length >= 2 &&
-    [".docker", ".kube"].includes(segments.at(-2)) &&
-    segments.at(-1) === "config.json"
+    (parentDirectory === ".docker" && fileName === "config.json") ||
+    (parentDirectory === ".kube" && fileName === "config")
   );
 }
 
