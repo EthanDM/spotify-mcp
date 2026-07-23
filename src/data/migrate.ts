@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
+import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -122,7 +123,13 @@ async function main(): Promise<void> {
       "entry_id",
       config.machineId,
       false,
-      sharedStorage
+      sharedStorage,
+      (value) =>
+        rewriteArtifactPaths(
+          value,
+          path.join(config.localRoot, "artifacts"),
+          path.join(config.sharedRoot!, "artifacts")
+        )
     );
   }
   counts.events = await migrateNdjson(
@@ -272,7 +279,15 @@ async function validateMigration(
         "playlist-history",
         `${machineId}.ndjson`
       ),
-      "entry_id"
+      "entry_id",
+      false,
+      machineId,
+      (value) =>
+        rewriteArtifactPaths(
+          value,
+          path.join(localRoot, "artifacts"),
+          path.join(sharedRoot, "artifacts")
+        )
     );
   }
 
@@ -311,7 +326,10 @@ async function validateNdjson(
   destination: string,
   idField: string,
   addEventMetadata = false,
-  machineId = "local"
+  machineId = "local",
+  transform: (
+    value: Record<string, unknown>
+  ) => Record<string, unknown> = identityRecord
 ): Promise<void> {
   if (!(await exists(source))) return;
   const records = new Map<string, string>();
@@ -342,6 +360,7 @@ async function validateNdjson(
         schema_version: 1
       };
     }
+    value = transform(value);
     const id = String(value[idField] ?? "");
     if (!id) throw new Error(`Missing ${idField} at ${source}:${index + 1}.`);
     validateRecord(value, idField);
@@ -410,7 +429,10 @@ async function migrateNdjson(
   idField: string,
   machineId: string,
   addEventMetadata: boolean,
-  sharedStorage: SharedStorageGuard
+  sharedStorage: SharedStorageGuard,
+  transform: (
+    value: Record<string, unknown>
+  ) => Record<string, unknown> = identityRecord
 ): Promise<number> {
   if (!(await exists(source))) return 0;
   const sourceLines = (await fs.readFile(source, "utf8"))
@@ -443,6 +465,7 @@ async function migrateNdjson(
         schema_version: 1
       };
     }
+    value = transform(value);
     const normalized = JSON.stringify(value);
     const id = String(value[idField] ?? "");
     if (!id) throw new Error(`Missing ${idField} at ${source}:${index + 1}.`);
@@ -518,13 +541,51 @@ async function copyArtifacts(
           sharedStorage.sharedRoot,
           path.dirname(to)
         );
-        await fs.copyFile(from, to);
+        try {
+          await fs.copyFile(from, to, fsConstants.COPYFILE_EXCL);
+        } catch (error) {
+          if (!hasCode(error, "EEXIST")) throw error;
+          const concurrentTarget = await fs.readFile(to);
+          if (hash(concurrentTarget) !== hash(sourceBytes))
+            throw new Error(`Artifact collision with different content: ${to}`);
+          continue;
+        }
         await fs.chmod(to, 0o600);
         copied += 1;
       }
     }
   }
   return copied;
+}
+
+function rewriteArtifactPaths(
+  value: Record<string, unknown>,
+  sourceArtifactsRoot: string,
+  sharedArtifactsRoot: string
+): Record<string, unknown> {
+  if (!Array.isArray(value.artifact_paths)) return value;
+  return {
+    ...value,
+    artifact_paths: value.artifact_paths.map((artifactPath) => {
+      if (typeof artifactPath !== "string" || !path.isAbsolute(artifactPath))
+        return artifactPath;
+      const relative = path.relative(sourceArtifactsRoot, artifactPath);
+      if (
+        relative === "" ||
+        (!relative.startsWith(`..${path.sep}`) &&
+          relative !== ".." &&
+          !path.isAbsolute(relative))
+      )
+        return path.join(sharedArtifactsRoot, relative);
+      return artifactPath;
+    })
+  };
+}
+
+function identityRecord(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  return value;
 }
 
 function validateRecord(value: unknown, idField: string): void {
@@ -604,10 +665,13 @@ async function writeAtomic(
   await fs.rename(temporary, file);
 }
 function isMissing(error: unknown): boolean {
+  return hasCode(error, "ENOENT");
+}
+function hasCode(error: unknown, code: string): boolean {
   return (
     error instanceof Error &&
     "code" in error &&
-    (error as NodeJS.ErrnoException).code === "ENOENT"
+    (error as NodeJS.ErrnoException).code === code
   );
 }
 

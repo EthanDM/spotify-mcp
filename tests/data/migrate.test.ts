@@ -40,9 +40,13 @@ describe("shared data migration", () => {
       path.join(local, "people", "friend", "profile.json"),
       JSON.stringify(profile("friend"))
     );
+    const playlist = {
+      ...playlistRecord("entry"),
+      artifact_paths: [path.join(local, "artifacts", "note.md")]
+    };
     await writeFile(
       path.join(local, "people", "friend", "playlist-history.ndjson"),
-      `${JSON.stringify(playlistRecord("entry"))}\n`
+      `${JSON.stringify(playlist)}\n`
     );
     await writeFile(path.join(local, "artifacts", "note.md"), "artifact");
 
@@ -91,6 +95,21 @@ describe("shared data migration", () => {
     expect(
       await readFile(path.join(shared, "artifacts", "note.md"), "utf8")
     ).toBe("artifact");
+    const migratedPlaylist = JSON.parse(
+      await readFile(
+        path.join(
+          shared,
+          "people",
+          "friend",
+          "playlist-history",
+          "desktop.ndjson"
+        ),
+        "utf8"
+      )
+    ) as { artifact_paths: string[] };
+    expect(migratedPlaylist.artifact_paths).toEqual([
+      path.join(shared, "artifacts", "note.md")
+    ]);
     await expect(readFile(path.join(shared, "auth.json"))).rejects.toThrow();
     await expect(
       readFile(path.join(shared, "personalization", "profile-snapshot.json"))
@@ -322,6 +341,44 @@ describe("shared data migration", () => {
       recursive: true
     });
     await expect(runMigration(local, shared, "desktop")).rejects.toBeTruthy();
+  });
+
+  it("does not overwrite an artifact created by a concurrent migration", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-artifact-race-")
+    );
+    const shared = path.join(root, "shared");
+    const locals = ["first", "second"].map((name) =>
+      path.join(root, `${name}-local`)
+    );
+    await Promise.all(
+      locals.map(async (local, index) => {
+        await mkdir(path.join(local, "artifacts"), { recursive: true });
+        await writeFile(
+          path.join(local, "artifacts", "note.md"),
+          `artifact-${index}`
+        );
+      })
+    );
+    await mkdir(shared);
+
+    const results = await Promise.allSettled(
+      locals.map((local, index) =>
+        runMigration(local, shared, `machine-${index}`, true)
+      )
+    );
+
+    expect(
+      results.filter((result) => result.status === "fulfilled")
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "rejected")
+    ).toHaveLength(1);
+    expect(
+      ["artifact-0", "artifact-1"].includes(
+        await readFile(path.join(shared, "artifacts", "note.md"), "utf8")
+      )
+    ).toBe(true);
   });
 });
 
