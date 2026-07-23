@@ -154,11 +154,14 @@ export async function appendPrivateFile(
     file,
     constants.O_APPEND |
       constants.O_CREAT |
+      constants.O_NONBLOCK |
       constants.O_WRONLY |
       constants.O_NOFOLLOW,
     0o600
   );
   try {
+    if (!(await handle.stat()).isFile())
+      throw new Error(`Storage path must be a regular file: ${file}`);
     await handle.writeFile(value, "utf8");
     await handle.chmod(0o600);
   } finally {

@@ -432,8 +432,7 @@ async function validateNdjson(
           typeof value.event_id === "string"
             ? value.event_id
             : deterministicId(value, occurrences),
-        machine_id:
-          typeof value.machine_id === "string" ? value.machine_id : machineId,
+        machine_id: machineId,
         schema_version: "schema_version" in value ? value.schema_version : 1
       };
     }
@@ -589,8 +588,7 @@ async function migrateNdjson(
           typeof value.event_id === "string"
             ? value.event_id
             : deterministicId(value, occurrences),
-        machine_id:
-          typeof value.machine_id === "string" ? value.machine_id : machineId,
+        machine_id: machineId,
         schema_version: "schema_version" in value ? value.schema_version : 1
       };
     }
