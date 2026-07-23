@@ -425,6 +425,7 @@ describe("skill installer", () => {
       [".m2", "settings.xml"],
       [".terraform.d", "credentials.tfrc.json"],
       [".config", "gcloud", "credentials.db"],
+      [".config", "glab-cli", "config.yml"],
       [".cache", "huggingface", "token"],
       [".nuget", "NuGet", "NuGet.Config"],
       [".config", "pip", "pip.conf"],
