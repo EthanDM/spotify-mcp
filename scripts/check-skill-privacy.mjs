@@ -178,6 +178,8 @@ function isForbiddenRuntimePath(relativePath) {
       ["credentials", "credentials.toml"].includes(fileName)) ||
     (parentDirectory === ".gem" && fileName === "credentials") ||
     (parentDirectory === ".m2" && fileName === "settings.xml") ||
+    (parentDirectory === ".terraform.d" &&
+      fileName === "credentials.tfrc.json") ||
     (parentDirectory === "pip" && ["pip.conf", "pip.ini"].includes(fileName))
   );
 }

@@ -402,6 +402,7 @@ describe("skill installer", () => {
       [".cargo", "credentials.toml"],
       [".gem", "credentials"],
       [".m2", "settings.xml"],
+      [".terraform.d", "credentials.tfrc.json"],
       [".config", "pip", "pip.conf"],
       ["pip", "pip.ini"]
     ]) {
