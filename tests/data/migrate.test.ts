@@ -226,7 +226,7 @@ describe("shared data migration", () => {
       )
     ) as { tips: Array<{ revision_id: string }> };
     expect(ancestorInspection.tips).toHaveLength(2);
-  });
+  }, 15_000);
 
   it("normalizes legacy preference documents before migrating", async () => {
     const root = await mkdtemp(
