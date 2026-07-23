@@ -433,6 +433,36 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects symlinked legacy state files during preflight", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-state-link-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const outside = path.join(root, "outside.json");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await writeFile(outside, JSON.stringify(preferences("Outside")));
+    await symlink(
+      outside,
+      path.join(local, "personalization", "user-preferences.json")
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toBeTruthy();
+  });
+
+  it("rejects non-regular legacy artifacts during preflight", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-artifact-fifo-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const fifo = path.join(local, "artifacts", "stream");
+    await mkdir(path.dirname(fifo), { recursive: true });
+    await execute("mkfifo", [fifo]);
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("requires regular files or directories")
+    });
+  });
+
   it("rejects symlinked legacy person directories during preflight", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-person-link-"));
     const local = path.join(root, "local");

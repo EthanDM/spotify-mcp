@@ -77,9 +77,12 @@ export class RevisionStore<T> {
     const parents = new Set(
       revisions.flatMap((revision) => revision.parent_revision_ids)
     );
-    return revisions
+    const tips = revisions
       .filter((revision) => !parents.has(revision.revision_id))
       .sort((a, b) => a.revision_id.localeCompare(b.revision_id));
+    if (revisions.length > 0 && tips.length === 0)
+      throw new Error(`${this.documentName} contains a cyclic revision graph.`);
+    return tips;
   }
 
   async write(

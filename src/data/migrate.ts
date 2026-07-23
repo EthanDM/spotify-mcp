@@ -390,7 +390,7 @@ async function validateNdjson(
     idField,
     destinationTransform
   );
-  const sourceLines = (await fs.readFile(source, "utf8"))
+  const sourceLines = ((await readText(source)) ?? "")
     .split("\n")
     .filter((line) => line.trim());
   for (const [index, line] of sourceLines.entries()) {
@@ -444,9 +444,12 @@ async function validateArtifactCollisions(
       await validateArtifactCollisions(from, to, sharedRoot);
     else if (entry.isFile()) {
       const target = await readBytes(to);
-      if (target && hash(target) !== hash(await fs.readFile(from)))
+      if (target && hash(target) !== hash(await readBytesNoFollow(from)))
         throw new Error(`Artifact collision with different content: ${to}`);
-    }
+    } else
+      throw new Error(
+        `Artifact migration requires regular files or directories: ${from}`
+      );
   }
 }
 
@@ -675,7 +678,10 @@ async function copyArtifacts(
         await fs.chmod(to, 0o600);
         copied += 1;
       }
-    }
+    } else
+      throw new Error(
+        `Artifact migration requires regular files or directories: ${from}`
+      );
   }
   return copied;
 }
@@ -894,7 +900,17 @@ async function readBytesNoFollowIfExists(file: string): Promise<Buffer | null> {
 }
 async function readText(file: string): Promise<string | null> {
   try {
-    return await fs.readFile(file, "utf8");
+    const handle = await fs.open(
+      file,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW
+    );
+    try {
+      if (!(await handle.stat()).isFile())
+        throw new Error(`Migration source must be a regular file: ${file}`);
+      return await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
   } catch (error) {
     if (isMissing(error)) return null;
     throw error;

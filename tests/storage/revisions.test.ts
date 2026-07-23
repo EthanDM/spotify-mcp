@@ -97,6 +97,31 @@ describe("RevisionStore", () => {
 
     await expect(store.read()).rejects.toThrow("must not contain symlinks");
   });
+
+  it("rejects revision graphs with no tips", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-cycle-")
+    );
+    await writeFile(
+      path.join(directory, "cycle.json"),
+      JSON.stringify({
+        schema_version: 1,
+        revision_id: "cycle",
+        parent_revision_ids: ["cycle"],
+        written_at: new Date().toISOString(),
+        written_by: "desktop",
+        value: { value: "cycle" }
+      })
+    );
+    const store = new RevisionStore<{ value: string }>(
+      directory,
+      "test document",
+      "desktop",
+      normalize
+    );
+
+    await expect(store.read()).rejects.toThrow("cyclic revision graph");
+  });
 });
 
 function normalize(value: unknown): { value: string } {
