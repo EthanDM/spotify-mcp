@@ -12,11 +12,11 @@ import {
   appendPrivateFile,
   assertDirectoryIdentity,
   assertNoSymlinksWithinRoot,
-  type DirectoryIdentity,
   ensureDirectoryWithinRoot,
   readDirectoryIdentity,
   readFileNoFollow,
-  SharedStorageGuard
+  SharedStorageGuard,
+  writePrivateFileExclusive
 } from "../storage/shared.js";
 import {
   validatePersonPlaylistRecordDocument,
@@ -831,7 +831,7 @@ async function copyArtifacts(
         const directory = path.dirname(to);
         await ensureDirectoryWithinRoot(sharedStorage.sharedRoot, directory);
         const directoryIdentity = await readDirectoryIdentity(directory);
-        const created = await writeBytesExclusive(
+        const created = await writePrivateFileExclusive(
           to,
           sourceBytes,
           directoryIdentity
@@ -1040,38 +1040,6 @@ async function directoryNames(directory: string): Promise<string[]> {
   }
 }
 
-async function writeBytesExclusive(
-  file: string,
-  value: Uint8Array,
-  directoryIdentity: DirectoryIdentity
-): Promise<boolean> {
-  let handle: Awaited<ReturnType<typeof fs.open>>;
-  try {
-    handle = await fs.open(
-      file,
-      fsConstants.O_CREAT |
-        fsConstants.O_EXCL |
-        fsConstants.O_NONBLOCK |
-        fsConstants.O_WRONLY |
-        fsConstants.O_NOFOLLOW,
-      0o600
-    );
-  } catch (error) {
-    if (hasCode(error, "EEXIST")) return false;
-    throw error;
-  }
-  try {
-    if (!(await handle.stat()).isFile())
-      throw new Error(`Artifact destination must be a regular file: ${file}`);
-    await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
-    await handle.writeFile(value);
-    await handle.chmod(0o600);
-    await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
-    return true;
-  } finally {
-    await handle.close();
-  }
-}
 async function ndjsonFiles(
   directory: string,
   directoryIdentity: { device: number; inode: number } | null
@@ -1163,14 +1131,22 @@ async function writeAtomic(
   sharedStorage: SharedStorageGuard
 ): Promise<void> {
   await sharedStorage.assertWritable();
-  await ensureDirectoryWithinRoot(sharedStorage.sharedRoot, path.dirname(file));
+  const directory = path.dirname(file);
+  await ensureDirectoryWithinRoot(sharedStorage.sharedRoot, directory);
+  const directoryIdentity = await readDirectoryIdentity(directory);
   const temporary = `${file}.${process.pid}.tmp`;
-  await fs.writeFile(temporary, value, {
-    encoding: "utf8",
-    mode: 0o600,
-    flag: "wx"
-  });
+  const created = await writePrivateFileExclusive(
+    temporary,
+    value,
+    directoryIdentity
+  );
+  if (!created)
+    throw new Error(
+      `Migration manifest temporary file already exists: ${temporary}`
+    );
+  await assertDirectoryIdentity(directory, directoryIdentity);
   await fs.rename(temporary, file);
+  await assertDirectoryIdentity(directory, directoryIdentity);
 }
 function isMissing(error: unknown): boolean {
   return hasCode(error, "ENOENT");

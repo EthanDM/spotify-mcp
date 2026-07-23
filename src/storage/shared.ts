@@ -32,6 +32,7 @@ export class SharedStorageGuard {
     const installationId = await this.getInstallationId();
     const claimsDirectory = path.join(this.sharedRoot, "machines");
     await ensureDirectoryWithinRoot(this.sharedRoot, claimsDirectory);
+    const directoryIdentity = await readDirectoryIdentity(claimsDirectory);
     const claimPath = this.claimPath;
     const claim: MachineClaim = {
       schema_version: 1,
@@ -39,27 +40,30 @@ export class SharedStorageGuard {
       installation_id: installationId,
       claimed_at: new Date().toISOString()
     };
-    try {
-      await fs.writeFile(claimPath, `${JSON.stringify(claim, null, 2)}\n`, {
-        encoding: "utf8",
-        mode: 0o600,
-        flag: "wx"
-      });
-    } catch (error) {
-      if (!isAlreadyExists(error)) throw error;
-    }
+    await writePrivateFileExclusive(
+      claimPath,
+      `${JSON.stringify(claim, null, 2)}\n`,
+      directoryIdentity
+    );
     await this.assertWritable();
   }
 
   async assertWritable(): Promise<void> {
     await assertSharedStorageAvailable(this.config);
     const installationId = await this.getInstallationId();
-    await assertNoSymlinksWithinRoot(this.sharedRoot, this.claimPath);
+    const claimsDirectory = path.dirname(this.claimPath);
+    const observed = await assertNoSymlinksWithinRoot(
+      this.sharedRoot,
+      this.claimPath
+    );
     let claim: MachineClaim;
     try {
-      claim = JSON.parse(
-        await readFileNoFollow(this.claimPath)
-      ) as MachineClaim;
+      if (!observed) throw missingError();
+      const directoryIdentity = await readDirectoryIdentity(claimsDirectory);
+      await assertDirectoryIdentity(claimsDirectory, directoryIdentity);
+      const raw = await readFileNoFollow(this.claimPath);
+      await assertDirectoryIdentity(claimsDirectory, directoryIdentity);
+      claim = JSON.parse(raw) as MachineClaim;
     } catch (error) {
       if (isMissing(error))
         throw new Error(
@@ -175,6 +179,40 @@ export async function appendPrivateFile(
   }
 }
 
+export async function writePrivateFileExclusive(
+  file: string,
+  value: string | Uint8Array,
+  directoryIdentity: DirectoryIdentity
+): Promise<boolean> {
+  let handle: Awaited<ReturnType<typeof fs.open>>;
+  try {
+    handle = await fs.open(
+      file,
+      constants.O_CREAT |
+        constants.O_EXCL |
+        constants.O_NONBLOCK |
+        constants.O_WRONLY |
+        constants.O_NOFOLLOW,
+      0o600
+    );
+  } catch (error) {
+    if (isAlreadyExists(error)) return false;
+    throw error;
+  }
+  try {
+    if (!(await handle.stat()).isFile())
+      throw new Error(`Storage path must be a regular file: ${file}`);
+    await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
+    if (typeof value === "string") await handle.writeFile(value, "utf8");
+    else await handle.writeFile(value);
+    await handle.chmod(0o600);
+    await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
+    return true;
+  } finally {
+    await handle.close();
+  }
+}
+
 export async function readDirectoryIdentity(
   directory: string
 ): Promise<DirectoryIdentity> {
@@ -242,4 +280,10 @@ function isMissing(error: unknown): boolean {
 
 function isAlreadyExists(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "EEXIST";
+}
+
+function missingError(): NodeJS.ErrnoException {
+  return Object.assign(new Error("Missing shared storage path."), {
+    code: "ENOENT"
+  });
 }

@@ -4,6 +4,7 @@ import {
   chmod,
   mkdir,
   readFile,
+  rename,
   rm,
   stat,
   symlink,
@@ -139,6 +140,38 @@ describe("shared storage guard", () => {
     await expect(guard.assertWritable()).rejects.toThrow(
       "must not contain symlinks"
     );
+  });
+
+  it("rejects a machine-claim directory replaced during a read", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-claim-swap-"));
+    const sharedRoot = path.join(root, "shared");
+    const localRoot = path.join(root, "local");
+    const machines = path.join(sharedRoot, "machines");
+    const original = path.join(root, "original-machines");
+    const replacement = path.join(root, "replacement-machines");
+    await mkdir(sharedRoot);
+    const guard = new SharedStorageGuard(
+      config(localRoot, sharedRoot, "desktop")
+    );
+    await guard.claimMachineId();
+    await mkdir(replacement);
+    await writeFile(
+      path.join(replacement, "desktop.json"),
+      await readFile(path.join(machines, "desktop.json"))
+    );
+    const openFile = fs.open.bind(fs);
+    const open = vi
+      .spyOn(fs, "open")
+      .mockImplementationOnce(async (...args) => {
+        await rename(machines, original);
+        await rename(replacement, machines);
+        return openFile(...args);
+      });
+
+    await expect(guard.assertWritable()).rejects.toThrow(
+      "Shared storage directory changed"
+    );
+    open.mockRestore();
   });
 
   it("appends without following symlinks and restores private permissions", async () => {
