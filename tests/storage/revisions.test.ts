@@ -98,6 +98,26 @@ describe("RevisionStore", () => {
     await expect(store.read()).rejects.toThrow("must not contain symlinks");
   });
 
+  it("rejects an existing empty shared revision directory", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-empty-directory-")
+    );
+    const sharedRoot = path.join(root, "shared");
+    const revisions = path.join(sharedRoot, "preferences", "revisions");
+    await mkdir(revisions, { recursive: true });
+    const store = new RevisionStore<{ value: string }>(
+      revisions,
+      "test document",
+      "desktop",
+      normalize,
+      { root: sharedRoot, assertAvailable: async () => undefined }
+    );
+
+    await expect(store.read()).rejects.toThrow(
+      "empty shared revision directory"
+    );
+  });
+
   it("rejects revision graphs with no tips", async () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "spotify-revision-cycle-")

@@ -189,6 +189,10 @@ export class RevisionStore<T> {
         names.push(entry.name);
       }
       names.sort();
+      if (this.sharedAccessGuard && names.length === 0)
+        throw new Error(
+          `${this.documentName} has an empty shared revision directory. Retry after shared storage finishes syncing.`
+        );
     } catch (error) {
       if (isMissing(error)) {
         await this.sharedAccessGuard?.assertAvailable();
