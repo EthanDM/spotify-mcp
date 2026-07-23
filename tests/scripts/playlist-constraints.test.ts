@@ -77,15 +77,18 @@ describe("playlist constraint checker", () => {
   });
 
   it("normalizes artist metadata before applying artist limits", async () => {
-    const tracks = ["Same", "same ", " SAME", "SaMe  "].map(
-      (primaryArtist, index) => ({
-        ...track(
-          `spotify:track:${String(index + 1).padStart(22, "0")}`,
-          "development"
-        ),
-        primary_artist: primaryArtist
-      })
-    );
+    const tracks = [
+      "Beyoncé",
+      "Beyonce\u0301 ",
+      " BEYONCÉ",
+      "Beyonce\u0301  "
+    ].map((primaryArtist, index) => ({
+      ...track(
+        `spotify:track:${String(index + 1).padStart(22, "0")}`,
+        "development"
+      ),
+      primary_artist: primaryArtist
+    }));
     const manifest = await writeManifest({
       target_track_count: 4,
       tracks,
@@ -94,7 +97,7 @@ describe("playlist constraint checker", () => {
         {
           id: "prior",
           track_uris: ["spotify:track:0000000000000000000099"],
-          primary_artists: [" SAME "]
+          primary_artists: [" BEYONCE\u0301 "]
         }
       ]
     });
@@ -106,7 +109,7 @@ describe("playlist constraint checker", () => {
       violations: string[];
     };
 
-    expect(report.primary_artist_counts).toEqual({ same: 4 });
+    expect(report.primary_artist_counts).toEqual({ beyoncé: 4 });
     expect(report.new_primary_artist_track_count).toBe(0);
     expect(report.violations).toContain("primary_artist_cap");
     expect(report.passes_applicable_hard_checks).toBe(false);

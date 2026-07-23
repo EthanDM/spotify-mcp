@@ -11,6 +11,7 @@ import json
 import math
 import re
 import sys
+import unicodedata
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,10 @@ def normalized_title_family(title: str) -> str:
         value = parts[0]
     value = re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
     return value
+
+
+def normalized_artist(artist: str) -> str:
+    return unicodedata.normalize("NFC", artist.strip()).casefold()
 
 
 def main() -> None:
@@ -171,7 +176,7 @@ def main() -> None:
             fail(f"tracks[{index}].phase is required for ordered playback")
         uris.append(uri)
         names.append(name)
-        artists.append(artist.strip().casefold())
+        artists.append(normalized_artist(artist))
         buckets.append(bucket)
         evidence_tiers.append(evidence_tier)
         prompt_fits.append(prompt_fit)
@@ -256,7 +261,7 @@ def main() -> None:
             )
         )
         build_artists = {
-            artist.strip().casefold()
+            normalized_artist(artist)
             for artist in require_nonempty_strings(
                 build.get("primary_artists", []),
                 f"recent_comparable_builds[{index}].primary_artists",
@@ -276,7 +281,7 @@ def main() -> None:
         if not isinstance(build, dict):
             fail(f"recent_general_builds[{index}] must be an object")
         build_artists = {
-            artist.strip().casefold()
+            normalized_artist(artist)
             for artist in require_nonempty_strings(
                 build.get("primary_artists", []),
                 f"recent_general_builds[{index}].primary_artists",
