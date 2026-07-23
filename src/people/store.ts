@@ -105,9 +105,13 @@ export class PeopleStore {
   private async listProfileEntries(): Promise<
     Array<{ id: string; hadRevisionsPath: boolean }>
   > {
+    let directoryObserved = false;
     if (this.sharedMode) {
       await this.assertSharedStorageAvailable!();
-      await assertNoSymlinksWithinRoot(this.sharedRoot!, this.sharedDirectory);
+      directoryObserved = await assertNoSymlinksWithinRoot(
+        this.sharedRoot!,
+        this.sharedDirectory
+      );
     }
     try {
       const entries = await fs.readdir(this.sharedDirectory, {
@@ -135,6 +139,10 @@ export class PeopleStore {
     } catch (error) {
       if (isMissing(error)) {
         await this.assertSharedStorageAvailable?.();
+        if (directoryObserved)
+          throw new Error(
+            `Shared people directory disappeared after validation: ${this.sharedDirectory}`
+          );
         return [];
       }
       throw error;

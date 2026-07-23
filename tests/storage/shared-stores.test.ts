@@ -306,6 +306,27 @@ describe("shared stores", () => {
     );
   });
 
+  it("fails when the observed shared people directory disappears", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-people-directory-gone-")
+    );
+    const store = people(root, "desktop");
+    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    const directory = store.basePath;
+    const readDirectory = fs.readdir.bind(fs);
+    const readdir = vi
+      .spyOn(fs, "readdir")
+      .mockImplementationOnce(async (...args) => {
+        await rm(directory, { recursive: true });
+        return readDirectory(...args);
+      });
+
+    await expect(store.listProfileIds()).rejects.toThrow(
+      "Shared people directory disappeared after validation"
+    );
+    readdir.mockRestore();
+  });
+
   it("rejects symlinked profile entries while listing people", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-link-"));
     const sharedPeople = path.join(root, "shared", "people");
