@@ -94,9 +94,10 @@ Treat a refresh as an intentional derivative:
 - introduce enough new material for the refresh to feel meaningful
 - keep overlap thresholds report-only under the builder's derivative rules
 - do not change the title, description, count, or ordering strategy without reason
-- create a new playlist by default; overwrite the existing radio only when explicitly requested
+- when the user explicitly targets an existing radio for refresh, replace that playlist's body
+- create a new playlist only when the user requests a new copy or fresh snapshot
 
-If the user asks for a fresh snapshot rather than a refinement, rebuild from the seed and use the old body only for overlap reporting.
+If the user asks for a fresh snapshot rather than a refinement, create a new playlist, rebuild from the seed, and use the old body only for overlap reporting.
 
 ## Sidecar Fields
 

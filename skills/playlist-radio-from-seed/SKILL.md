@@ -57,6 +57,7 @@ Also read `$playlist-builder-from-context` and its `references/workflow-patterns
 - Treat an explicit create or make request as authorization for a new private playlist.
 - Refresh an existing radio playlist only when the user explicitly requests it.
 - For refreshes, use the builder's intentional-derivative mode, preserve the seed, and follow the refresh guidance in `references/radio-patterns.md`.
+- Replace an explicitly targeted existing radio on refresh; create a new playlist only for a requested new copy or fresh snapshot.
 
 7. Verify and record.
 

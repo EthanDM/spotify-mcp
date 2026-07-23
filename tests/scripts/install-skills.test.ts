@@ -400,12 +400,19 @@ describe("skill installer", () => {
     const fixtures = [
       path.resolve("skills", "playlist-review", ".env.production"),
       path.resolve("skills", "playlist-review", ".ENV.production"),
+      path.resolve("skills", "playlist-review", ".ash_history"),
+      path.resolve("skills", "playlist-review", ".bash_history"),
       path.resolve("skills", "playlist-review", ".git-credentials"),
+      path.resolve("skills", "playlist-review", ".ksh_history"),
       path.resolve("skills", "playlist-review", ".netrc"),
       path.resolve("skills", "playlist-review", ".npmrc"),
       path.resolve("skills", "playlist-review", ".pypirc"),
+      path.resolve("skills", "playlist-review", ".sh_history"),
+      path.resolve("skills", "playlist-review", ".zsh_history"),
       path.resolve("skills", "playlist-review", "_netrc"),
       path.resolve("skills", "playlist-review", "AUTH.JSON"),
+      path.resolve("skills", "playlist-review", "ConsoleHost_history.txt"),
+      path.resolve("skills", "playlist-review", "fish_history"),
       path.resolve("skills", "playlist-review", "personalization-context.md")
     ];
     try {
