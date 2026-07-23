@@ -18,6 +18,7 @@ import type { StorageConfig } from "../../src/config.js";
 import { PersonalizationStore } from "../../src/personalization/store.js";
 import {
   appendPrivateFile,
+  assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
   SharedStorageGuard
 } from "../../src/storage/shared.js";
@@ -100,6 +101,18 @@ describe("shared storage guard", () => {
         sharedRoot,
         path.join(sharedRoot, "people", "friend")
       )
+    ).rejects.toThrow("must not contain symlinks");
+  });
+
+  it("rejects a symlinked root itself", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-root-link-"));
+    const outside = path.join(root, "outside");
+    const linkedRoot = path.join(root, "linked");
+    await mkdir(outside);
+    await symlink(outside, linkedRoot);
+
+    await expect(
+      assertNoSymlinksWithinRoot(linkedRoot, path.join(linkedRoot, "file"))
     ).rejects.toThrow("must not contain symlinks");
   });
 

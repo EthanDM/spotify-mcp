@@ -433,6 +433,22 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects symlinked legacy person directories during preflight", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-person-link-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(path.join(local, "people"), { recursive: true });
+    await mkdir(outside);
+    await symlink(outside, path.join(local, "people", "friend"));
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "People migration does not allow symlinks"
+      )
+    });
+  });
+
   it("rejects a symlinked legacy artifacts root", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-artifact-root-link-")

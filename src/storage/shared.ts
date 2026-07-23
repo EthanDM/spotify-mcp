@@ -180,8 +180,8 @@ export async function assertNoSymlinksWithinRoot(
   )
     throw new Error(`Shared path escapes its configured root: ${target}`);
   let current = root;
-  for (const segment of relative.split(path.sep).filter(Boolean)) {
-    current = path.join(current, segment);
+  for (const segment of ["", ...relative.split(path.sep).filter(Boolean)]) {
+    if (segment) current = path.join(current, segment);
     try {
       if ((await fs.lstat(current)).isSymbolicLink())
         throw new Error(

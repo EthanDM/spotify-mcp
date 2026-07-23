@@ -823,10 +823,16 @@ function stable(value: unknown): string {
 }
 async function directoryNames(directory: string): Promise<string[]> {
   try {
-    return (await fs.readdir(directory, { withFileTypes: true }))
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort();
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    const names: string[] = [];
+    for (const entry of entries) {
+      if (entry.isSymbolicLink())
+        throw new Error(
+          `People migration does not allow symlinks: ${path.join(directory, entry.name)}`
+        );
+      if (entry.isDirectory()) names.push(entry.name);
+    }
+    return names.sort();
   } catch (error) {
     if (isMissing(error)) return [];
     throw error;
