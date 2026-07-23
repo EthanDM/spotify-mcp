@@ -18,6 +18,10 @@ type DirectoryIdentity = {
   inode: number;
 };
 
+const INITIALIZATION_MARKER = ".spotify-mcp-initializing";
+
+class EmptySharedRevisionDirectoryError extends Error {}
+
 export type RevisionEnvelope<T> = {
   schema_version: 1;
   revision_id: string;
@@ -45,6 +49,8 @@ export class RevisionConflictError extends Error {
 }
 
 export class RevisionStore<T> {
+  private readonly failedInitializationIds = new Set<string>();
+
   constructor(
     readonly revisionsDirectory: string,
     private readonly documentName: string,
@@ -95,7 +101,7 @@ export class RevisionStore<T> {
     value: T,
     expectedRevisionId: string | null
   ): Promise<RevisionEnvelope<T>> {
-    const tips = await this.readTips();
+    const tips = await this.readTipsForWrite(expectedRevisionId === null);
     const current = tips.length === 1 ? tips[0].revision_id : null;
     if (tips.length > 1)
       throw new RevisionConflictError(
@@ -127,7 +133,7 @@ export class RevisionStore<T> {
   }
 
   async importRoot(value: T): Promise<RevisionEnvelope<T>> {
-    const tips = await this.readTips();
+    const tips = await this.readTipsForWrite(true);
     if (
       tips.some((tip) => JSON.stringify(tip.value) === JSON.stringify(value))
     ) {
@@ -136,6 +142,22 @@ export class RevisionStore<T> {
       );
     }
     return this.writeRevision(value, []);
+  }
+
+  private async readTipsForWrite(
+    allowInitialRecovery: boolean
+  ): Promise<Array<RevisionEnvelope<T>>> {
+    try {
+      return await this.readTips();
+    } catch (error) {
+      if (
+        !allowInitialRecovery ||
+        !(error instanceof EmptySharedRevisionDirectoryError) ||
+        !(await this.recoverIncompleteInitialPublication())
+      )
+        throw error;
+      return [];
+    }
   }
 
   private async writeRevision(
@@ -150,48 +172,146 @@ export class RevisionStore<T> {
       written_by: this.machineId,
       value: this.normalize(value)
     };
+    let initializing = false;
     if (this.sharedAccessGuard) {
       await this.sharedAccessGuard.assertAvailable();
-      await ensureDirectoryWithinRoot(
+      const directoryCreated = await ensureDirectoryWithinRoot(
         this.sharedAccessGuard.root,
         this.revisionsDirectory
       );
+      if (directoryCreated) {
+        await fs.writeFile(
+          path.join(this.revisionsDirectory, INITIALIZATION_MARKER),
+          `${JSON.stringify({
+            machine_id: this.machineId,
+            pid: process.pid,
+            revision_id: envelope.revision_id
+          })}\n`,
+          { encoding: "utf8", mode: 0o600, flag: "wx" }
+        );
+        initializing = true;
+      }
     } else {
       await fs.mkdir(this.revisionsDirectory, { recursive: true, mode: 0o700 });
     }
-    const destination = path.join(
-      this.revisionsDirectory,
-      `${envelope.revision_id}.json`
+    try {
+      const destination = path.join(
+        this.revisionsDirectory,
+        `${envelope.revision_id}.json`
+      );
+      const temporary = `${destination}.${process.pid}.tmp`;
+      const directoryIdentity = this.sharedAccessGuard
+        ? await readDirectoryIdentity(
+            this.revisionsDirectory,
+            this.documentName
+          )
+        : null;
+      if (directoryIdentity)
+        await assertDirectoryIdentity(
+          this.revisionsDirectory,
+          this.documentName,
+          directoryIdentity
+        );
+      await fs.writeFile(temporary, JSON.stringify(envelope, null, 2), {
+        encoding: "utf8",
+        mode: 0o600,
+        flag: "wx"
+      });
+      if (directoryIdentity)
+        await assertDirectoryIdentity(
+          this.revisionsDirectory,
+          this.documentName,
+          directoryIdentity
+        );
+      await fs.rename(temporary, destination);
+      if (directoryIdentity)
+        await assertDirectoryIdentity(
+          this.revisionsDirectory,
+          this.documentName,
+          directoryIdentity
+        );
+      if (initializing)
+        await fs.unlink(
+          path.join(this.revisionsDirectory, INITIALIZATION_MARKER)
+        );
+      return envelope;
+    } catch (error) {
+      if (initializing) this.failedInitializationIds.add(envelope.revision_id);
+      throw error;
+    }
+  }
+
+  private async recoverIncompleteInitialPublication(): Promise<boolean> {
+    if (!this.sharedAccessGuard) return false;
+    await this.sharedAccessGuard.assertAvailable();
+    const observed = await assertNoSymlinksWithinRoot(
+      this.sharedAccessGuard.root,
+      this.revisionsDirectory
     );
-    const temporary = `${destination}.${process.pid}.tmp`;
-    const directoryIdentity = this.sharedAccessGuard
-      ? await readDirectoryIdentity(this.revisionsDirectory, this.documentName)
-      : null;
-    if (directoryIdentity)
-      await assertDirectoryIdentity(
-        this.revisionsDirectory,
-        this.documentName,
-        directoryIdentity
-      );
-    await fs.writeFile(temporary, JSON.stringify(envelope, null, 2), {
-      encoding: "utf8",
-      mode: 0o600,
-      flag: "wx"
+    if (!observed) return false;
+    const identity = await readDirectoryIdentity(
+      this.revisionsDirectory,
+      this.documentName
+    );
+    const entries = await fs.readdir(this.revisionsDirectory, {
+      withFileTypes: true
     });
-    if (directoryIdentity)
+    await assertDirectoryIdentity(
+      this.revisionsDirectory,
+      this.documentName,
+      identity
+    );
+    const markerEntry = entries.find(
+      (entry) => entry.name === INITIALIZATION_MARKER
+    );
+    if (
+      !markerEntry ||
+      entries.some(
+        (entry) =>
+          !entry.isFile() ||
+          (entry.name !== INITIALIZATION_MARKER && !entry.name.endsWith(".tmp"))
+      )
+    )
+      return false;
+    let marker: {
+      machine_id?: unknown;
+      pid?: unknown;
+      revision_id?: unknown;
+    };
+    try {
+      marker = JSON.parse(
+        await readFileNoFollow(
+          path.join(this.revisionsDirectory, INITIALIZATION_MARKER)
+        )
+      ) as typeof marker;
+    } catch {
+      return false;
+    }
+    if (
+      marker.machine_id !== this.machineId ||
+      typeof marker.pid !== "number" ||
+      typeof marker.revision_id !== "string" ||
+      (marker.pid === process.pid
+        ? !this.failedInitializationIds.has(marker.revision_id)
+        : isProcessAlive(marker.pid))
+    )
+      return false;
+    for (const entry of entries) {
       await assertDirectoryIdentity(
         this.revisionsDirectory,
         this.documentName,
-        directoryIdentity
+        identity
       );
-    await fs.rename(temporary, destination);
-    if (directoryIdentity)
-      await assertDirectoryIdentity(
-        this.revisionsDirectory,
-        this.documentName,
-        directoryIdentity
-      );
-    return envelope;
+      await fs.unlink(path.join(this.revisionsDirectory, entry.name));
+    }
+    await assertDirectoryIdentity(
+      this.revisionsDirectory,
+      this.documentName,
+      identity
+    );
+    await fs.rmdir(this.revisionsDirectory);
+    this.failedInitializationIds.delete(marker.revision_id);
+    return true;
   }
 
   private async loadAll(): Promise<Array<RevisionEnvelope<T>>> {
@@ -226,7 +346,7 @@ export class RevisionStore<T> {
       }
       names.sort();
       if (this.sharedAccessGuard && names.length === 0)
-        throw new Error(
+        throw new EmptySharedRevisionDirectoryError(
           `${this.documentName} has an empty shared revision directory. Retry after shared storage finishes syncing.`
         );
     } catch (error) {
@@ -333,4 +453,17 @@ function assertAcyclic<T>(
 
 function isMissing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !(
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ESRCH"
+    );
+  }
 }

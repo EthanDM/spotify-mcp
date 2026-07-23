@@ -119,6 +119,38 @@ describe("RevisionStore", () => {
     );
   });
 
+  it("recovers an interrupted first shared revision publication", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-revision-interrupted-")
+    );
+    const sharedRoot = path.join(root, "shared");
+    const revisions = path.join(sharedRoot, "preferences", "revisions");
+    await mkdir(sharedRoot);
+    const store = new RevisionStore<{ value: string }>(
+      revisions,
+      "test document",
+      "desktop",
+      normalize,
+      { root: sharedRoot, assertAvailable: async () => undefined }
+    );
+    const rename = vi
+      .spyOn(fs, "rename")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("interrupted publication"), { code: "EIO" })
+      );
+
+    await expect(store.write({ value: "first" }, null)).rejects.toThrow(
+      "interrupted publication"
+    );
+    const recovered = await store.write({ value: "recovered" }, null);
+
+    expect((await store.read())?.revisionId).toBe(recovered.revision_id);
+    expect((await fs.readdir(revisions)).sort()).toEqual([
+      `${recovered.revision_id}.json`
+    ]);
+    rename.mockRestore();
+  });
+
   it("fails when shared revisions disappear after validation", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-revision-directory-gone-")

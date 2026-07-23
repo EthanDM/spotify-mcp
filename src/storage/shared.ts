@@ -114,7 +114,7 @@ export class SharedStorageGuard {
 export async function ensureDirectoryWithinRoot(
   root: string,
   directory: string
-): Promise<void> {
+): Promise<boolean> {
   const relative = path.relative(root, directory);
   if (
     relative === ".." ||
@@ -125,10 +125,12 @@ export async function ensureDirectoryWithinRoot(
       `Shared directory escapes its configured root: ${directory}`
     );
   let current = root;
+  let directoryCreated = false;
   for (const segment of relative.split(path.sep).filter(Boolean)) {
     current = path.join(current, segment);
     try {
       await fs.mkdir(current, { mode: 0o700 });
+      if (current === directory) directoryCreated = true;
     } catch (error) {
       if (!isAlreadyExists(error)) throw error;
       const stats = await fs.lstat(current);
@@ -140,6 +142,7 @@ export async function ensureDirectoryWithinRoot(
         throw new Error(`Shared storage path is not a directory: ${current}`);
     }
   }
+  return directoryCreated;
 }
 
 export async function appendPrivateFile(
