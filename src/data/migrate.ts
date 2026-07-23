@@ -216,15 +216,25 @@ async function collectHashes(
   }
   for (const entry of entries) {
     const child = path.join(target, entry.name);
+    const relative = path.relative(root, child);
     if (entry.isDirectory()) await collectHashes(child, root, hashes);
-    else if (
-      entry.isFile() &&
-      !entry.name.endsWith("context.md") &&
-      entry.name !== "profile-snapshot.json"
-    ) {
-      hashes[path.relative(root, child)] = hash(await fs.readFile(child));
-    }
+    else if (entry.isFile() && !isGeneratedLocalState(relative))
+      hashes[relative] = hash(await fs.readFile(child));
   }
+}
+
+function isGeneratedLocalState(relative: string): boolean {
+  if (
+    relative === path.join("personalization", "profile-snapshot.json") ||
+    relative === path.join("personalization", "personalization-context.md")
+  )
+    return true;
+  const parts = relative.split(path.sep);
+  return (
+    parts.length === 3 &&
+    parts[0] === "people" &&
+    parts[2] === "profile-context.md"
+  );
 }
 
 async function buildPlan(

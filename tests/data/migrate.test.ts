@@ -55,6 +55,10 @@ describe("shared data migration", () => {
       `${JSON.stringify(playlist)}\n`
     );
     await writeFile(path.join(local, "artifacts", "note.md"), "artifact");
+    await writeFile(
+      path.join(local, "artifacts", "profile-context.md"),
+      "durable artifact"
+    );
 
     const environment = {
       ...process.env,
@@ -130,6 +134,7 @@ describe("shared data migration", () => {
     expect(
       manifest.source_hashes["personalization/user-preferences.json"]
     ).toBeTruthy();
+    expect(manifest.source_hashes["artifacts/profile-context.md"]).toBeTruthy();
     expect(Object.keys(manifest.source_hashes)).not.toContain("auth.json");
     expect(manifest.source_root).toBeUndefined();
     expect(manifest.destination_root).toBeUndefined();
