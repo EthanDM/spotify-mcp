@@ -451,6 +451,29 @@ describe("shared data migration", () => {
     });
   });
 
+  it("rejects symlinked shared stream directories", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-stream-link-"));
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(path.join(local, "personalization"), { recursive: true });
+    await mkdir(path.join(shared, "personalization"), { recursive: true });
+    await mkdir(outside);
+    await symlink(outside, path.join(shared, "personalization", "events"));
+    await writeFile(
+      path.join(local, "personalization", "interaction-log.ndjson"),
+      `${JSON.stringify({
+        ts: "2026-01-01T00:00:00.000Z",
+        type: "event",
+        details: {}
+      })}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("must not contain symlinks")
+    });
+  });
+
   it("does not overwrite an artifact created by a concurrent migration", async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), "spotify-artifact-race-")

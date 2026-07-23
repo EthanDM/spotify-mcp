@@ -19,6 +19,7 @@ export function validatePersonalizationEventDocument(
     "personalization event"
   );
   requireString(event.ts, "personalization event.ts");
+  requireCanonicalTimestamp(event.ts, "personalization event.ts");
   requireString(event.type, "personalization event.type");
   requireObject(event.details, "personalization event.details");
   if (event.event_id !== undefined)
@@ -177,6 +178,8 @@ export function validatePersonProfileDocument(
     throw new Error(`Person profile id must be ${expectedId}.`);
   for (const field of ["name", "created_at", "updated_at"])
     requireString(document[field], `person profile.${field}`);
+  for (const field of ["created_at", "updated_at"])
+    requireCanonicalTimestamp(document[field], `person profile.${field}`);
   requireNullableString(document.relationship, "person profile.relationship");
   if (
     document.age !== null &&

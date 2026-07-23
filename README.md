@@ -371,9 +371,7 @@ Record a playlist made for one saved listener:
   "verdict": "success",
   "winning_traits": ["bright", "warm", "comforting"],
   "workflow_learning": "Tightening to roughly 22 tracks improved hit rate and replayability",
-  "artifact_paths": [
-    "~/.config/spotify-mcp/artifacts/people/sample-listener/review.md"
-  ]
+  "artifact_paths": ["artifacts/people/sample-listener/review.md"]
 }
 ```
 

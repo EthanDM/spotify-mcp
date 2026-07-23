@@ -300,6 +300,7 @@ async function validateMigration(
       "entry_id",
       false,
       machineId,
+      sharedRoot,
       (value) =>
         rewriteArtifactPaths(
           value,
@@ -316,7 +317,8 @@ async function validateMigration(
     path.join(sharedRoot, "personalization", "events", `${machineId}.ndjson`),
     "event_id",
     true,
-    machineId
+    machineId,
+    sharedRoot
   );
   await validateArtifactCollisions(
     path.join(localRoot, "artifacts"),
@@ -357,6 +359,7 @@ async function validateNdjson(
   idField: string,
   addEventMetadata = false,
   machineId = "local",
+  sharedRoot: string,
   transform: (
     value: Record<string, unknown>
   ) => Record<string, unknown> = identityRecord,
@@ -365,6 +368,7 @@ async function validateNdjson(
   ) => Record<string, unknown> = transform
 ): Promise<void> {
   if (!(await exists(source))) return;
+  await assertNoSymlinksWithinRoot(sharedRoot, path.dirname(destination));
   const records = new Map<string, string>();
   await addDestinationRecords(
     records,
@@ -510,6 +514,10 @@ async function migrateNdjson(
   ) => Record<string, unknown> = transform
 ): Promise<number> {
   if (!(await exists(source))) return 0;
+  await assertNoSymlinksWithinRoot(
+    sharedStorage.sharedRoot,
+    path.dirname(destination)
+  );
   const sourceLines = (await fs.readFile(source, "utf8"))
     .split("\n")
     .filter((line) => line.trim());

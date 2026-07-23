@@ -50,6 +50,19 @@ describe("conflict resolution document validation", () => {
         details: null
       })
     ).toThrow("details");
+    expect(() =>
+      validatePersonalizationEventDocument({
+        ts: "zzz",
+        type: "event",
+        details: {}
+      })
+    ).toThrow("canonical ISO timestamp");
+    expect(() =>
+      validatePersonProfileDocument(
+        { ...profile(), updated_at: "zzz" },
+        "friend"
+      )
+    ).toThrow("canonical ISO timestamp");
   });
 
   it("rejects unsupported fields and invalid playlist numbers", () => {
