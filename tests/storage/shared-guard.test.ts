@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import {
   access,
   chmod,
@@ -8,11 +9,13 @@ import {
   symlink,
   writeFile
 } from "node:fs/promises";
+import fs from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { StorageConfig } from "../../src/config.js";
 import { PersonalizationStore } from "../../src/personalization/store.js";
@@ -20,8 +23,11 @@ import {
   appendPrivateFile,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
+  readFileNoFollow,
   SharedStorageGuard
 } from "../../src/storage/shared.js";
+
+const execute = promisify(execFile);
 
 describe("shared storage guard", () => {
   it("prevents two installations from claiming the same machine ID", async () => {
@@ -150,6 +156,19 @@ describe("shared storage guard", () => {
     await symlink(outside, linked);
     await expect(appendPrivateFile(linked, "escaped\n")).rejects.toBeTruthy();
     expect(await readFile(outside, "utf8")).toBe("outside\n");
+  });
+
+  it("rejects FIFO reads without blocking", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-read-fifo-"));
+    const fifo = path.join(root, "stream");
+    const regular = path.join(root, "regular");
+    await writeFile(regular, "content");
+    await execute("mkfifo", [fifo]);
+    vi.spyOn(fs, "lstat").mockResolvedValueOnce(await stat(regular));
+
+    await expect(readFileNoFollow(fifo)).rejects.toThrow(
+      "must be a regular file"
+    );
   });
 });
 

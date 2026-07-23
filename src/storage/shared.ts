@@ -172,8 +172,13 @@ export async function appendPrivateFile(
 export async function readFileNoFollow(file: string): Promise<string> {
   if (!(await fs.lstat(file)).isFile())
     throw new Error(`Storage path must be a regular file: ${file}`);
-  const handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const handle = await fs.open(
+    file,
+    constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW
+  );
   try {
+    if (!(await handle.stat()).isFile())
+      throw new Error(`Storage path must be a regular file: ${file}`);
     return await handle.readFile("utf8");
   } finally {
     await handle.close();

@@ -34,6 +34,18 @@ describe("TokenStore", () => {
     await expect(store.read()).resolves.toBeNull();
   });
 
+  it("revalidates storage containment before reading tokens", async () => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "spotify-mcp-token-guard-")
+    );
+    const unavailable = new Error("Local storage no longer physically local");
+    const store = new TokenStore(path.join(tempDir, "auth.json"), async () => {
+      throw unavailable;
+    });
+
+    await expect(store.read()).rejects.toBe(unavailable);
+  });
+
   it("refuses to write through a symlinked token file", async () => {
     const tempDir = await fs.mkdtemp(
       path.join(os.tmpdir(), "spotify-mcp-token-link-")

@@ -31,6 +31,7 @@ export class TokenStore implements TokenStoreLike {
    * Reads stored tokens if they exist. Missing files are treated as "not logged in".
    */
   async read(): Promise<StoredTokens | null> {
+    await this.assertStorageAvailable?.();
     try {
       await assertNoSymlinksWithinRoot(
         path.dirname(this.filePath),
