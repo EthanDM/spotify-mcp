@@ -312,16 +312,33 @@ describe("shared stores", () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-gone-"));
     const store = people(root, "desktop");
     await new PeopleProfileService(store).createProfile({ name: "Friend" });
-    const profileIds = await store.listProfileIds();
-    vi.spyOn(store, "listProfileIds").mockImplementation(async () => {
-      await rm(store.getProfileDirectoryPath(profileIds[0]), {
+    const readProfile = store.readProfile.bind(store);
+    vi.spyOn(store, "readProfile").mockImplementation(async (profileId) => {
+      await rm(store.getProfileDirectoryPath(profileId), {
         recursive: true
       });
-      return profileIds;
+      return readProfile(profileId);
     });
 
     await expect(store.readAllProfiles()).rejects.toThrow(
       "Shared profile disappeared after enumeration: friend"
+    );
+  });
+
+  it("fails when an enumerated profile's revisions disappear", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-profile-revisions-gone-")
+    );
+    const store = people(root, "desktop");
+    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    const readProfile = store.readProfile.bind(store);
+    vi.spyOn(store, "readProfile").mockImplementation(async (profileId) => {
+      await rm(store.getProfilePath(profileId), { recursive: true });
+      return readProfile(profileId);
+    });
+
+    await expect(store.readAllProfiles()).rejects.toThrow(
+      "Shared profile revisions disappeared after enumeration: friend"
     );
   });
 });

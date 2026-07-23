@@ -98,6 +98,12 @@ export class PeopleStore {
     return (await this.readProfile(profileId)) !== null;
   }
   async listProfileIds(): Promise<string[]> {
+    return (await this.listProfileEntries()).map(({ id }) => id);
+  }
+
+  private async listProfileEntries(): Promise<
+    Array<{ id: string; hadRevisionsPath: boolean }>
+  > {
     if (this.sharedMode) {
       await this.assertSharedStorageAvailable!();
       await assertNoSymlinksWithinRoot(this.sharedRoot!, this.sharedDirectory);
@@ -106,15 +112,25 @@ export class PeopleStore {
       const entries = await fs.readdir(this.sharedDirectory, {
         withFileTypes: true
       });
-      const profileIds: string[] = [];
+      const profiles: Array<{ id: string; hadRevisionsPath: boolean }> = [];
       for (const entry of entries) {
         if (entry.isSymbolicLink())
           throw new Error(
             `Shared people directory must not contain symlinks: ${path.join(this.sharedDirectory, entry.name)}`
           );
-        if (entry.isDirectory()) profileIds.push(entry.name);
+        if (!entry.isDirectory()) continue;
+        let hadRevisionsPath = false;
+        if (this.sharedMode) {
+          try {
+            await fs.lstat(this.getProfilePath(entry.name));
+            hadRevisionsPath = true;
+          } catch (error) {
+            if (!isMissing(error)) throw error;
+          }
+        }
+        profiles.push({ id: entry.name, hadRevisionsPath });
       }
-      return profileIds.sort();
+      return profiles.sort((a, b) => a.id.localeCompare(b.id));
     } catch (error) {
       if (isMissing(error)) {
         await this.assertSharedStorageAvailable?.();
@@ -149,23 +165,31 @@ export class PeopleStore {
 
   async readAllProfiles(): Promise<PersonProfile[]> {
     const profiles = await Promise.all(
-      (await this.listProfileIds()).map(async (id) => {
-        const profile = await this.readProfile(id);
-        if (profile === null && this.sharedMode) {
-          try {
-            await fs.lstat(this.getProfileDirectoryPath(id));
-          } catch (error) {
-            if (isMissing(error)) {
+      (await this.listProfileEntries()).map(
+        async ({ id, hadRevisionsPath }) => {
+          const profile = await this.readProfile(id);
+          if (profile === null && this.sharedMode) {
+            try {
+              await fs.lstat(this.getProfileDirectoryPath(id));
+            } catch (error) {
+              if (isMissing(error)) {
+                await this.assertSharedStorageAvailable!();
+                throw new Error(
+                  `Shared profile disappeared after enumeration: ${id}`
+                );
+              }
+              throw error;
+            }
+            if (hadRevisionsPath) {
               await this.assertSharedStorageAvailable!();
               throw new Error(
-                `Shared profile disappeared after enumeration: ${id}`
+                `Shared profile revisions disappeared after enumeration: ${id}`
               );
             }
-            throw error;
           }
+          return profile;
         }
-        return profile;
-      })
+      )
     );
     return profiles.filter(
       (profile): profile is PersonProfile => profile !== null
