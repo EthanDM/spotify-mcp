@@ -43,6 +43,26 @@ describe("tool handlers", () => {
     expect(result.structuredContent).toEqual({ id: "me" });
   });
 
+  it("resolves exact track IDs through the read-only track handler", async () => {
+    const getTrack = vi.fn(async () => ({
+      id: "track-1",
+      uri: "spotify:track:track-1",
+      name: "Seed Track"
+    }));
+    const handlers = createToolHandlers({
+      getTrack
+    } as never);
+
+    const result = await handlers.getTrack({ trackId: "track-1" });
+
+    expect("structuredContent" in result && result.structuredContent).toEqual({
+      id: "track-1",
+      uri: "spotify:track:track-1",
+      name: "Seed Track"
+    });
+    expect(getTrack).toHaveBeenCalledWith("track-1");
+  });
+
   it("rejects incomplete artist feedback before recording personalization state", async () => {
     const handlers = createToolHandlers(
       {} as never,

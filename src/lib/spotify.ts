@@ -11,6 +11,7 @@ import type {
   SavedAlbumsPageResult,
   SavedTracksPageResult,
   SpotifyProfile,
+  TrackResult,
   TrackSearchResult,
   UnfollowPlaylistResult
 } from "../types.js";
@@ -164,6 +165,16 @@ export class SpotifyClient {
       total: page.total,
       next_offset: page.next ? page.offset + page.limit : null
     };
+  }
+
+  /**
+   * Returns normalized metadata for one catalog track by its Spotify ID.
+   */
+  async getTrack(trackId: string): Promise<TrackResult> {
+    const track = await this.requests.request<SpotifyTrackObject>(
+      `/tracks/${encodeURIComponent(trackId)}`
+    );
+    return normalizeTrack(track);
   }
 
   /**
