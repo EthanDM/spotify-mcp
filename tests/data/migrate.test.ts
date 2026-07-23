@@ -679,6 +679,42 @@ describe("shared data migration", () => {
     });
   });
 
+  it("does not satisfy sibling history from local artifacts", async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-sibling-artifact-")
+    );
+    const local = path.join(root, "local");
+    const shared = path.join(root, "shared");
+    const sibling = {
+      ...playlistRecord("sibling"),
+      artifact_paths: [path.join("artifacts", "note.md")]
+    };
+    await mkdir(path.join(local, "people", "friend"), { recursive: true });
+    await mkdir(path.join(local, "artifacts"), { recursive: true });
+    await mkdir(path.join(shared, "people", "friend", "playlist-history"), {
+      recursive: true
+    });
+    await writeFile(path.join(local, "artifacts", "note.md"), "local note");
+    await writeFile(
+      path.join(local, "people", "friend", "playlist-history.ndjson"),
+      `${JSON.stringify(playlistRecord("incoming"))}\n`
+    );
+    await writeFile(
+      path.join(
+        shared,
+        "people",
+        "friend",
+        "playlist-history",
+        "sibling.ndjson"
+      ),
+      `${JSON.stringify(sibling)}\n`
+    );
+
+    await expect(runMigration(local, shared, "desktop")).rejects.toMatchObject({
+      stderr: expect.stringContaining("Referenced artifact does not exist")
+    });
+  });
+
   it("rejects conflicting event IDs from another machine stream", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-event-id-"));
     const local = path.join(root, "local");

@@ -137,6 +137,11 @@ async function main(): Promise<void> {
           value,
           path.join(config.localRoot, "artifacts"),
           path.join(config.sharedRoot!, "artifacts")
+        ),
+      (value) =>
+        rewriteSharedArtifactPaths(
+          value,
+          path.join(config.sharedRoot!, "artifacts")
         )
     );
   }
@@ -300,7 +305,9 @@ async function validateMigration(
           value,
           path.join(localRoot, "artifacts"),
           path.join(sharedRoot, "artifacts")
-        )
+        ),
+      (value) =>
+        rewriteSharedArtifactPaths(value, path.join(sharedRoot, "artifacts"))
     );
   }
 
@@ -352,11 +359,19 @@ async function validateNdjson(
   machineId = "local",
   transform: (
     value: Record<string, unknown>
-  ) => Record<string, unknown> = identityRecord
+  ) => Record<string, unknown> = identityRecord,
+  destinationTransform: (
+    value: Record<string, unknown>
+  ) => Record<string, unknown> = transform
 ): Promise<void> {
   if (!(await exists(source))) return;
   const records = new Map<string, string>();
-  await addDestinationRecords(records, destination, idField, transform);
+  await addDestinationRecords(
+    records,
+    destination,
+    idField,
+    destinationTransform
+  );
   const sourceLines = (await fs.readFile(source, "utf8"))
     .split("\n")
     .filter((line) => line.trim());
@@ -489,14 +504,22 @@ async function migrateNdjson(
   sharedStorage: SharedStorageGuard,
   transform: (
     value: Record<string, unknown>
-  ) => Record<string, unknown> = identityRecord
+  ) => Record<string, unknown> = identityRecord,
+  destinationTransform: (
+    value: Record<string, unknown>
+  ) => Record<string, unknown> = transform
 ): Promise<number> {
   if (!(await exists(source))) return 0;
   const sourceLines = (await fs.readFile(source, "utf8"))
     .split("\n")
     .filter((line) => line.trim());
   const records = new Map<string, string>();
-  await addDestinationRecords(records, destination, idField, transform);
+  await addDestinationRecords(
+    records,
+    destination,
+    idField,
+    destinationTransform
+  );
   let added = 0;
   const additions: string[] = [];
   for (const [index, line] of sourceLines.entries()) {
@@ -696,6 +719,17 @@ function rewriteArtifactPaths(
       );
     })
   };
+}
+
+function rewriteSharedArtifactPaths(
+  value: Record<string, unknown>,
+  sharedArtifactsRoot: string
+): Record<string, unknown> {
+  return rewriteArtifactPaths(
+    value,
+    path.join(path.dirname(sharedArtifactsRoot), ".no-local-artifacts"),
+    sharedArtifactsRoot
+  );
 }
 
 function assertNoSymlinkSegmentsSync(root: string, target: string): void {

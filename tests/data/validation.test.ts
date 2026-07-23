@@ -38,6 +38,12 @@ describe("conflict resolution document validation", () => {
       })
     ).toThrow("non-empty string");
     expect(() =>
+      validatePersonPlaylistRecordDocument({
+        ...playlistRecord(),
+        recorded_at: "zzz"
+      })
+    ).toThrow("canonical ISO timestamp");
+    expect(() =>
       validatePersonalizationEventDocument({
         ts: "2026-01-01T00:00:00.000Z",
         type: "event",

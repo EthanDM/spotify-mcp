@@ -58,6 +58,10 @@ export function validatePersonPlaylistRecordDocument(
   );
   for (const field of ["entry_id", "recorded_at", "playlist_name"])
     requireString(record[field], `playlist history record.${field}`);
+  requireCanonicalTimestamp(
+    record.recorded_at,
+    "playlist history record.recorded_at"
+  );
   for (const field of [
     "playlist_id",
     "playlist_url",
@@ -305,6 +309,14 @@ function requireKnownKeys(
 function requireString(value: unknown, label: string): void {
   if (typeof value !== "string" || !value.trim())
     throw new Error(`${label} must be a non-empty string.`);
+}
+function requireCanonicalTimestamp(value: unknown, label: string): void {
+  if (
+    typeof value !== "string" ||
+    Number.isNaN(Date.parse(value)) ||
+    new Date(value).toISOString() !== value
+  )
+    throw new Error(`${label} must be a canonical ISO timestamp.`);
 }
 function requireNullableString(value: unknown, label: string): void {
   if (value !== null && typeof value !== "string")
