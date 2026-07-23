@@ -26,8 +26,12 @@ const codexHome = await resolveFilesystemPath(configuredCodexHome);
 if (codexHome === path.parse(codexHome).root)
   throw new Error("CODEX_HOME must be a safe absolute directory.");
 
-const skillsRoot = path.join(codexHome, "skills");
 if (apply) await fs.mkdir(codexHome, { recursive: true, mode: 0o700 });
+const skillsRoot = await resolveFilesystemPath(path.join(codexHome, "skills"));
+if (!isWithin(codexHome, skillsRoot))
+  throw new Error(
+    "CODEX_HOME/skills must resolve inside the configured Codex home."
+  );
 const stagingRoot = apply
   ? await fs.mkdtemp(path.join(codexHome, ".spotify-mcp-skills-"))
   : null;
@@ -115,4 +119,13 @@ async function resolveFilesystemPath(target) {
   }
   const resolvedExisting = await fs.realpath(existing);
   return path.join(resolvedExisting, path.relative(existing, normalized));
+}
+
+function isWithin(parent, candidate) {
+  const relative = path.relative(parent, candidate);
+  return (
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }

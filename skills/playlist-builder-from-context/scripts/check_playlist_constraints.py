@@ -191,7 +191,6 @@ def main() -> None:
         phase_values = [phase_order[str(phase)] for phase in phases]
         ordered_phase_valid = (
             all(current <= following for current, following in zip(phase_values, phase_values[1:]))
-            and phase_counts["opening"] > 0
             and phase_counts["close"] > 0
             and phases[-1] == "close"
         )

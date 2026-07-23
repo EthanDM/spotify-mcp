@@ -34,6 +34,27 @@ describe("playlist constraint checker", () => {
       }
     );
   });
+
+  it("accepts an ordered build that starts after the opening phase", async () => {
+    const tracks = [
+      track("spotify:track:one", "development"),
+      track("spotify:track:two", "close")
+    ];
+    const manifest = await writeManifest({
+      target_track_count: 2,
+      tracks,
+      curation_mode: "recovered",
+      playback_mode: "ordered"
+    });
+    const result = await execute("python3", [checker, manifest]);
+    const report = JSON.parse(result.stdout) as {
+      passes_applicable_hard_checks: boolean;
+      ordered_phase_progression_valid: boolean;
+    };
+
+    expect(report.ordered_phase_progression_valid).toBe(true);
+    expect(report.passes_applicable_hard_checks).toBe(true);
+  });
 });
 
 async function writeManifest(value: unknown): Promise<string> {
@@ -43,4 +64,17 @@ async function writeManifest(value: unknown): Promise<string> {
   const manifest = path.join(directory, "manifest.json");
   await writeFile(manifest, JSON.stringify(value));
   return manifest;
+}
+
+function track(uri: string, phase: string): Record<string, string> {
+  return {
+    uri,
+    name: uri,
+    primary_artist: uri,
+    bucket: "familiar",
+    evidence_tier: "anchor",
+    prompt_fit: "strong",
+    functional_fit: "strong",
+    phase
+  };
 }

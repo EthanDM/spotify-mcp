@@ -49,7 +49,10 @@ describe("skill installer", () => {
       ".skill-work"
     );
     await mkdir(workDirectory, { recursive: true });
-    await writeFile(path.join(workDirectory, "private.json"), "private");
+    await writeFile(
+      path.join(workDirectory, "private.json"),
+      "spotify:track:generated"
+    );
     try {
       await execute("node", ["scripts/install-skills.mjs", "--apply"], {
         env: { ...process.env, CODEX_HOME: codexHome }
@@ -65,6 +68,11 @@ describe("skill installer", () => {
           )
         )
       ).rejects.toMatchObject({ code: "ENOENT" });
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).resolves.toMatchObject({
+        stdout: expect.stringContaining("Skill privacy check passed")
+      });
     } finally {
       await rm(workDirectory, { recursive: true, force: true });
     }
@@ -89,5 +97,42 @@ describe("skill installer", () => {
     ).rejects.toMatchObject({
       stderr: expect.stringContaining("safe absolute directory")
     });
+
+    const codexHome = await mkdtemp(
+      path.join(os.tmpdir(), "spotify-skills-link-")
+    );
+    await symlink(path.parse(codexHome).root, path.join(codexHome, "skills"));
+    await expect(
+      execute("node", ["scripts/install-skills.mjs"], {
+        env: { ...process.env, CODEX_HOME: codexHome }
+      })
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining(
+        "skills must resolve inside the configured Codex home"
+      )
+    });
+  });
+
+  it("rejects Linux and Windows personal home paths", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "privacy-path-fixture.md"
+    );
+    try {
+      await writeFile(
+        fixture,
+        ["/home/alice/private/file", String.raw`C:\Users\alice\private`].join(
+          "\n"
+        )
+      );
+      await expect(
+        execute("node", ["scripts/check-skill-privacy.mjs"])
+      ).rejects.toMatchObject({
+        stderr: expect.stringContaining("personal home path")
+      });
+    } finally {
+      await rm(fixture, { force: true });
+    }
   });
 });

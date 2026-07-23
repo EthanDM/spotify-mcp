@@ -9,6 +9,8 @@ This directory is the canonical source for the Codex skills that operate against
 
 The packages contain workflow instructions, reference material, agent metadata, and deterministic validation code only. Do not add OAuth credentials, environment files, personalization state, people profiles, playlist histories, generated manifests, or artifacts.
 
+The playlist builder requires `python3` for its deterministic pre-creation constraint check.
+
 Preview installation into the active Codex home:
 
 ```bash

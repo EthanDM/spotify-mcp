@@ -19,7 +19,11 @@ const forbiddenFileNames = new Set([
   "user-preferences.json"
 ]);
 const forbiddenContent = [
-  { label: "personal macOS home path", pattern: /\/Users\/[^/\s]+\// },
+  {
+    label: "personal home path",
+    pattern:
+      /(?:\/Users\/[^/\s]+\/|\/home\/[^/\s]+\/|\/root\/|[A-Za-z]:\\Users\\[^\\\s]+\\)/
+  },
   {
     label: "email address",
     pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
@@ -73,9 +77,19 @@ process.stdout.write("Skill privacy check passed.\n");
 async function listFiles(directory) {
   const files = [];
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    if (isGenerated(entry.name)) continue;
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...(await listFiles(entryPath)));
     else if (entry.isFile()) files.push(entryPath);
   }
   return files;
+}
+
+function isGenerated(name) {
+  return (
+    name === ".skill-work" ||
+    name === "__pycache__" ||
+    name === ".DS_Store" ||
+    name.endsWith(".pyc")
+  );
 }

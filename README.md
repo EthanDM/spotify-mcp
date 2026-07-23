@@ -47,6 +47,7 @@ The server exposes these tools:
 
 - Node.js 22+
 - `pnpm`
+- Python 3 for the bundled playlist-builder constraint checker
 - A Spotify app in the Spotify Developer Dashboard
 
 ## Quick Start
