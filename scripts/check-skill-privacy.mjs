@@ -52,6 +52,10 @@ const forbiddenContent = [
     pattern: /\b(?:gh[opusr]_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)\b/
   },
   {
+    label: "OpenAI API key",
+    pattern: /\bsk-(?:(?:proj|svcacct)-)?[A-Za-z0-9_-]{20,}\b/
+  },
+  {
     label: "private key",
     pattern: /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----/
   },

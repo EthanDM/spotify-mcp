@@ -274,6 +274,30 @@ describe("skill installer", () => {
     }
   });
 
+  it("rejects OpenAI API keys", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "openai-key-fixture.md"
+    );
+    try {
+      for (const token of [
+        "sk-proj-abcdefghijklmnopqrstuvwxyz123456",
+        "sk-svcacct-abcdefghijklmnopqrstuvwxyz123456",
+        "sk-abcdefghijklmnopqrstuvwxyz123456"
+      ]) {
+        await writeFile(fixture, token);
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("OpenAI API key")
+        });
+      }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
   it("rejects stored Spotify token fields under arbitrary filenames", async () => {
     const fixture = path.resolve(
       "skills",

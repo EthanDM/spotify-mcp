@@ -77,7 +77,7 @@ describe("playlist constraint checker", () => {
   });
 
   it("normalizes artist metadata before applying artist limits", async () => {
-    const tracks = ["Same", "Same ", " Same", "Same  "].map(
+    const tracks = ["Same", "same ", " SAME", "SaMe  "].map(
       (primaryArtist, index) => ({
         ...track(
           `spotify:track:${String(index + 1).padStart(22, "0")}`,
@@ -89,16 +89,25 @@ describe("playlist constraint checker", () => {
     const manifest = await writeManifest({
       target_track_count: 4,
       tracks,
-      curation_mode: "general"
+      curation_mode: "general",
+      recent_comparable_builds: [
+        {
+          id: "prior",
+          track_uris: ["spotify:track:0000000000000000000099"],
+          primary_artists: [" SAME "]
+        }
+      ]
     });
     const result = await execute("python3", [checker, manifest]);
     const report = JSON.parse(result.stdout) as {
+      new_primary_artist_track_count: number;
       passes_applicable_hard_checks: boolean;
       primary_artist_counts: Record<string, number>;
       violations: string[];
     };
 
-    expect(report.primary_artist_counts).toEqual({ Same: 4 });
+    expect(report.primary_artist_counts).toEqual({ same: 4 });
+    expect(report.new_primary_artist_track_count).toBe(0);
     expect(report.violations).toContain("primary_artist_cap");
     expect(report.passes_applicable_hard_checks).toBe(false);
   });

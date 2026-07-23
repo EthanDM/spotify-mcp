@@ -171,7 +171,7 @@ def main() -> None:
             fail(f"tracks[{index}].phase is required for ordered playback")
         uris.append(uri)
         names.append(name)
-        artists.append(artist.strip())
+        artists.append(artist.strip().casefold())
         buckets.append(bucket)
         evidence_tiers.append(evidence_tier)
         prompt_fits.append(prompt_fit)
@@ -256,7 +256,7 @@ def main() -> None:
             )
         )
         build_artists = {
-            artist.strip()
+            artist.strip().casefold()
             for artist in require_nonempty_strings(
                 build.get("primary_artists", []),
                 f"recent_comparable_builds[{index}].primary_artists",
@@ -276,7 +276,7 @@ def main() -> None:
         if not isinstance(build, dict):
             fail(f"recent_general_builds[{index}] must be an object")
         build_artists = {
-            artist.strip()
+            artist.strip().casefold()
             for artist in require_nonempty_strings(
                 build.get("primary_artists", []),
                 f"recent_general_builds[{index}].primary_artists",
