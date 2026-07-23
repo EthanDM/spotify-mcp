@@ -37,6 +37,8 @@ Do not express false statistical precision. A numeric rating is structured judgm
 
 ### Front-loaded quality
 
+Apply this failure mode only when order is claimed or materially important.
+
 Symptoms:
 
 - best tracks are clustered in the first quarter

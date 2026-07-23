@@ -12,6 +12,7 @@ const forbiddenFileNames = new Set([
   ".env",
   ".netrc",
   ".npmrc",
+  ".pypirc",
   "_netrc",
   "auth.json",
   "interaction-log.ndjson",
