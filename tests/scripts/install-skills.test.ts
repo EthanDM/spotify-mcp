@@ -405,6 +405,8 @@ describe("skill installer", () => {
       path.resolve("skills", "playlist-review", ".git-credentials"),
       path.resolve("skills", "playlist-review", ".irb_history"),
       path.resolve("skills", "playlist-review", ".ksh_history"),
+      path.resolve("skills", "playlist-review", ".my.cnf"),
+      path.resolve("skills", "playlist-review", ".mylogin.cnf"),
       path.resolve("skills", "playlist-review", ".mysql_history"),
       path.resolve("skills", "playlist-review", ".netrc"),
       path.resolve("skills", "playlist-review", ".node_repl_history"),

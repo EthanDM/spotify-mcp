@@ -15,6 +15,8 @@ const forbiddenFileNames = new Set([
   ".git-credentials",
   ".irb_history",
   ".ksh_history",
+  ".my.cnf",
+  ".mylogin.cnf",
   ".mysql_history",
   ".netrc",
   ".node_repl_history",
