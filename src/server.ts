@@ -4,16 +4,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { TokenStore } from "./auth/token-store.js";
-import {
-  getPeopleDirectoryPath,
-  getPersonalizationDirectoryPath,
-  getTokenFilePath
-} from "./config.js";
+import { getStorageConfig } from "./config.js";
 import { SpotifyClient } from "./lib/spotify.js";
 import { PeopleProfileService } from "./people/service.js";
 import { PeopleStore } from "./people/store.js";
 import { PersonalizationService } from "./personalization/service.js";
 import { PersonalizationStore } from "./personalization/store.js";
+import { SharedStorageGuard } from "./storage/shared.js";
 import {
   addPlaylistItemsSchema,
   archivePlaylistSchema,
@@ -53,13 +50,41 @@ const server = new McpServer({
   version: "0.1.0"
 });
 
-const spotify = new SpotifyClient(new TokenStore(getTokenFilePath()));
+const storage = getStorageConfig();
+const sharedStorage = storage.sharedMode
+  ? new SharedStorageGuard(storage)
+  : null;
+await sharedStorage?.claimMachineId();
+const spotify = new SpotifyClient(
+  new TokenStore(
+    storage.tokenFile,
+    sharedStorage ? () => sharedStorage.assertWritable() : undefined
+  )
+);
 const personalization = new PersonalizationService(
   spotify,
-  new PersonalizationStore(getPersonalizationDirectoryPath())
+  storage.sharedMode
+    ? new PersonalizationStore({
+        localDirectory: storage.localPersonalizationDirectory,
+        sharedDirectory: storage.sharedPersonalizationDirectory,
+        machineId: storage.machineId!,
+        sharedMode: true,
+        sharedRoot: sharedStorage!.sharedRoot,
+        assertSharedStorageAvailable: () => sharedStorage!.assertWritable()
+      })
+    : new PersonalizationStore(storage.localPersonalizationDirectory)
 );
 const people = new PeopleProfileService(
-  new PeopleStore(getPeopleDirectoryPath())
+  storage.sharedMode
+    ? new PeopleStore({
+        localDirectory: storage.localPeopleDirectory,
+        sharedDirectory: storage.sharedPeopleDirectory,
+        machineId: storage.machineId!,
+        sharedMode: true,
+        sharedRoot: sharedStorage!.sharedRoot,
+        assertSharedStorageAvailable: () => sharedStorage!.assertWritable()
+      })
+    : new PeopleStore(storage.localPeopleDirectory)
 );
 const handlers = createToolHandlers(spotify, personalization, people);
 

@@ -1,4 +1,7 @@
-import { getPersonArtifactsDirectoryPath } from "../config.js";
+import {
+  getPersonArtifactsDirectoryPath,
+  toPortableArtifactPath
+} from "../config.js";
 import { PeopleStore } from "./store.js";
 import type {
   PersonPlaylistRecord,
@@ -81,10 +84,8 @@ export class PeopleProfileService {
       notes: input.notes ?? []
     });
 
-    await this.store.writeProfile(profile);
-    await this.rebuildContext(profile.id, profile, []);
-
-    return this.buildProfileResult(profile, 0);
+    await this.store.writeProfile(profile, null);
+    return this.buildProfileResult(profile);
   }
 
   /**
@@ -97,7 +98,8 @@ export class PeopleProfileService {
     profileId: string,
     input: ProfileUpsertInput
   ): Promise<PersonProfileResult> {
-    const existing = await this.requireProfile(profileId);
+    const existingState = await this.requireProfileVersioned(profileId);
+    const existing = existingState.value;
     const updated = normalizeProfile({
       ...existing,
       ...(input.name !== undefined ? { name: input.name } : {}),
@@ -149,11 +151,8 @@ export class PeopleProfileService {
       updated_at: new Date().toISOString()
     });
 
-    await this.store.writeProfile(updated);
-    const history = await this.store.readPlaylistHistory(profileId);
-    await this.rebuildContext(profileId, updated, history);
-
-    return this.buildProfileResult(updated, history.length);
+    await this.store.writeProfile(updated, existingState.revisionId);
+    return this.buildProfileResult(updated);
   }
 
   /**
@@ -179,8 +178,7 @@ export class PeopleProfileService {
    */
   async getProfile(profileId: string): Promise<PersonProfileResult> {
     const profile = await this.requireProfile(profileId);
-    const historyCount = await this.store.countPlaylistHistory(profileId);
-    return this.buildProfileResult(profile, historyCount);
+    return this.buildProfileResult(profile);
   }
 
   /**
@@ -189,12 +187,6 @@ export class PeopleProfileService {
   async getProfileContext(
     profileId: string
   ): Promise<PersonProfileContextResult> {
-    const existing = await this.store.readContext(profileId);
-
-    if (existing) {
-      return existing;
-    }
-
     const profile = await this.requireProfile(profileId);
     const history = await this.store.readPlaylistHistory(profileId);
     return this.rebuildContext(profileId, profile, history);
@@ -215,14 +207,12 @@ export class PeopleProfileService {
     sentiment?: "prefer" | "avoid";
     value: string;
   }): Promise<PersonProfileResult> {
-    const profile = await this.requireProfile(input.profileId);
+    const profileState = await this.requireProfileVersioned(input.profileId);
+    const profile = profileState.value;
     const updated = applyFeedback(profile, input);
 
-    await this.store.writeProfile(updated);
-    const history = await this.store.readPlaylistHistory(input.profileId);
-    await this.rebuildContext(input.profileId, updated, history);
-
-    return this.buildProfileResult(updated, history.length);
+    await this.store.writeProfile(updated, profileState.revisionId);
+    return this.buildProfileResult(updated);
   }
 
   /**
@@ -274,6 +264,9 @@ export class PeopleProfileService {
       entry: record,
       playlist_history_count: history.length,
       playlist_history_path: this.store.getPlaylistHistoryPath(input.profileId),
+      playlist_history_paths: await this.store.getPlaylistHistoryPaths(
+        input.profileId
+      ),
       context_path: this.store.getContextPath(input.profileId),
       artifacts_directory_path: getPersonArtifactsDirectoryPath(
         input.profileId
@@ -305,6 +298,15 @@ export class PeopleProfileService {
     return profile;
   }
 
+  private async requireProfileVersioned(profileId: string): Promise<{
+    value: PersonProfile;
+    revisionId: string | null;
+  }> {
+    const state = await this.store.readProfileVersioned(profileId);
+    if (!state.value) throw new Error(`Unknown person profile: ${profileId}`);
+    return { value: state.value, revisionId: state.revisionId };
+  }
+
   private async buildProfileSummary(
     profile: PersonProfile
   ): Promise<PersonProfileSummary> {
@@ -321,20 +323,25 @@ export class PeopleProfileService {
   }
 
   private async buildProfileResult(
-    profile: PersonProfile,
-    playlistHistoryCount?: number
+    profile: PersonProfile
   ): Promise<PersonProfileResult> {
-    const historyCount =
-      playlistHistoryCount ??
-      (await this.store.countPlaylistHistory(profile.id));
+    const profileState = await this.store.readProfileVersioned(profile.id);
+    if (!profileState.value)
+      throw new Error(`Unknown person profile: ${profile.id}`);
+    const history = await this.store.readPlaylistHistory(profile.id);
+    await this.rebuildContext(profile.id, profileState.value, history);
 
     return {
-      profile,
-      profile_path: this.store.getProfilePath(profile.id),
+      profile: profileState.value,
+      profile_path:
+        profileState.revisionPath ?? this.store.getProfilePath(profile.id),
       playlist_history_path: this.store.getPlaylistHistoryPath(profile.id),
+      playlist_history_paths: await this.store.getPlaylistHistoryPaths(
+        profile.id
+      ),
       context_path: this.store.getContextPath(profile.id),
       artifacts_directory_path: getPersonArtifactsDirectoryPath(profile.id),
-      playlist_history_count: historyCount
+      playlist_history_count: history.length
     };
   }
 
@@ -619,7 +626,9 @@ function normalizePlaylistRecord(
     workflow_learning: normalizeNullableString(record.workflow_learning),
     winning_traits: uniqueValues(record.winning_traits),
     losing_traits: uniqueValues(record.losing_traits),
-    artifact_paths: uniqueValues(record.artifact_paths),
+    artifact_paths: uniqueValues(record.artifact_paths).map((artifactPath) =>
+      toPortableArtifactPath(artifactPath)
+    ),
     notes: uniqueValues(record.notes)
   };
 }

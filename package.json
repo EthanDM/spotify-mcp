@@ -11,6 +11,8 @@
     "format:check": "prettier . --check",
     "lint": "eslint . --max-warnings=0",
     "personalize:refresh": "tsx src/personalization/cli.ts refresh",
+    "data:migrate": "tsx src/data/migrate.ts",
+    "data:resolve": "tsx src/data/resolve.ts",
     "smoke": "tsx src/smoke.ts",
     "skills:check": "node scripts/check-skill-privacy.mjs",
     "skills:install": "node scripts/install-skills.mjs",

@@ -1,8 +1,9 @@
 import "dotenv/config";
 
-import { getTokenFilePath } from "./config.js";
+import { getStorageConfig } from "./config.js";
 import { TokenStore } from "./auth/token-store.js";
 import { SpotifyClient } from "./lib/spotify.js";
+import { SharedStorageGuard } from "./storage/shared.js";
 import type { TrackResult } from "./types.js";
 
 /**
@@ -13,7 +14,17 @@ import type { TrackResult } from "./types.js";
  * playlist deletion for cleanup after the run.
  */
 async function main(): Promise<void> {
-  const client = new SpotifyClient(new TokenStore(getTokenFilePath()));
+  const storage = getStorageConfig();
+  const sharedStorage = storage.sharedMode
+    ? new SharedStorageGuard(storage)
+    : null;
+  await sharedStorage?.claimMachineId();
+  const client = new SpotifyClient(
+    new TokenStore(
+      storage.tokenFile,
+      sharedStorage ? () => sharedStorage.assertWritable() : undefined
+    )
+  );
   const stamp = createTimestamp();
   const smokePrefix = `[spotify-mcp smoke ${stamp}]`;
   const verbose = process.env.SPOTIFY_SMOKE_VERBOSE === "1";

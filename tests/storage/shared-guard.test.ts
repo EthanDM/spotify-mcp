@@ -1,0 +1,295 @@
+import { execFile } from "node:child_process";
+import {
+  access,
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from "node:fs/promises";
+import fs from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+
+import { describe, expect, it, vi } from "vitest";
+
+import type { StorageConfig } from "../../src/config.js";
+import { PersonalizationStore } from "../../src/personalization/store.js";
+import {
+  appendPrivateFile,
+  assertNoSymlinksWithinRoot,
+  ensureDirectoryWithinRoot,
+  readBytesNoFollow,
+  readDirectoryIdentity,
+  readFileNoFollow,
+  SharedStorageGuard
+} from "../../src/storage/shared.js";
+
+const execute = promisify(execFile);
+
+describe("shared storage guard", () => {
+  it("prevents two installations from claiming the same machine ID", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-claims-"));
+    const sharedRoot = path.join(root, "shared");
+    await mkdir(sharedRoot);
+    const desktop = new SharedStorageGuard(
+      config(path.join(root, "desktop"), sharedRoot, "desktop")
+    );
+    const duplicate = new SharedStorageGuard(
+      config(path.join(root, "other"), sharedRoot, "desktop")
+    );
+    const neo = new SharedStorageGuard(
+      config(path.join(root, "neo"), sharedRoot, "neo")
+    );
+
+    await desktop.claimMachineId();
+    await expect(duplicate.claimMachineId()).rejects.toThrow(
+      "already claimed by another installation"
+    );
+    await expect(neo.claimMachineId()).resolves.toBeUndefined();
+
+    const installationId = (
+      await readFile(path.join(root, "desktop", "installation-id"), "utf8")
+    ).trim();
+    const claim = JSON.parse(
+      await readFile(path.join(sharedRoot, "machines", "desktop.json"), "utf8")
+    ) as { installation_id: string };
+    expect(claim.installation_id).toBe(installationId);
+  });
+
+  it("rejects reads and writes when the shared root disappears", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-unmounted-"));
+    const sharedRoot = path.join(root, "shared");
+    const localRoot = path.join(root, "local");
+    await mkdir(sharedRoot);
+    const guard = new SharedStorageGuard(
+      config(localRoot, sharedRoot, "desktop")
+    );
+    await guard.claimMachineId();
+    const store = new PersonalizationStore({
+      localDirectory: path.join(localRoot, "personalization"),
+      sharedDirectory: path.join(sharedRoot, "personalization"),
+      machineId: "desktop",
+      sharedMode: true,
+      sharedRoot,
+      assertSharedStorageAvailable: () => guard.assertWritable()
+    });
+
+    await rm(sharedRoot, { recursive: true });
+    await expect(store.readPreferences()).rejects.toThrow(
+      "Configured shared storage is unavailable"
+    );
+    await expect(store.readRecentEvents(10)).rejects.toThrow(
+      "Configured shared storage is unavailable"
+    );
+    await expect(
+      store.appendEvent({
+        ts: "2026-01-01T00:00:00.000Z",
+        type: "feedback",
+        details: {}
+      })
+    ).rejects.toThrow("Configured shared storage is unavailable");
+    await expect(access(sharedRoot)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects symlinked directories beneath the shared root", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-shared-link-"));
+    const sharedRoot = path.join(root, "shared");
+    const outside = path.join(root, "outside");
+    await mkdir(sharedRoot);
+    await mkdir(outside);
+    await symlink(outside, path.join(sharedRoot, "people"));
+
+    await expect(
+      ensureDirectoryWithinRoot(
+        sharedRoot,
+        path.join(sharedRoot, "people", "friend")
+      )
+    ).rejects.toThrow("must not contain symlinks");
+  });
+
+  it("rejects a symlinked root itself", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-root-link-"));
+    const outside = path.join(root, "outside");
+    const linkedRoot = path.join(root, "linked");
+    await mkdir(outside);
+    await symlink(outside, linkedRoot);
+
+    await expect(
+      assertNoSymlinksWithinRoot(linkedRoot, path.join(linkedRoot, "file"))
+    ).rejects.toThrow("must not contain symlinks");
+  });
+
+  it("rejects a symlinked machine-claim directory after startup", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-claim-link-"));
+    const sharedRoot = path.join(root, "shared");
+    const localRoot = path.join(root, "local");
+    const outside = path.join(root, "outside");
+    await mkdir(sharedRoot);
+    const guard = new SharedStorageGuard(
+      config(localRoot, sharedRoot, "desktop")
+    );
+    await guard.claimMachineId();
+    await mkdir(outside);
+    await rm(path.join(sharedRoot, "machines"), { recursive: true });
+    await symlink(outside, path.join(sharedRoot, "machines"));
+
+    await expect(guard.assertWritable()).rejects.toThrow(
+      "must not contain symlinks"
+    );
+  });
+
+  it("rejects a machine-claim directory replaced during a read", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-claim-swap-"));
+    const sharedRoot = path.join(root, "shared");
+    const localRoot = path.join(root, "local");
+    const machines = path.join(sharedRoot, "machines");
+    const original = path.join(root, "original-machines");
+    const replacement = path.join(root, "replacement-machines");
+    await mkdir(sharedRoot);
+    const guard = new SharedStorageGuard(
+      config(localRoot, sharedRoot, "desktop")
+    );
+    await guard.claimMachineId();
+    await mkdir(replacement);
+    await writeFile(
+      path.join(replacement, "desktop.json"),
+      await readFile(path.join(machines, "desktop.json"))
+    );
+    const openFile = fs.open.bind(fs);
+    const open = vi
+      .spyOn(fs, "open")
+      .mockImplementationOnce(async (...args) => {
+        await rename(machines, original);
+        await rename(replacement, machines);
+        return openFile(...args);
+      });
+
+    await expect(guard.assertWritable()).rejects.toThrow(
+      "Shared storage directory changed"
+    );
+    open.mockRestore();
+  });
+
+  it("appends without following symlinks and restores private permissions", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-append-"));
+    const file = path.join(root, "history.ndjson");
+    await writeFile(file, "first\n");
+    await chmod(file, 0o644);
+    await appendPrivateFile(file, "second\n");
+    expect(await readFile(file, "utf8")).toBe("first\nsecond\n");
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+
+    const outside = path.join(root, "outside.ndjson");
+    const linked = path.join(root, "linked.ndjson");
+    await writeFile(outside, "outside\n");
+    await symlink(outside, linked);
+    await expect(appendPrivateFile(linked, "escaped\n")).rejects.toBeTruthy();
+    expect(await readFile(outside, "utf8")).toBe("outside\n");
+  });
+
+  it("rejects an append when its directory changes during the write", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-append-swap-"));
+    const directory = path.join(root, "events");
+    const original = path.join(root, "original-events");
+    const replacement = path.join(root, "replacement-events");
+    const file = path.join(directory, "desktop.ndjson");
+    await mkdir(directory);
+    await mkdir(replacement);
+    await writeFile(file, "first\n");
+    const directoryIdentity = await readDirectoryIdentity(directory);
+    const openFile = fs.open.bind(fs);
+    const open = vi
+      .spyOn(fs, "open")
+      .mockImplementationOnce(async (...args) => {
+        const handle = await openFile(...args);
+        const write = handle.writeFile.bind(handle);
+        vi.spyOn(handle, "writeFile").mockImplementationOnce(
+          async (...writeArgs) => {
+            await rename(directory, original);
+            await rename(replacement, directory);
+            return write(...writeArgs);
+          }
+        );
+        return handle;
+      });
+
+    await expect(
+      appendPrivateFile(file, "second\n", directoryIdentity)
+    ).rejects.toThrow("Shared storage directory changed");
+    expect(await readFile(path.join(original, "desktop.ndjson"), "utf8")).toBe(
+      "first\nsecond\n"
+    );
+    open.mockRestore();
+  });
+
+  it("rejects FIFO reads without blocking", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-read-fifo-"));
+    const fifo = path.join(root, "stream");
+    const regular = path.join(root, "regular");
+    await writeFile(regular, "content");
+    await execute("mkfifo", [fifo]);
+    vi.spyOn(fs, "lstat").mockResolvedValueOnce(await stat(regular));
+
+    await expect(readFileNoFollow(fifo)).rejects.toThrow(
+      "must be a regular file"
+    );
+  });
+
+  it("rejects a byte read when its directory changes during the read", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "spotify-read-swap-"));
+    const directory = path.join(root, "artifacts");
+    const original = path.join(root, "original-artifacts");
+    const replacement = path.join(root, "replacement-artifacts");
+    const file = path.join(directory, "note.md");
+    await mkdir(directory);
+    await mkdir(replacement);
+    await writeFile(file, "artifact");
+    await writeFile(path.join(replacement, "note.md"), "artifact");
+    const directoryIdentity = await readDirectoryIdentity(directory);
+    const openFile = fs.open.bind(fs);
+    const open = vi
+      .spyOn(fs, "open")
+      .mockImplementationOnce(async (...args) => {
+        const handle = await openFile(...args);
+        const read = handle.readFile.bind(handle);
+        vi.spyOn(handle, "readFile").mockImplementationOnce(
+          async (...readArgs) => {
+            await rename(directory, original);
+            await rename(replacement, directory);
+            return read(...readArgs);
+          }
+        );
+        return handle;
+      });
+
+    await expect(readBytesNoFollow(file, directoryIdentity)).rejects.toThrow(
+      "Shared storage directory changed"
+    );
+    open.mockRestore();
+  });
+});
+
+function config(
+  localRoot: string,
+  sharedRoot: string,
+  machineId: string
+): StorageConfig {
+  return {
+    localRoot,
+    sharedRoot,
+    machineId,
+    tokenFile: path.join(localRoot, "auth.json"),
+    localPersonalizationDirectory: path.join(localRoot, "personalization"),
+    sharedPersonalizationDirectory: path.join(sharedRoot, "personalization"),
+    localPeopleDirectory: path.join(localRoot, "people"),
+    sharedPeopleDirectory: path.join(sharedRoot, "people"),
+    artifactsDirectory: path.join(sharedRoot, "artifacts"),
+    sharedMode: true
+  };
+}

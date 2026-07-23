@@ -188,6 +188,39 @@ Set `CODEX_HOME` to install into another absolute Codex directory. Run `pnpm ski
 - `spotify_record_playlist_evaluation` captures evidence about specific playlist outputs, including score, verdict, winning traits, losing traits, and workflow learnings.
 - Friend/family profiles are manual-context-first in v1. Create or update the person profile, read their generated context, build the playlist with the normal Spotify tools, then record the resulting playlist back against the profile.
 
+### Sharing durable state between Macs
+
+Shared mode is opt-in. Keep authentication and generated state local while putting durable preferences, people profiles, history, and artifacts in iCloud:
+
+```dotenv
+SPOTIFY_MCP_DATA_DIR=~/.config/spotify-mcp
+SPOTIFY_MCP_SHARED_DATA_DIR=~/Library/Mobile Documents/com~apple~CloudDocs/App Data/spotify-mcp
+SPOTIFY_MCP_MACHINE_ID=desktop
+```
+
+Use a different stable lowercase id such as `neo` on the other Mac. On first use, Spotify MCP creates a private local `installation-id` and reserves the machine id under the shared `machines/` directory. A machine id can belong to only one installation, so do not copy `installation-id` between Macs or reuse an id after configuring another Mac.
+
+Never move or symlink the entire `~/.config/spotify-mcp` directory: `auth.json`, Spotify snapshots, generated contexts, `.env`, and Codex configuration must remain machine-local. Spotify MCP rechecks the iCloud root and machine reservation before each shared read or write. If the configured root disappears, the operation fails instead of reporting empty durable state, recreating a local shadow directory, or falling back to local storage.
+
+Migrate the desktop first after iCloud is available:
+
+```bash
+pnpm data:migrate
+pnpm data:migrate -- --apply
+```
+
+The first command is read-only. Create the configured directory in iCloud before applying the migration. Apply first validates a private immutable snapshot of the local migration inputs, then reserves the machine id and writes shared state from that snapshot. The migration preserves the original local files, excludes credentials and generated state, and can be rerun without duplicating records. Allow iCloud to finish syncing before configuring or migrating Neo. If Neo has different preferences or profiles, migration imports them as explicit revision forks while still migrating its histories and artifacts; resolve those forks afterward.
+
+Preferences and person profiles retain immutable revisions. If offline edits create multiple tips, normal access refuses to choose one. Inspect and resolve the conflict explicitly:
+
+```bash
+pnpm data:resolve -- --document preferences
+pnpm data:resolve -- --document preferences --from-revision <revision-id> --apply
+pnpm data:resolve -- --document people/<profile-id> --from-file /absolute/path/to/merged-profile.json --apply
+```
+
+Resolution preserves all earlier revisions. Removing the shared variables restores legacy local behavior using the untouched local files; newer shared activity is not copied back automatically. Give shared artifacts unique or timestamped names because differing files at the same relative path are treated as collisions during migration. In shared mode, durable playlist history stores artifact references relative to the shared root (for example, `artifacts/people/sample-listener/review.md`) so they remain valid when each Mac mounts iCloud at a different absolute path.
+
 ## Example Calls
 
 Create a playlist:
@@ -358,9 +391,7 @@ Record a playlist made for one saved listener:
   "verdict": "success",
   "winning_traits": ["bright", "warm", "comforting"],
   "workflow_learning": "Tightening to roughly 22 tracks improved hit rate and replayability",
-  "artifact_paths": [
-    "~/.config/spotify-mcp/artifacts/people/sample-listener/review.md"
-  ]
+  "artifact_paths": ["artifacts/people/sample-listener/review.md"]
 }
 ```
 

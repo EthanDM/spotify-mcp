@@ -1,6 +1,19 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { RevisionStore } from "../storage/revisions.js";
+import {
+  validatePersonalizationEventDocument,
+  validatePreferencesDocument
+} from "../data/validation.js";
+import {
+  appendPrivateFile,
+  assertNoSymlinksWithinRoot,
+  ensureDirectoryWithinRoot,
+  readDirectoryIdentity as readSharedDirectoryIdentity,
+  readFileNoFollow
+} from "../storage/shared.js";
 import type {
   PersonalizationContextResult,
   PersonalizationEvent,
@@ -9,105 +22,158 @@ import type {
   PersonalizationUseCasePreferences
 } from "./types.js";
 
-const SNAPSHOT_FILE = "profile-snapshot.json";
-const PREFERENCES_FILE = "user-preferences.json";
-const INTERACTION_LOG_FILE = "interaction-log.ndjson";
-const CONTEXT_FILE = "personalization-context.md";
+type StoreOptions = {
+  localDirectory: string;
+  sharedDirectory: string;
+  machineId: string;
+  sharedMode: true;
+  sharedRoot: string;
+  assertSharedStorageAvailable: () => Promise<void>;
+};
 
-/**
- * Local file store for personalization state.
- *
- * All files live under one user-scoped directory so refreshes, feedback, and
- * agent reads can share the same state without mixing it into the repo.
- */
+type DirectoryIdentity = { device: number; inode: number };
+
 export class PersonalizationStore {
-  constructor(private readonly directoryPath: string) {}
+  private readonly localDirectory: string;
+  private readonly sharedDirectory: string;
+  private readonly machineId: string;
+  private readonly sharedMode: boolean;
+  private readonly sharedRoot: string | null;
+  private readonly assertSharedStorageAvailable: (() => Promise<void>) | null;
 
-  /**
-   * Absolute path to the persisted Spotify-derived snapshot file.
-   */
+  constructor(options: string | StoreOptions) {
+    this.localDirectory =
+      typeof options === "string" ? options : options.localDirectory;
+    this.sharedDirectory =
+      typeof options === "string" ? options : options.sharedDirectory;
+    this.machineId = typeof options === "string" ? "local" : options.machineId;
+    this.sharedMode = typeof options !== "string";
+    this.sharedRoot = typeof options === "string" ? null : options.sharedRoot;
+    this.assertSharedStorageAvailable =
+      typeof options === "string" ? null : options.assertSharedStorageAvailable;
+  }
+
   get snapshotPath(): string {
-    return path.join(this.directoryPath, SNAPSHOT_FILE);
+    return path.join(this.localDirectory, "profile-snapshot.json");
   }
-
-  /**
-   * Absolute path to the persisted explicit-preferences file.
-   */
   get preferencesPath(): string {
-    return path.join(this.directoryPath, PREFERENCES_FILE);
+    return this.sharedMode
+      ? path.join(this.sharedDirectory, "preferences", "revisions")
+      : path.join(this.localDirectory, "user-preferences.json");
   }
-
-  /**
-   * Absolute path to the append-only interaction log.
-   */
   get interactionLogPath(): string {
-    return path.join(this.directoryPath, INTERACTION_LOG_FILE);
+    return this.sharedMode
+      ? path.join(this.sharedDirectory, "events", `${this.machineId}.ndjson`)
+      : path.join(this.localDirectory, "interaction-log.ndjson");
+  }
+  get contextPath(): string {
+    return path.join(this.localDirectory, "personalization-context.md");
   }
 
-  /**
-   * Absolute path to the generated agent-facing summary.
-   */
-  get contextPath(): string {
-    return path.join(this.directoryPath, CONTEXT_FILE);
+  async getInteractionLogPaths(
+    observeDirectory?: (identity: DirectoryIdentity) => void
+  ): Promise<string[]> {
+    if (!this.sharedMode) return [this.interactionLogPath];
+    await this.assertSharedStorageAvailable!();
+    const directoryObserved = await assertNoSymlinksWithinRoot(
+      this.sharedRoot!,
+      path.join(this.sharedDirectory, "events")
+    );
+    return listFiles(
+      path.join(this.sharedDirectory, "events"),
+      ".ndjson",
+      this.assertSharedStorageAvailable!,
+      directoryObserved,
+      observeDirectory
+    );
+  }
+
+  async getPreferencesDocumentPath(): Promise<string> {
+    if (!this.sharedMode) return this.preferencesPath;
+    const state = await this.preferenceRevisions().read();
+    return state?.revisionPath ?? this.preferencesPath;
   }
 
   async readSnapshot(): Promise<PersonalizationSnapshot | null> {
-    return this.readJsonFile<PersonalizationSnapshot>(this.snapshotPath);
+    return readJson(this.snapshotPath);
   }
-
   async writeSnapshot(snapshot: PersonalizationSnapshot): Promise<void> {
-    await this.ensureDirectory();
-    await fs.writeFile(this.snapshotPath, JSON.stringify(snapshot, null, 2), {
-      encoding: "utf8",
-      mode: 0o600
-    });
-    await fs.chmod(this.snapshotPath, 0o600);
+    await this.assertSharedStorageAvailable?.();
+    await assertNoSymlinksWithinRoot(this.localDirectory, this.snapshotPath);
+    await writePrivateJson(this.snapshotPath, snapshot);
   }
 
-  /**
-   * Preferences default to a valid empty state so callers do not need a first-run branch.
-   */
   async readPreferences(): Promise<PersonalizationPreferences> {
-    const stored = await this.readJsonFile<PersonalizationPreferences>(
-      this.preferencesPath
-    );
+    return (await this.readPreferencesVersioned()).value;
+  }
 
-    return normalizePreferences(stored);
+  async readPreferencesVersioned(): Promise<{
+    value: PersonalizationPreferences;
+    revisionId: string | null;
+    revisionPath: string | null;
+  }> {
+    if (!this.sharedMode)
+      return {
+        value: normalizePreferences(await readJson(this.preferencesPath)),
+        revisionId: null,
+        revisionPath: this.preferencesPath
+      };
+    const state = await this.preferenceRevisions().read();
+    return {
+      value: state
+        ? normalizePreferences(validatePreferencesDocument(state.value))
+        : normalizePreferences(null),
+      revisionId: state?.revisionId ?? null,
+      revisionPath: state?.revisionPath ?? null
+    };
   }
 
   async writePreferences(
-    preferences: PersonalizationPreferences
+    preferences: PersonalizationPreferences,
+    expectedRevisionId: string | null = null
   ): Promise<void> {
-    await this.ensureDirectory();
-    await fs.writeFile(
-      this.preferencesPath,
-      JSON.stringify(preferences, null, 2),
-      {
-        encoding: "utf8",
-        mode: 0o600
-      }
-    );
-    await fs.chmod(this.preferencesPath, 0o600);
+    if (!this.sharedMode)
+      return writePrivateJson(this.preferencesPath, preferences);
+    await this.preferenceRevisions().write(preferences, expectedRevisionId);
   }
 
   async appendEvent(event: PersonalizationEvent): Promise<void> {
-    await this.ensureDirectory();
-    await fs.appendFile(
+    const persisted = this.sharedMode
+      ? {
+          ...event,
+          event_id: event.event_id ?? randomUUID(),
+          machine_id: this.machineId,
+          schema_version: 1 as const
+        }
+      : event;
+    let directoryIdentity: DirectoryIdentity | undefined;
+    if (this.sharedMode) {
+      await this.assertSharedStorageAvailable!();
+      await ensureDirectoryWithinRoot(
+        this.sharedRoot!,
+        path.dirname(this.interactionLogPath)
+      );
+      directoryIdentity = await readSharedDirectoryIdentity(
+        path.dirname(this.interactionLogPath)
+      );
+    } else {
+      await fs.mkdir(path.dirname(this.interactionLogPath), {
+        recursive: true,
+        mode: 0o700
+      });
+    }
+    await appendPrivateFile(
       this.interactionLogPath,
-      `${JSON.stringify(event)}\n`,
-      "utf8"
+      `${JSON.stringify(persisted)}\n`,
+      directoryIdentity
     );
-    await fs.chmod(this.interactionLogPath, 0o600).catch(() => undefined);
   }
 
   async countEvents(): Promise<number> {
-    const events = await this.readAllEvents();
-    return events.length;
+    return (await this.readAllEvents()).length;
   }
-
   async readRecentEvents(limit: number): Promise<PersonalizationEvent[]> {
-    const events = await this.readAllEvents();
-    return events.slice(-limit);
+    return (await this.readAllEvents()).slice(-limit);
   }
 
   async readContext(): Promise<PersonalizationContextResult | null> {
@@ -116,69 +182,98 @@ export class PersonalizationStore {
       return {
         context,
         context_path: this.contextPath,
-        rebuilt_at: await this.readContextRebuiltAt(context)
+        rebuilt_at: context.match(/^Rebuilt: (.+)$/m)?.[1] ?? null
       };
     } catch (error) {
-      if (isMissingFile(error)) {
-        return null;
-      }
-
+      if (isMissing(error)) return null;
       throw error;
     }
   }
-
   async writeContext(context: string): Promise<void> {
-    await this.ensureDirectory();
-    await fs.writeFile(this.contextPath, context, {
-      encoding: "utf8",
-      mode: 0o600
+    await this.assertSharedStorageAvailable?.();
+    await assertNoSymlinksWithinRoot(this.localDirectory, this.contextPath);
+    await writePrivate(this.contextPath, context);
+  }
+
+  private preferenceRevisions(): RevisionStore<PersonalizationPreferences> {
+    return new RevisionStore(
+      this.preferencesPath,
+      "personalization preferences",
+      this.machineId,
+      (value) => normalizePreferences(validatePreferencesDocument(value)),
+      this.sharedMode
+        ? {
+            root: this.sharedRoot!,
+            assertAvailable: this.assertSharedStorageAvailable!
+          }
+        : null
+    );
+  }
+
+  async readAllEvents(): Promise<PersonalizationEvent[]> {
+    let directoryIdentity: DirectoryIdentity | null = null;
+    const files = await this.getInteractionLogPaths((identity) => {
+      directoryIdentity = identity;
     });
-    await fs.chmod(this.contextPath, 0o600);
-  }
-
-  private async ensureDirectory(): Promise<void> {
-    await fs.mkdir(this.directoryPath, {
-      recursive: true,
-      mode: 0o700
-    });
-  }
-
-  private async readJsonFile<T>(filePath: string): Promise<T | null> {
-    try {
-      const raw = await fs.readFile(filePath, "utf8");
-      return JSON.parse(raw) as T;
-    } catch (error) {
-      if (isMissingFile(error)) {
-        return null;
+    const byId = new Map<
+      string,
+      { event: PersonalizationEvent; raw: string }
+    >();
+    for (const file of files) {
+      let raw: string;
+      try {
+        if (directoryIdentity)
+          await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
+        raw = await readFileNoFollow(file);
+        if (directoryIdentity)
+          await assertDirectoryIdentity(path.dirname(file), directoryIdentity);
+      } catch (error) {
+        if (isMissing(error)) {
+          await this.assertSharedStorageAvailable?.();
+          if (!this.sharedMode) continue;
+          throw new Error(
+            `Shared personalization stream disappeared after enumeration: ${file}`
+          );
+        }
+        throw error;
       }
-
-      throw error;
-    }
-  }
-
-  private async readAllEvents(): Promise<PersonalizationEvent[]> {
-    try {
-      const raw = await fs.readFile(this.interactionLogPath, "utf8");
-      return raw
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => JSON.parse(line) as PersonalizationEvent);
-    } catch (error) {
-      if (isMissingFile(error)) {
-        return [];
+      for (const [index, line] of raw.split("\n").entries()) {
+        if (!line.trim()) continue;
+        let event: PersonalizationEvent;
+        try {
+          event = validatePersonalizationEventDocument(JSON.parse(line));
+        } catch {
+          throw new Error(
+            `Invalid personalization event at ${file}:${index + 1}.`
+          );
+        }
+        if (
+          this.sharedMode &&
+          (typeof event.event_id !== "string" ||
+            typeof event.machine_id !== "string" ||
+            event.machine_id !== path.basename(file, ".ndjson") ||
+            event.schema_version !== 1)
+        )
+          throw new Error(
+            `Invalid shared personalization event metadata at ${file}:${index + 1}.`
+          );
+        const id = event.event_id ?? `legacy:${file}:${index + 1}`;
+        const { machine_id: ignoredMachineId, ...semanticEvent } = event;
+        void ignoredMachineId;
+        const canonical = canonicalJson(semanticEvent);
+        const existing = byId.get(id);
+        if (existing && existing.raw !== canonical)
+          throw new Error(`Conflicting personalization event ID ${id}.`);
+        if (!existing) byId.set(id, { event, raw: canonical });
       }
-
-      throw error;
     }
-  }
-
-  /**
-   * The summary file includes its rebuild timestamp in the second line.
-   */
-  private async readContextRebuiltAt(context: string): Promise<string | null> {
-    const match = context.match(/^Rebuilt: (.+)$/m);
-    return match?.[1] ?? null;
+    return [...byId.values()]
+      .map(({ event }) => event)
+      .sort(
+        (a, b) =>
+          a.ts.localeCompare(b.ts) ||
+          (a.event_id ?? "").localeCompare(b.event_id ?? "")
+      );
   }
 }
 
@@ -198,19 +293,15 @@ export function createEmptyUseCasePreferences(): PersonalizationUseCasePreferenc
   };
 }
 
-function normalizePreferences(
+export function normalizePreferences(
   preferences: PersonalizationPreferences | null
 ): PersonalizationPreferences {
-  const useCases = Object.fromEntries(
-    Object.entries(preferences?.use_cases ?? {}).map(([name, useCase]) => [
+  const use_cases = Object.fromEntries(
+    Object.entries(preferences?.use_cases ?? {}).map(([name, value]) => [
       name,
-      {
-        ...createEmptyUseCasePreferences(),
-        ...useCase
-      }
+      { ...createEmptyUseCasePreferences(), ...value }
     ])
   );
-
   return {
     preferred_artists: preferences?.preferred_artists ?? [],
     avoided_artists: preferences?.avoided_artists ?? [],
@@ -220,15 +311,100 @@ function normalizePreferences(
     avoided_traits: preferences?.avoided_traits ?? [],
     discovery_level: preferences?.discovery_level ?? null,
     notes: preferences?.notes ?? [],
-    use_cases: useCases,
+    use_cases,
     updated_at: preferences?.updated_at ?? null
   };
 }
 
-function isMissingFile(error: unknown): boolean {
+async function listFiles(
+  directory: string,
+  suffix: string,
+  assertSharedStorageAvailable?: () => Promise<void>,
+  directoryObserved = false,
+  observeDirectory?: (identity: DirectoryIdentity) => void
+): Promise<string[]> {
+  const directoryIdentity = directoryObserved
+    ? await readDirectoryIdentity(directory)
+    : null;
+  try {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    if (directoryIdentity)
+      await assertDirectoryIdentity(directory, directoryIdentity);
+    const files: string[] = [];
+    for (const entry of entries) {
+      if (!entry.name.endsWith(suffix)) continue;
+      if (!entry.isFile())
+        throw new Error(
+          `Shared stream must be a regular file: ${path.join(directory, entry.name)}`
+        );
+      files.push(path.join(directory, entry.name));
+    }
+    if (directoryIdentity) observeDirectory?.(directoryIdentity);
+    return files.sort();
+  } catch (error) {
+    if (isMissing(error)) {
+      await assertSharedStorageAvailable?.();
+      if (directoryObserved)
+        throw new Error(
+          `Shared stream directory disappeared after validation: ${directory}`
+        );
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function readDirectoryIdentity(
+  directory: string
+): Promise<DirectoryIdentity> {
+  const stats = await fs.lstat(directory);
+  if (!stats.isDirectory())
+    throw new Error(`Shared stream path is not a directory: ${directory}`);
+  return { device: stats.dev, inode: stats.ino };
+}
+
+async function assertDirectoryIdentity(
+  directory: string,
+  expected: DirectoryIdentity
+): Promise<void> {
+  const actual = await readDirectoryIdentity(directory);
+  if (actual.device !== expected.device || actual.inode !== expected.inode)
+    throw new Error(
+      `Shared stream directory changed during read: ${directory}`
+    );
+}
+async function readJson<T>(file: string): Promise<T | null> {
+  try {
+    return JSON.parse(await fs.readFile(file, "utf8")) as T;
+  } catch (error) {
+    if (isMissing(error)) return null;
+    throw error;
+  }
+}
+async function writePrivateJson(file: string, value: unknown): Promise<void> {
+  await writePrivate(file, JSON.stringify(value, null, 2));
+}
+async function writePrivate(file: string, value: string): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  await fs.writeFile(file, value, { encoding: "utf8", mode: 0o600 });
+  await fs.chmod(file, 0o600);
+}
+function isMissing(error: unknown): boolean {
   return (
     error instanceof Error &&
     "code" in error &&
     (error as NodeJS.ErrnoException).code === "ENOENT"
   );
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }

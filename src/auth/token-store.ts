@@ -1,6 +1,11 @@
+import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import {
+  assertNoSymlinksWithinRoot,
+  readFileNoFollow
+} from "../storage/shared.js";
 import type { StoredTokens } from "../types.js";
 
 export type TokenStoreLike = {
@@ -17,14 +22,22 @@ export class TokenStore implements TokenStoreLike {
    * The store is path-based so tests can redirect persistence without mocking
    * the filesystem API itself.
    */
-  constructor(private readonly filePath: string) {}
+  constructor(
+    private readonly filePath: string,
+    private readonly assertStorageAvailable?: () => Promise<void>
+  ) {}
 
   /**
    * Reads stored tokens if they exist. Missing files are treated as "not logged in".
    */
   async read(): Promise<StoredTokens | null> {
+    await this.assertStorageAvailable?.();
     try {
-      const raw = await fs.readFile(this.filePath, "utf8");
+      await assertNoSymlinksWithinRoot(
+        path.dirname(this.filePath),
+        this.filePath
+      );
+      const raw = await readFileNoFollow(this.filePath);
       return JSON.parse(raw) as StoredTokens;
     } catch (error) {
       const isMissingFile =
@@ -45,14 +58,33 @@ export class TokenStore implements TokenStoreLike {
    * both the directory and file private to the current user.
    */
   async write(tokens: StoredTokens): Promise<void> {
+    await this.assertStorageAvailable?.();
     await fs.mkdir(path.dirname(this.filePath), {
       recursive: true,
       mode: 0o700
     });
-    await fs.writeFile(this.filePath, JSON.stringify(tokens, null, 2), {
-      encoding: "utf8",
-      mode: 0o600
-    });
-    await fs.chmod(this.filePath, 0o600);
+    await assertNoSymlinksWithinRoot(
+      path.dirname(this.filePath),
+      this.filePath
+    );
+    const handle = await fs.open(
+      this.filePath,
+      constants.O_CREAT |
+        constants.O_TRUNC |
+        constants.O_NONBLOCK |
+        constants.O_WRONLY |
+        constants.O_NOFOLLOW,
+      0o600
+    );
+    try {
+      if (!(await handle.stat()).isFile())
+        throw new Error(
+          `Token storage path must be a regular file: ${this.filePath}`
+        );
+      await handle.writeFile(JSON.stringify(tokens, null, 2), "utf8");
+      await handle.chmod(0o600);
+    } finally {
+      await handle.close();
+    }
   }
 }

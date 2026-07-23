@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { constants, lstatSync, realpathSync } from "node:fs";
+import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -14,79 +16,311 @@ export const DEFAULT_SCOPES = [
   "user-follow-read"
 ];
 
-/**
- * Returns the Spotify OAuth client ID from the local environment.
- *
- * The auth CLI and MCP server share this single source of truth so both paths
- * fail with the same actionable setup error instead of drifting into separate
- * setup contracts.
- */
+export type StorageConfig = {
+  localRoot: string;
+  sharedRoot: string | null;
+  machineId: string | null;
+  tokenFile: string;
+  localPersonalizationDirectory: string;
+  sharedPersonalizationDirectory: string;
+  localPeopleDirectory: string;
+  sharedPeopleDirectory: string;
+  artifactsDirectory: string;
+  sharedMode: boolean;
+};
+
 export function getSpotifyClientId(): string {
   const clientId = process.env.SPOTIFY_CLIENT_ID?.trim();
-
-  if (!clientId) {
+  if (!clientId)
     throw new Error("Missing SPOTIFY_CLIENT_ID in the environment.");
-  }
-
   return clientId;
 }
 
-/**
- * Returns the redirect URI used for the local PKCE callback server.
- *
- * Keeping this in config allows the auth CLI and OAuth refresh path to agree on
- * the same redirect URI without threading it through every call site.
- */
 export function getSpotifyRedirectUri(): string {
   return process.env.SPOTIFY_REDIRECT_URI?.trim() || DEFAULT_REDIRECT_URI;
 }
 
-/**
- * Returns the on-disk token location.
- *
- * Token material lives outside the repo so a normal development workflow cannot
- * accidentally commit Spotify credentials.
- */
+export function getStorageConfig(
+  environment: NodeJS.ProcessEnv = process.env
+): StorageConfig {
+  rejectExplicitEmpty(environment, "SPOTIFY_MCP_DATA_DIR");
+  rejectExplicitEmpty(environment, "SPOTIFY_MCP_SHARED_DATA_DIR");
+  const localRoot = resolveConfiguredPath(
+    environment.SPOTIFY_MCP_DATA_DIR,
+    path.join(homedir(), ".config", "spotify-mcp"),
+    "SPOTIFY_MCP_DATA_DIR"
+  );
+  const configuredSharedRoot = environment.SPOTIFY_MCP_SHARED_DATA_DIR?.trim();
+  const sharedRoot = configuredSharedRoot
+    ? resolveConfiguredPath(
+        configuredSharedRoot,
+        undefined,
+        "SPOTIFY_MCP_SHARED_DATA_DIR"
+      )
+    : null;
+  const machineId = environment.SPOTIFY_MCP_MACHINE_ID?.trim() || null;
+
+  if (
+    sharedRoot &&
+    (isSameOrNested(localRoot, sharedRoot) ||
+      isSameOrNested(sharedRoot, localRoot))
+  ) {
+    throw new Error(
+      "SPOTIFY_MCP_SHARED_DATA_DIR and SPOTIFY_MCP_DATA_DIR must be separate, non-nested directories."
+    );
+  }
+  if (sharedRoot && !machineId) {
+    throw new Error(
+      "SPOTIFY_MCP_MACHINE_ID is required when SPOTIFY_MCP_SHARED_DATA_DIR is set."
+    );
+  }
+  if (machineId && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(machineId)) {
+    throw new Error(
+      "SPOTIFY_MCP_MACHINE_ID must be a lowercase slug using letters, numbers, underscores, or hyphens."
+    );
+  }
+
+  return {
+    localRoot,
+    sharedRoot,
+    machineId,
+    tokenFile: path.join(localRoot, "auth.json"),
+    localPersonalizationDirectory: path.join(localRoot, "personalization"),
+    sharedPersonalizationDirectory: path.join(
+      sharedRoot ?? localRoot,
+      "personalization"
+    ),
+    localPeopleDirectory: path.join(localRoot, "people"),
+    sharedPeopleDirectory: path.join(sharedRoot ?? localRoot, "people"),
+    artifactsDirectory: path.join(sharedRoot ?? localRoot, "artifacts"),
+    sharedMode: sharedRoot !== null
+  };
+}
+
+export async function assertSharedStorageAvailable(
+  config: StorageConfig
+): Promise<void> {
+  if (!config.sharedRoot) return;
+  try {
+    const stats = await fs.stat(config.sharedRoot);
+    if (!stats.isDirectory()) throw new Error("not a directory");
+    const [physicalLocalRoot, physicalSharedRoot] = await Promise.all([
+      resolvePhysicalPath(config.localRoot),
+      resolvePhysicalPath(config.sharedRoot)
+    ]);
+    if (
+      isSameOrNested(physicalLocalRoot, physicalSharedRoot) ||
+      isSameOrNested(physicalSharedRoot, physicalLocalRoot)
+    )
+      throw new Error("local and shared roots resolve to nested directories");
+    for (const localPath of [
+      config.tokenFile,
+      path.join(config.localRoot, "installation-id"),
+      config.localPersonalizationDirectory,
+      path.join(config.localPersonalizationDirectory, "profile-snapshot.json"),
+      config.localPeopleDirectory
+    ]) {
+      const physicalLocalPath = await resolvePhysicalPath(localPath);
+      if (isSameOrNested(physicalSharedRoot, physicalLocalPath))
+        throw new Error(
+          `sensitive local path resolves inside shared storage: ${localPath}`
+        );
+    }
+    await fs.access(config.sharedRoot, constants.R_OK | constants.W_OK);
+  } catch (error) {
+    const detail = error instanceof Error ? ` (${error.message})` : "";
+    throw new Error(
+      `Configured shared storage is unavailable: ${config.sharedRoot}${detail}. Ensure iCloud is mounted and the directory exists before starting Spotify MCP.`
+    );
+  }
+}
+
+function rejectExplicitEmpty(
+  environment: NodeJS.ProcessEnv,
+  name: "SPOTIFY_MCP_DATA_DIR" | "SPOTIFY_MCP_SHARED_DATA_DIR"
+): void {
+  if (environment[name] !== undefined && !environment[name]?.trim()) {
+    throw new Error(`${name} must not be empty.`);
+  }
+}
+
 export function getTokenFilePath(): string {
-  return path.join(homedir(), ".config", "spotify-mcp", "auth.json");
+  const config = getStorageConfig();
+  if (config.sharedRoot) {
+    const physicalSharedRoot = resolvePhysicalPathSync(config.sharedRoot);
+    const physicalTokenFile = resolvePhysicalPathSync(config.tokenFile);
+    if (isSameOrNested(physicalSharedRoot, physicalTokenFile))
+      throw new Error(
+        "The local token path resolves inside shared storage; refusing to expose the token path."
+      );
+  }
+  return config.tokenFile;
 }
 
-/**
- * Returns the directory used for personalization state files.
- *
- * Personalization data stays outside the repo because it is user-specific
- * runtime state, not source-controlled application data.
- */
+function resolvePhysicalPathSync(target: string): string {
+  const missingSegments: string[] = [];
+  let existing = target;
+  while (true) {
+    try {
+      return path.join(realpathSync(existing), ...missingSegments.reverse());
+    } catch (error) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      )
+        throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw error;
+      missingSegments.push(path.basename(existing));
+      existing = parent;
+    }
+  }
+}
+
 export function getPersonalizationDirectoryPath(): string {
-  return path.join(homedir(), ".config", "spotify-mcp", "personalization");
+  return getStorageConfig().localPersonalizationDirectory;
 }
 
-/**
- * Returns the directory used for saved friend/family listener profiles.
- *
- * These profiles are separate from the authenticated account's own Spotify
- * personalization because they describe other people, not the current user.
- */
 export function getPeopleDirectoryPath(): string {
-  return path.join(homedir(), ".config", "spotify-mcp", "people");
+  return getStorageConfig().sharedPeopleDirectory;
 }
 
-/**
- * Returns the directory used for generated user-specific artifacts.
- *
- * Playlist writeups and similar outputs are useful to keep around, but they are
- * runtime artifacts for one account, not source-controlled project files.
- */
 export function getArtifactsDirectoryPath(): string {
-  return path.join(homedir(), ".config", "spotify-mcp", "artifacts");
+  return getStorageConfig().artifactsDirectory;
 }
 
-/**
- * Returns the recommended artifact directory for one saved listener profile.
- *
- * Profile artifacts stay outside canonical structured state so future agents
- * can preserve writeups and review notes without turning them into source data.
- */
 export function getPersonArtifactsDirectoryPath(profileId: string): string {
   return path.join(getArtifactsDirectoryPath(), "people", profileId);
+}
+
+export function toPortableArtifactPath(
+  artifactPath: string,
+  config: StorageConfig = getStorageConfig()
+): string {
+  if (!config.sharedMode) return artifactPath;
+  const expandedPath =
+    artifactPath === "~"
+      ? homedir()
+      : artifactPath.startsWith("~/")
+        ? path.join(homedir(), artifactPath.slice(2))
+        : artifactPath;
+  if (path.isAbsolute(expandedPath)) {
+    if (!isSameOrNested(config.artifactsDirectory, expandedPath))
+      throw new Error(
+        `Shared artifact paths must be inside ${config.artifactsDirectory}.`
+      );
+    const physicalArtifactsDirectory = realpathSync(config.artifactsDirectory);
+    const physicalSharedRoot = realpathSync(config.sharedRoot!);
+    if (!isSameOrNested(physicalSharedRoot, physicalArtifactsDirectory))
+      throw new Error(
+        `Shared artifacts directory must not traverse outside ${config.sharedRoot}.`
+      );
+    assertNoSymlinkSegments(config.sharedRoot!, expandedPath);
+    const physicalArtifactPath = realpathSync(expandedPath);
+    if (!isSameOrNested(physicalArtifactsDirectory, physicalArtifactPath))
+      throw new Error(
+        `Shared artifact paths must not traverse outside ${config.artifactsDirectory}.`
+      );
+    assertRegularArtifactTarget(physicalArtifactPath);
+    return path.join(
+      "artifacts",
+      path.relative(config.artifactsDirectory, expandedPath)
+    );
+  }
+  const normalized = path.normalize(expandedPath);
+  if (!isSameOrNested("artifacts", normalized))
+    throw new Error(
+      `Shared artifact paths must be relative to the shared artifacts directory.`
+    );
+  const physicalArtifactsDirectory = realpathSync(config.artifactsDirectory);
+  const physicalSharedRoot = realpathSync(config.sharedRoot!);
+  if (!isSameOrNested(physicalSharedRoot, physicalArtifactsDirectory))
+    throw new Error(
+      `Shared artifacts directory must not traverse outside ${config.sharedRoot}.`
+    );
+  assertNoSymlinkSegments(
+    config.sharedRoot!,
+    path.join(config.sharedRoot!, normalized)
+  );
+  const physicalArtifactPath = realpathSync(
+    path.join(config.sharedRoot!, normalized)
+  );
+  if (!isSameOrNested(physicalArtifactsDirectory, physicalArtifactPath))
+    throw new Error(
+      `Shared artifact paths must not traverse outside ${config.artifactsDirectory}.`
+    );
+  assertRegularArtifactTarget(physicalArtifactPath);
+  return normalized;
+}
+
+function assertRegularArtifactTarget(artifactPath: string): void {
+  const stats = lstatSync(artifactPath);
+  if (!stats.isFile() && !stats.isDirectory())
+    throw new Error(
+      `Shared artifact paths must reference a regular file or directory: ${artifactPath}`
+    );
+}
+
+function assertNoSymlinkSegments(root: string, target: string): void {
+  const relative = path.relative(root, target);
+  let current = root;
+  for (const segment of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    if (lstatSync(current).isSymbolicLink())
+      throw new Error(
+        `Shared artifact paths must not contain symlinks: ${current}`
+      );
+  }
+}
+
+function resolveConfiguredPath(
+  value: string | undefined,
+  fallback: string | undefined,
+  name: string
+): string {
+  const raw = value?.trim() || fallback;
+  if (!raw) throw new Error(`${name} must not be empty.`);
+  const expanded =
+    raw === "~"
+      ? homedir()
+      : raw.startsWith("~/")
+        ? path.join(homedir(), raw.slice(2))
+        : raw;
+  if (!path.isAbsolute(expanded))
+    throw new Error(`${name} must be an absolute path or start with ~/.`);
+  const resolved = path.resolve(expanded);
+  if (resolved === path.parse(resolved).root)
+    throw new Error(`${name} must not be a filesystem root.`);
+  return resolved;
+}
+
+function isSameOrNested(parent: string, candidate: string): boolean {
+  const relative = path.relative(parent, candidate);
+  return (
+    relative === "" ||
+    (!relative.startsWith(`..${path.sep}`) &&
+      relative !== ".." &&
+      !path.isAbsolute(relative))
+  );
+}
+
+async function resolvePhysicalPath(target: string): Promise<string> {
+  const missingSegments: string[] = [];
+  let existing = target;
+  while (true) {
+    try {
+      return path.join(
+        await fs.realpath(existing),
+        ...missingSegments.reverse()
+      );
+    } catch (error) {
+      if (
+        !(error instanceof Error && "code" in error && error.code === "ENOENT")
+      )
+        throw error;
+      const parent = path.dirname(existing);
+      if (parent === existing) throw error;
+      missingSegments.push(path.basename(existing));
+      existing = parent;
+    }
+  }
 }
