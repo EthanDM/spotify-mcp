@@ -348,6 +348,29 @@ describe("skill installer", () => {
     }
   });
 
+  it("rejects case-insensitive Spotify credential assignments", async () => {
+    const fixture = path.resolve(
+      "skills",
+      "playlist-review",
+      "spotify-credentials.txt"
+    );
+    try {
+      for (const assignment of [
+        "spotify_client_secret=secret",
+        "Spotify_Access_Token=token"
+      ]) {
+        await writeFile(fixture, assignment);
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("Spotify credential assignment")
+        });
+      }
+    } finally {
+      await rm(fixture, { force: true });
+    }
+  });
+
   it("rejects container credential-store paths", async () => {
     for (const [directoryName, fileName] of [
       [".docker", "config.json"],

@@ -191,6 +191,23 @@ describe("playlist constraint checker", () => {
     });
   });
 
+  it("rejects blank person profile IDs", async () => {
+    const manifest = await writeManifest({
+      target_track_count: 1,
+      tracks: [track("spotify:track:0000000000000000000001", "close")],
+      audience_mode: "person_profile",
+      person_profile_id: "   "
+    });
+    const result = await execute("python3", [checker, manifest]);
+    const report = JSON.parse(result.stdout) as {
+      passes_applicable_hard_checks: boolean;
+      violations: string[];
+    };
+
+    expect(report.violations).toContain("person_profile_id_required");
+    expect(report.passes_applicable_hard_checks).toBe(false);
+  });
+
   it("rejects non-string comparison-history values", async () => {
     const invalidUris = await writeManifest({
       target_track_count: 1,

@@ -316,7 +316,9 @@ def main() -> None:
         violations.append("neutral_personalization_source")
     if audience_mode == "self_neutral" and references:
         violations.append("neutral_historical_reference")
-    if audience_mode == "person_profile" and (not isinstance(person_profile_id, str) or not person_profile_id):
+    if audience_mode == "person_profile" and (
+        not isinstance(person_profile_id, str) or not person_profile_id.strip()
+    ):
         violations.append("person_profile_id_required")
     if weak_prompt_indexes:
         violations.append("weak_prompt_fit")

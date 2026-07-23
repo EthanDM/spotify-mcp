@@ -62,7 +62,7 @@ const forbiddenContent = [
   {
     label: "Spotify credential assignment",
     pattern:
-      /SPOTIFY_(?:CLIENT_ID|CLIENT_SECRET|ACCESS_TOKEN|REFRESH_TOKEN)\s*=/
+      /SPOTIFY_(?:CLIENT_ID|CLIENT_SECRET|ACCESS_TOKEN|REFRESH_TOKEN)\s*=/i
   },
   {
     label: "AWS credential assignment",
