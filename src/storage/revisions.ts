@@ -180,15 +180,44 @@ export class RevisionStore<T> {
         this.revisionsDirectory
       );
       if (directoryCreated) {
-        await fs.writeFile(
-          path.join(this.revisionsDirectory, INITIALIZATION_MARKER),
-          `${JSON.stringify({
-            machine_id: this.machineId,
-            pid: process.pid,
-            revision_id: envelope.revision_id
-          })}\n`,
-          { encoding: "utf8", mode: 0o600, flag: "wx" }
+        const directoryIdentity = await readDirectoryIdentity(
+          this.revisionsDirectory,
+          this.documentName
         );
+        const markerPath = path.join(
+          this.revisionsDirectory,
+          INITIALIZATION_MARKER
+        );
+        try {
+          await fs.writeFile(
+            markerPath,
+            `${JSON.stringify({
+              machine_id: this.machineId,
+              pid: process.pid,
+              revision_id: envelope.revision_id
+            })}\n`,
+            { encoding: "utf8", mode: 0o600, flag: "wx" }
+          );
+        } catch (error) {
+          await assertDirectoryIdentity(
+            this.revisionsDirectory,
+            this.documentName,
+            directoryIdentity
+          );
+          try {
+            if ((await fs.lstat(markerPath)).isFile())
+              await fs.unlink(markerPath);
+          } catch (cleanupError) {
+            if (!isMissing(cleanupError)) throw cleanupError;
+          }
+          await assertDirectoryIdentity(
+            this.revisionsDirectory,
+            this.documentName,
+            directoryIdentity
+          );
+          await fs.rmdir(this.revisionsDirectory);
+          throw error;
+        }
         initializing = true;
       }
     } else {

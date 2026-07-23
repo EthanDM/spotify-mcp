@@ -10,6 +10,7 @@ import { normalizePreferences } from "../personalization/store.js";
 import { RevisionStore } from "../storage/revisions.js";
 import {
   appendPrivateFile,
+  assertDirectoryIdentity,
   assertNoSymlinksWithinRoot,
   ensureDirectoryWithinRoot,
   readDirectoryIdentity,
@@ -508,7 +509,8 @@ async function validateNdjson(
     records,
     destination,
     idField,
-    destinationTransform
+    destinationTransform,
+    sharedRoot
   );
   const sourceLines = ((await readText(source)) ?? "")
     .split("\n")
@@ -673,7 +675,8 @@ async function migrateNdjson(
     records,
     destination,
     idField,
-    destinationTransform
+    destinationTransform,
+    sharedStorage.sharedRoot
   );
   let added = 0;
   const additions: string[] = [];
@@ -769,13 +772,22 @@ async function addDestinationRecords(
   records: Map<string, string>,
   destination: string,
   idField: string,
-  transform: (value: Record<string, unknown>) => Record<string, unknown>
+  transform: (value: Record<string, unknown>) => Record<string, unknown>,
+  sharedRoot: string
 ): Promise<void> {
-  const files = await ndjsonFiles(path.dirname(destination));
+  const directory = path.dirname(destination);
+  const observed = await assertNoSymlinksWithinRoot(sharedRoot, directory);
+  const directoryIdentity = observed
+    ? await readDirectoryIdentity(directory)
+    : null;
+  const files = await ndjsonFiles(directory, directoryIdentity);
   for (const file of files) {
-    const lines = (await readFileNoFollow(file))
-      .split("\n")
-      .filter((line) => line.trim());
+    if (directoryIdentity)
+      await assertDirectoryIdentity(directory, directoryIdentity);
+    const raw = await readFileNoFollow(file);
+    if (directoryIdentity)
+      await assertDirectoryIdentity(directory, directoryIdentity);
+    const lines = raw.split("\n").filter((line) => line.trim());
     for (const [index, line] of lines.entries())
       addRecord(
         records,
@@ -1024,9 +1036,14 @@ async function directoryNames(directory: string): Promise<string[]> {
     throw error;
   }
 }
-async function ndjsonFiles(directory: string): Promise<string[]> {
+async function ndjsonFiles(
+  directory: string,
+  directoryIdentity: { device: number; inode: number } | null
+): Promise<string[]> {
   try {
     const entries = await fs.readdir(directory, { withFileTypes: true });
+    if (directoryIdentity)
+      await assertDirectoryIdentity(directory, directoryIdentity);
     const files: string[] = [];
     for (const entry of entries) {
       if (!entry.name.endsWith(".ndjson")) continue;
