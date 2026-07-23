@@ -232,4 +232,26 @@ describe("skill installer", () => {
       await rm(fixture, { force: true });
     }
   });
+
+  it("rejects environment variants and generated personalization context", async () => {
+    const fixtures = [
+      path.resolve("skills", "playlist-review", ".env.production"),
+      path.resolve("skills", "playlist-review", "personalization-context.md")
+    ];
+    try {
+      for (const fixture of fixtures) {
+        await writeFile(fixture, "private runtime value");
+        await expect(
+          execute("node", ["scripts/check-skill-privacy.mjs"])
+        ).rejects.toMatchObject({
+          stderr: expect.stringContaining("forbidden runtime-state filename")
+        });
+        await rm(fixture, { force: true });
+      }
+    } finally {
+      await Promise.all(
+        fixtures.map((fixture) => rm(fixture, { force: true }))
+      );
+    }
+  });
 });

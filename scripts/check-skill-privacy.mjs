@@ -13,6 +13,7 @@ const forbiddenFileNames = new Set([
   "auth.json",
   "interaction-log.ndjson",
   "playlist-history.ndjson",
+  "personalization-context.md",
   "profile.json",
   "profile-context.md",
   "profile-snapshot.json",
@@ -63,7 +64,8 @@ const forbiddenContent = [
 const failures = [];
 for (const filePath of await listFiles(skillsRoot)) {
   const relativePath = path.relative(repositoryRoot, filePath);
-  if (forbiddenFileNames.has(path.basename(filePath))) {
+  const fileName = path.basename(filePath);
+  if (forbiddenFileNames.has(fileName) || fileName.startsWith(".env.")) {
     failures.push(`${relativePath}: forbidden runtime-state filename`);
     continue;
   }
