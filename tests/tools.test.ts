@@ -381,6 +381,40 @@ describe("tool handlers", () => {
     expect(result.content[0]?.text).toContain("Invalid literal value");
   });
 
+  it("rejects a merge that uses the target as a source before calling Spotify", async () => {
+    const mergePlaylists = vi.fn();
+    const handlers = createToolHandlers({ mergePlaylists } as never);
+
+    const result = await handlers.mergePlaylists({
+      targetPlaylistId: "target",
+      sourcePlaylistIds: ["target"],
+      confirm: true
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain(
+      "A merge source cannot be the target playlist"
+    );
+    expect(mergePlaylists).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate merge sources before calling Spotify", async () => {
+    const mergePlaylists = vi.fn();
+    const handlers = createToolHandlers({ mergePlaylists } as never);
+
+    const result = await handlers.mergePlaylists({
+      targetPlaylistId: "target",
+      sourcePlaylistIds: ["source", "source"],
+      confirm: true
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain(
+      "Merge source playlists must be unique"
+    );
+    expect(mergePlaylists).not.toHaveBeenCalled();
+  });
+
   it("requires confirm=true when deduping a playlist", async () => {
     const handlers = createToolHandlers({
       dedupePlaylist: vi.fn()

@@ -106,12 +106,34 @@ export const replacePlaylistItemsSchema = z.object({
 /**
  * Merge one or more source playlists into a target playlist, preserving order.
  */
-export const mergePlaylistsSchema = z.object({
+export const mergePlaylistsInputSchema = {
   targetPlaylistId: z.string().min(1),
   sourcePlaylistIds: z.array(z.string().min(1)).min(1),
   dedupe: z.boolean().optional(),
   confirm: z.literal(true)
-});
+};
+
+export const mergePlaylistsSchema = z
+  .object(mergePlaylistsInputSchema)
+  .superRefine((input, context) => {
+    if (input.sourcePlaylistIds.includes(input.targetPlaylistId)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A merge source cannot be the target playlist.",
+        path: ["sourcePlaylistIds"]
+      });
+    }
+
+    if (
+      new Set(input.sourcePlaylistIds).size !== input.sourcePlaylistIds.length
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Merge source playlists must be unique.",
+        path: ["sourcePlaylistIds"]
+      });
+    }
+  });
 
 /**
  * Remove duplicate track URIs from a playlist while preserving first occurrence order.

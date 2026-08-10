@@ -4,16 +4,13 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { getStorageConfig } from "../../src/config.js";
 import { PeopleProfileService } from "../../src/people/service.js";
 import { PeopleStore } from "../../src/people/store.js";
 
 describe("PeopleProfileService", () => {
   it("creates stable slug ids and disambiguates duplicate names", async () => {
-    const service = new PeopleProfileService(
-      new PeopleStore(
-        await mkdtemp(path.join(os.tmpdir(), "spotify-mcp-people-"))
-      )
-    );
+    const service = await createService();
 
     const first = await service.createProfile({
       name: "Taylor Q. Example"
@@ -27,11 +24,7 @@ describe("PeopleProfileService", () => {
   });
 
   it("updates one field without dropping existing structured preferences", async () => {
-    const service = new PeopleProfileService(
-      new PeopleStore(
-        await mkdtemp(path.join(os.tmpdir(), "spotify-mcp-people-"))
-      )
-    );
+    const service = await createService();
     const created = await service.createProfile({
       name: "Sample Listener",
       relationship: "friend",
@@ -52,11 +45,7 @@ describe("PeopleProfileService", () => {
   });
 
   it("records playlist history, retains artifact paths, and rebuilds context", async () => {
-    const service = new PeopleProfileService(
-      new PeopleStore(
-        await mkdtemp(path.join(os.tmpdir(), "spotify-mcp-people-"))
-      )
-    );
+    const service = await createService();
     const created = await service.createProfile({
       name: "Sample Listener",
       life_context: [
@@ -106,11 +95,7 @@ describe("PeopleProfileService", () => {
   });
 
   it("records lightweight profile feedback into the durable profile", async () => {
-    const service = new PeopleProfileService(
-      new PeopleStore(
-        await mkdtemp(path.join(os.tmpdir(), "spotify-mcp-people-"))
-      )
-    );
+    const service = await createService();
     const created = await service.createProfile({
       name: "Sample Listener"
     });
@@ -125,3 +110,11 @@ describe("PeopleProfileService", () => {
     expect(updated.profile.avoided_traits).toEqual(["festival emotional"]);
   });
 });
+
+async function createService(): Promise<PeopleProfileService> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "spotify-mcp-people-"));
+  return new PeopleProfileService(
+    new PeopleStore(root),
+    getStorageConfig({ SPOTIFY_MCP_DATA_DIR: root })
+  );
+}

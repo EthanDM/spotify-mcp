@@ -1,7 +1,5 @@
-import {
-  getPersonArtifactsDirectoryPath,
-  toPortableArtifactPath
-} from "../config.js";
+import { type StorageConfig, toPortableArtifactPath } from "../config.js";
+import path from "node:path";
 import { PeopleStore } from "./store.js";
 import type {
   PersonPlaylistRecord,
@@ -48,7 +46,10 @@ type ProfileUpsertInput = {
  * from Spotify automatically; it just keeps reusable taste memory structured.
  */
 export class PeopleProfileService {
-  constructor(private readonly store: PeopleStore) {}
+  constructor(
+    private readonly store: PeopleStore,
+    private readonly storage: StorageConfig
+  ) {}
 
   /**
    * Creates a new durable person profile from explicit listener context.
@@ -236,24 +237,27 @@ export class PeopleProfileService {
     notes?: string[];
   }): Promise<PersonPlaylistRecordResult> {
     const profile = await this.requireProfile(input.profileId);
-    const record = normalizePlaylistRecord({
-      entry_id: buildPlaylistRecordId(),
-      recorded_at: new Date().toISOString(),
-      playlist_id: input.playlist_id ?? null,
-      playlist_name: input.playlist_name,
-      playlist_url: input.playlist_url ?? null,
-      brief: input.brief ?? null,
-      use_case: input.use_case ?? null,
-      track_count: input.track_count ?? null,
-      runtime_minutes: input.runtime_minutes ?? null,
-      score: input.score ?? null,
-      verdict: input.verdict ?? null,
-      winning_traits: input.winning_traits ?? [],
-      losing_traits: input.losing_traits ?? [],
-      workflow_learning: input.workflow_learning ?? null,
-      artifact_paths: input.artifact_paths ?? [],
-      notes: input.notes ?? []
-    });
+    const record = normalizePlaylistRecord(
+      {
+        entry_id: buildPlaylistRecordId(),
+        recorded_at: new Date().toISOString(),
+        playlist_id: input.playlist_id ?? null,
+        playlist_name: input.playlist_name,
+        playlist_url: input.playlist_url ?? null,
+        brief: input.brief ?? null,
+        use_case: input.use_case ?? null,
+        track_count: input.track_count ?? null,
+        runtime_minutes: input.runtime_minutes ?? null,
+        score: input.score ?? null,
+        verdict: input.verdict ?? null,
+        winning_traits: input.winning_traits ?? [],
+        losing_traits: input.losing_traits ?? [],
+        workflow_learning: input.workflow_learning ?? null,
+        artifact_paths: input.artifact_paths ?? [],
+        notes: input.notes ?? []
+      },
+      this.storage
+    );
 
     await this.store.appendPlaylistRecord(input.profileId, record);
     const history = await this.store.readPlaylistHistory(input.profileId);
@@ -268,9 +272,7 @@ export class PeopleProfileService {
         input.profileId
       ),
       context_path: this.store.getContextPath(input.profileId),
-      artifacts_directory_path: getPersonArtifactsDirectoryPath(
-        input.profileId
-      ),
+      artifacts_directory_path: this.getArtifactsDirectoryPath(input.profileId),
       rebuilt_at: record.recorded_at
     };
   }
@@ -340,7 +342,7 @@ export class PeopleProfileService {
         profile.id
       ),
       context_path: this.store.getContextPath(profile.id),
-      artifacts_directory_path: getPersonArtifactsDirectoryPath(profile.id),
+      artifacts_directory_path: this.getArtifactsDirectoryPath(profile.id),
       playlist_history_count: history.length
     };
   }
@@ -359,6 +361,10 @@ export class PeopleProfileService {
       context_path: this.store.getContextPath(profileId),
       rebuilt_at: profile.updated_at
     };
+  }
+
+  private getArtifactsDirectoryPath(profileId: string): string {
+    return path.join(this.storage.artifactsDirectory, "people", profileId);
   }
 }
 
@@ -611,7 +617,8 @@ function normalizeProfile(profile: PersonProfile): PersonProfile {
 }
 
 function normalizePlaylistRecord(
-  record: PersonPlaylistRecord
+  record: PersonPlaylistRecord,
+  storage: StorageConfig
 ): PersonPlaylistRecord {
   return {
     ...record,
@@ -627,7 +634,7 @@ function normalizePlaylistRecord(
     winning_traits: uniqueValues(record.winning_traits),
     losing_traits: uniqueValues(record.losing_traits),
     artifact_paths: uniqueValues(record.artifact_paths).map((artifactPath) =>
-      toPortableArtifactPath(artifactPath)
+      toPortableArtifactPath(artifactPath, storage)
     ),
     notes: uniqueValues(record.notes)
   };

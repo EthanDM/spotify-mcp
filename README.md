@@ -167,6 +167,7 @@ Set `CODEX_HOME` to install into another absolute Codex directory. Run `pnpm ski
 - `spotify_unfollow_playlist` removes a playlist from the current user's library. It does not delete the playlist from Spotify.
 - `spotify_archive_playlist` is an opinionated cleanup flow for owned playlists: it makes the playlist private, disables collaboration, prefixes the name with `[Archived] ` by default, and can optionally clear all items.
 - `spotify_replace_playlist_items`, `spotify_remove_playlist_items`, `spotify_reorder_playlist_items`, `spotify_merge_playlists`, `spotify_dedupe_playlist`, `spotify_unfollow_playlist`, and `spotify_archive_playlist` require `confirm: true`.
+- `spotify_merge_playlists` rejects duplicate sources and a source that matches its target.
 - Remove and reorder fetch the latest playlist snapshot before mutating.
 - Clone copies items in batches and creates the destination playlist as private unless you explicitly opt into `public: true`.
 - Personalization state is stored outside the repo in `~/.config/spotify-mcp/personalization/`.
