@@ -23,7 +23,7 @@ import {
   getPersonalizationStateSchema,
   listPersonProfilesSchema,
   listPlaylistsSchema,
-  mergePlaylistsSchema,
+  mergePlaylistsInputSchema,
   personProfileIdSchema,
   playlistIdSchema,
   playlistItemsSchema,
@@ -84,7 +84,8 @@ const people = new PeopleProfileService(
         sharedRoot: sharedStorage!.sharedRoot,
         assertSharedStorageAvailable: () => sharedStorage!.assertWritable()
       })
-    : new PeopleStore(storage.localPeopleDirectory)
+    : new PeopleStore(storage.localPeopleDirectory),
+  storage
 );
 const handlers = createToolHandlers(spotify, personalization, people);
 
@@ -219,7 +220,7 @@ server.registerTool(
     title: "Merge Spotify Playlists",
     description:
       "Merges source playlists into a target playlist. Requires confirm=true.",
-    inputSchema: mergePlaylistsSchema.shape
+    inputSchema: mergePlaylistsInputSchema
   },
   handlers.mergePlaylists
 );

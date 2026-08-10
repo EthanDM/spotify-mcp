@@ -14,6 +14,7 @@ import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { getStorageConfig } from "../../src/config.js";
 import { PeopleStore } from "../../src/people/store.js";
 import type { PersonPlaylistRecord } from "../../src/people/types.js";
 import { PeopleProfileService } from "../../src/people/service.js";
@@ -428,7 +429,10 @@ describe("shared stores", () => {
       path.join(os.tmpdir(), "spotify-people-directory-gone-")
     );
     const store = people(root, "desktop");
-    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    await new PeopleProfileService(
+      store,
+      peopleConfig(root, "desktop")
+    ).createProfile({ name: "Friend" });
     const directory = store.basePath;
     const readDirectory = fs.readdir.bind(fs);
     const readdir = vi
@@ -449,7 +453,10 @@ describe("shared stores", () => {
       path.join(os.tmpdir(), "spotify-people-directory-swap-")
     );
     const store = people(root, "desktop");
-    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    await new PeopleProfileService(
+      store,
+      peopleConfig(root, "desktop")
+    ).createProfile({ name: "Friend" });
     const directory = store.basePath;
     const original = path.join(root, "original-people");
     const replacement = path.join(root, "replacement-people");
@@ -475,7 +482,10 @@ describe("shared stores", () => {
       path.join(os.tmpdir(), "spotify-people-read-swap-")
     );
     const store = people(root, "desktop");
-    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    await new PeopleProfileService(
+      store,
+      peopleConfig(root, "desktop")
+    ).createProfile({ name: "Friend" });
     const directory = store.basePath;
     const original = path.join(root, "original-people");
     const replacement = path.join(root, "replacement-people");
@@ -514,7 +524,10 @@ describe("shared stores", () => {
       { recursive: true }
     );
 
-    const created = await new PeopleProfileService(store).createProfile({
+    const created = await new PeopleProfileService(
+      store,
+      peopleConfig(root, "desktop")
+    ).createProfile({
       name: "Friend"
     });
 
@@ -526,7 +539,10 @@ describe("shared stores", () => {
       path.join(os.tmpdir(), "spotify-profile-stale-")
     );
     const store = people(root, "desktop");
-    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    await new PeopleProfileService(
+      store,
+      peopleConfig(root, "desktop")
+    ).createProfile({ name: "Friend" });
     const first = await store.readProfileVersioned("friend");
     const second = await store.readProfileVersioned("friend");
     await store.writeProfile(
@@ -549,7 +565,10 @@ describe("shared stores", () => {
   it("rejects a shared profile whose id differs from its directory", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-id-"));
     const store = people(root, "desktop");
-    await new PeopleProfileService(store).createProfile({ name: "Alice" });
+    await new PeopleProfileService(
+      store,
+      peopleConfig(root, "desktop")
+    ).createProfile({ name: "Alice" });
     await rename(
       path.join(root, "shared", "people", "alice"),
       path.join(root, "shared", "people", "bob")
@@ -563,7 +582,10 @@ describe("shared stores", () => {
   it("fails when an enumerated shared profile disappears", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "spotify-profile-gone-"));
     const store = people(root, "desktop");
-    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    await new PeopleProfileService(
+      store,
+      peopleConfig(root, "desktop")
+    ).createProfile({ name: "Friend" });
     const readProfile = store.readProfile.bind(store);
     vi.spyOn(store, "readProfile").mockImplementation(async (profileId) => {
       await rm(store.getProfileDirectoryPath(profileId), {
@@ -582,7 +604,10 @@ describe("shared stores", () => {
       path.join(os.tmpdir(), "spotify-profile-revisions-gone-")
     );
     const store = people(root, "desktop");
-    await new PeopleProfileService(store).createProfile({ name: "Friend" });
+    await new PeopleProfileService(
+      store,
+      peopleConfig(root, "desktop")
+    ).createProfile({ name: "Friend" });
     const readProfile = store.readProfile.bind(store);
     vi.spyOn(store, "readProfile").mockImplementation(async (profileId) => {
       await rm(store.getProfilePath(profileId), { recursive: true });
@@ -618,6 +643,14 @@ function people(root: string, machineId: string): PeopleStore {
     sharedMode: true,
     sharedRoot: path.join(root, "shared"),
     assertSharedStorageAvailable: async () => {}
+  });
+}
+
+function peopleConfig(root: string, machineId: string) {
+  return getStorageConfig({
+    SPOTIFY_MCP_DATA_DIR: path.join(root, machineId, "local-people"),
+    SPOTIFY_MCP_SHARED_DATA_DIR: path.join(root, "shared"),
+    SPOTIFY_MCP_MACHINE_ID: machineId
   });
 }
 function record(entry_id: string, recorded_at: string): PersonPlaylistRecord {
