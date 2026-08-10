@@ -81,7 +81,7 @@ Do not create, add, replace, or reorder playlist items until every applicable ch
 
 6. Create and verify.
 
-- Create a new private playlist with `spotify_create_playlist` unless the user explicitly wants an existing playlist replaced or public.
+- Create a new playlist with `spotify_create_playlist`, which requests that it is not published on the owner's profile by default. Set `public: true` only when the user explicitly requests profile publication; this Web API control does not make playlist access private.
 - For a new playlist, add tracks with `spotify_add_playlist_items`.
 - For every requested refresh or overwrite of an existing playlist, use `spotify_replace_playlist_items` regardless of playback mode.
 - Use `spotify_reorder_playlist_items` when a specific opening, midpoint, or finish sequence matters.
@@ -123,7 +123,7 @@ Do not create, add, replace, or reorder playlist items until every applicable ch
 ## Mutation Rules
 
 - Keep explicit preview or draft requests read-only.
-- Treat an explicit "make" or "create" request as authorization to create a new private playlist without another approval prompt.
+- Treat an explicit "make" or "create" request as authorization to create a new playlist with the default profile-publication request without another approval prompt.
 - Default to creating a new playlist unless the user explicitly asks to overwrite an existing one.
 - Do not replace or heavily mutate an existing playlist without the user asking for that path.
 - Prefer reversible operations and explicit naming.

@@ -179,8 +179,8 @@ export type UnfollowPlaylistResult = {
  * Result for archiving a playlist in-place.
  *
  * Archiving is an opinionated workflow on top of Spotify primitives: the
- * playlist is renamed with a prefix, made private, collaboration is disabled,
- * and its items may optionally be cleared.
+ * playlist is renamed with a prefix, requested for removal from the owner's
+ * profile, collaboration is disabled, and its items may optionally be cleared.
  */
 export type ArchivePlaylistResult = {
   playlist: PlaylistSummary;

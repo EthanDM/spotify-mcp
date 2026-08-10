@@ -54,7 +54,7 @@ Also read `$playlist-builder-from-context` and its `references/workflow-patterns
 6. Create or refresh safely.
 
 - Keep preview requests read-only.
-- Treat an explicit create or make request as authorization for a new private playlist.
+- Treat an explicit create or make request as authorization for a new playlist with the default request not to publish it on the owner's profile.
 - Refresh an existing radio playlist only when the user explicitly requests it.
 - For refreshes, use the builder's intentional-derivative mode, preserve the seed, and follow the refresh guidance in `references/radio-patterns.md`.
 - Replace an explicitly targeted existing radio on refresh; create a new playlist only for a requested new copy or fresh snapshot.
@@ -71,7 +71,7 @@ Also read `$playlist-builder-from-context` and its `references/workflow-patterns
 - Never claim to create, access, or reproduce Spotify's proprietary Song Radio.
 - Create a static playlist inspired by the seed; explain that it will not update automatically.
 - Do not modify a saved Spotify Radio or an existing playlist unless the user explicitly requests that target.
-- Default new playlists to private and report Spotify's returned visibility accurately.
+- Default new playlists to a request not to publish them on the owner's profile. Spotify's returned `public` value does not verify profile listing or access privacy.
 - Never knowingly create a partial playlist.
 
 ## Output Contract
