@@ -23,8 +23,8 @@ Use `$playlist-review` instead when the user only wants curation feedback and do
 
 - Read playlist metadata with `spotify_get_playlist`.
 - Read every item page with `spotify_get_playlist_items`; do not review only the first page.
-- Compare the live title, description, visibility, count, URI body, and order with the artifact.
-- Separate Spotify visibility or mutation failures from recommendation-quality failures.
+- Compare the live title, description, reported `public` value, count, URI body, and order with the artifact.
+- Separate Spotify visibility or mutation failures from recommendation-quality failures. The Web API's `public` value does not reliably verify profile listing or access privacy; use Spotify's UI when either matters.
 - Keep this step read-only.
 
 3. Review playlist quality.

@@ -131,11 +131,11 @@ Use these definitions and thresholds for a general personal build with final cou
 
 - Generate a concise title that preserves the prompt's intent.
 - Generate a one-sentence description naming the functional lane without claiming unsupported precision.
-- For a new request, create the playlist private unless the user explicitly requests public visibility, then add the exact selected URI list.
+- For a new request, create the playlist with the default request not to publish it on the owner's profile unless the user explicitly requests profile publication, then add the exact selected URI list. This does not make playlist access private.
 - For a requested refresh or overwrite, keep the existing playlist and replace its items with the exact selected URI list regardless of playback mode.
 - Read the playlist metadata and every item page back.
 - Verify the title is present, the description is nonempty, and the fetched count equals both the intended count and Spotify's reported total.
-- Verify exact order for ordered builds. For private requests, report Spotify's returned visibility without claiming stronger privacy than the readback supports.
+- Verify exact order for ordered builds. For default profile-publication requests, report Spotify's returned `public` value but do not infer profile listing or access privacy from it; verify in Spotify's UI when profile visibility matters.
 - If verification fails, report the exact mismatch and do not claim completion.
 
 10. Save the build record.
@@ -172,7 +172,7 @@ Use these definitions and thresholds for a general personal build with final cou
 5. Build a candidate set with the same applicable recent-overlap and discovery controls used by fast personal mode
 6. Tighten weak or redundant tracks
 7. Run the deterministic constraint check
-8. For a refresh or overwrite of an existing playlist, use `spotify_replace_playlist_items`; otherwise create a new private playlist
+8. For a refresh or overwrite of an existing playlist, use `spotify_replace_playlist_items`; otherwise create a new playlist with the default request not to publish it on the owner's profile
 9. Return the playlist and suggest evaluation criteria
 10. Record feedback later once the user has listened
 

@@ -230,7 +230,7 @@ describe("tool handlers", () => {
     );
   });
 
-  it("rejects public collaborative playlist creation at validation time", async () => {
+  it("rejects collaborative playlist creation with public=true at validation time", async () => {
     const handlers = createToolHandlers({
       createPlaylist: vi.fn()
     } as never);
@@ -242,7 +242,7 @@ describe("tool handlers", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("must not be public");
+    expect(result.content[0]?.text).toContain("require `public` to be `false`");
   });
 
   it("requires confirm=true when replacing playlist items", async () => {

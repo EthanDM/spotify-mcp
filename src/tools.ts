@@ -51,7 +51,7 @@ export const searchTracksSchema = z.object({
 });
 
 /**
- * Playlist creation inputs. Public playlists require an explicit opt-in.
+ * Playlist creation inputs. Profile publication requires an explicit opt-in.
  */
 const createPlaylistFields = {
   name: z.string().min(1),
@@ -63,7 +63,7 @@ const createPlaylistFields = {
 export const createPlaylistSchema = z
   .object(createPlaylistFields)
   .refine((input) => !(input.public === true && input.collaborative === true), {
-    message: "Collaborative playlists must not be public.",
+    message: "Collaborative playlists require `public` to be `false`.",
     path: ["collaborative"]
   });
 
@@ -81,7 +81,7 @@ const changePlaylistDetailsFields = {
 export const changePlaylistDetailsSchema = z
   .object(changePlaylistDetailsFields)
   .refine((input) => !(input.public === true && input.collaborative === true), {
-    message: "Collaborative playlists must not be public.",
+    message: "Collaborative playlists require `public` to be `false`.",
     path: ["collaborative"]
   });
 

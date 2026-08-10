@@ -404,7 +404,7 @@ describe("SpotifyClient", () => {
     );
   });
 
-  it("archives a playlist by making it private, prefixing its name, and clearing items", async () => {
+  it("archives a playlist by requesting removal from the profile, prefixing its name, and clearing items", async () => {
     const store = createTokenStore();
     const getPlaylistMock = vi
       .fn()
@@ -932,7 +932,7 @@ describe("SpotifyClient", () => {
     );
   });
 
-  it("rejects making an existing public playlist collaborative without also making it private", async () => {
+  it("rejects making a playlist collaborative without setting public=false", async () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
@@ -960,7 +960,7 @@ describe("SpotifyClient", () => {
         playlistId: "playlist",
         collaborative: true
       })
-    ).rejects.toThrow("must not be public");
+    ).rejects.toThrow("require `public` to be `false`");
 
     expect(fetchMock).not.toHaveBeenCalledWith(
       "https://api.spotify.com/v1/playlists/playlist",

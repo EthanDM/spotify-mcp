@@ -299,10 +299,10 @@ export class SpotifyClient {
   }
 
   /**
-   * Creates a playlist for the authenticated user. New playlists default to private.
-   *
-   * Callers may opt into `public`, but the default stays private so accidental
-   * tool calls do not publish playlists by surprise.
+   * Creates a playlist for the authenticated user, requesting that it is not
+   * published on the owner's profile by default. Spotify's Web API does not
+   * control true private access, and its public readback can be inconsistent
+   * with profile visibility.
    */
   async createPlaylist(input: {
     name: string;
@@ -383,9 +383,10 @@ export class SpotifyClient {
   /**
    * Archives a playlist in place for the current user.
    *
-   * This is an opinionated cleanup workflow: it makes the playlist private,
-   * disables collaboration, prefixes the name once, and can optionally clear
-   * every playlist item.
+   * This is an opinionated cleanup workflow: it requests removal from the
+   * owner's profile, disables collaboration, prefixes the name once, and can
+   * optionally clear every playlist item. It does not make the playlist
+   * access-private because Spotify's Web API cannot control that setting.
    */
   async archivePlaylist(input: {
     playlistId: string;
@@ -870,8 +871,9 @@ export class SpotifyClient {
   /**
    * Rejects metadata combinations that Spotify would refuse after a network round trip.
    *
-   * The main special case is enabling collaboration on an existing public
-   * playlist: callers must also make the playlist private in the same update.
+   * The main special case is enabling collaboration when Spotify reports the
+   * playlist's `public` field as true: callers must also set that field to
+   * false in the same update.
    */
   private async validatePlaylistDetailChange(input: {
     playlistId: string;
@@ -887,7 +889,7 @@ export class SpotifyClient {
 
     if (effectivePublic) {
       throw new SpotifyMcpError(
-        "Collaborative playlists must not be public. Set `public` to `false` in the same request.",
+        "Collaborative playlists require `public` to be `false`. Set it in the same request.",
         "playlist_invalid_visibility"
       );
     }
