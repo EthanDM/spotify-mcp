@@ -153,7 +153,7 @@ server.registerTool(
   {
     title: "Create Spotify Playlist",
     description:
-      "Creates a new Spotify playlist. New playlists default to private.",
+      "Creates a new Spotify playlist and requests public=false by default. Inspect the returned public value; Spotify may report a different value later, so this is not a privacy guarantee.",
     inputSchema: createPlaylistInputSchema
   },
   handlers.createPlaylist
@@ -186,7 +186,7 @@ server.registerTool(
   {
     title: "Archive Spotify Playlist",
     description:
-      "Makes a playlist private, prefixes its name, and can optionally clear items. Requires confirm=true.",
+      "Requests public=false, disables collaboration, prefixes a playlist name, and can optionally clear items. Inspect returned metadata because Spotify visibility is not guaranteed. Requires confirm=true.",
     inputSchema: archivePlaylistSchema.shape
   },
   handlers.archivePlaylist
@@ -261,7 +261,7 @@ server.registerTool(
   {
     title: "Clone Spotify Playlist",
     description:
-      "Copies a playlist into a new private playlist unless public=true is provided.",
+      "Copies a playlist into a new playlist and requests public=false unless public=true is provided. Inspect returned metadata because Spotify visibility is not guaranteed.",
     inputSchema: clonePlaylistSchema.shape
   },
   handlers.clonePlaylist

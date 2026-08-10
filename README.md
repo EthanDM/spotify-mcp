@@ -163,12 +163,12 @@ Set `CODEX_HOME` to install into another absolute Codex directory. Run `pnpm ski
 
 ## Tool Notes
 
-- New playlists default to `public: false`.
+- New playlists request `public: false` by default. Spotify may later report `public: true`, including for playlists that are not listed on the owner's profile. Treat the returned `public` value as observed Spotify metadata, not an access-control or privacy guarantee.
 - `spotify_unfollow_playlist` removes a playlist from the current user's library. It does not delete the playlist from Spotify.
-- `spotify_archive_playlist` is an opinionated cleanup flow for owned playlists: it makes the playlist private, disables collaboration, prefixes the name with `[Archived] ` by default, and can optionally clear all items.
+- `spotify_archive_playlist` is an opinionated cleanup flow for owned playlists: it requests `public: false`, disables collaboration, prefixes the name with `[Archived] ` by default, and can optionally clear all items. Verify visibility in Spotify's UI when privacy matters.
 - `spotify_replace_playlist_items`, `spotify_remove_playlist_items`, `spotify_reorder_playlist_items`, `spotify_merge_playlists`, `spotify_dedupe_playlist`, `spotify_unfollow_playlist`, and `spotify_archive_playlist` require `confirm: true`.
 - Remove and reorder fetch the latest playlist snapshot before mutating.
-- Clone copies items in batches and creates the destination playlist as private unless you explicitly opt into `public: true`.
+- Clone copies items in batches and requests `public: false` for the destination unless you explicitly opt into `public: true`. Verify visibility in Spotify's UI when privacy matters.
 - Personalization state is stored outside the repo in `~/.config/spotify-mcp/personalization/`.
 - Friend/family listener profiles are stored separately in `~/.config/spotify-mcp/people/`.
 - Generated user-specific artifacts should also stay outside the repo in `~/.config/spotify-mcp/artifacts/`.
@@ -427,7 +427,7 @@ pnpm smoke
 The smoke test:
 
 - uses your real authenticated Spotify account
-- creates temporary private playlists
+- creates temporary playlists that request `public: false`; verify visibility in Spotify's UI if that matters for the account used
 - exercises create, change-details, add, replace, clear, dedupe, merge, reorder, remove, and clone
 - prints the created playlist IDs so you can clean them up manually afterward
 
