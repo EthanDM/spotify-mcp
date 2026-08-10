@@ -404,7 +404,7 @@ describe("SpotifyClient", () => {
     );
   });
 
-  it("archives a playlist by requesting public=false, prefixing its name, and clearing items", async () => {
+  it("archives a playlist by requesting removal from the profile, prefixing its name, and clearing items", async () => {
     const store = createTokenStore();
     const getPlaylistMock = vi
       .fn()

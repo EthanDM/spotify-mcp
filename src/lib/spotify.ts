@@ -299,10 +299,10 @@ export class SpotifyClient {
   }
 
   /**
-   * Creates a playlist for the authenticated user, requesting `public: false`
-   * by default. Spotify may later report a different public value, so callers
-   * must treat the returned metadata as observed state rather than a privacy
-   * guarantee.
+   * Creates a playlist for the authenticated user, requesting that it is not
+   * published on the owner's profile by default. Spotify's Web API does not
+   * control true private access, and its public readback can be inconsistent
+   * with profile visibility.
    */
   async createPlaylist(input: {
     name: string;
@@ -383,10 +383,10 @@ export class SpotifyClient {
   /**
    * Archives a playlist in place for the current user.
    *
-   * This is an opinionated cleanup workflow: it requests `public: false`,
-   * disables collaboration, prefixes the name once, and can optionally clear
-   * every playlist item. Spotify's returned public value remains observed API
-   * state, not a privacy guarantee.
+   * This is an opinionated cleanup workflow: it requests removal from the
+   * owner's profile, disables collaboration, prefixes the name once, and can
+   * optionally clear every playlist item. It does not make the playlist
+   * access-private because Spotify's Web API cannot control that setting.
    */
   async archivePlaylist(input: {
     playlistId: string;
