@@ -932,7 +932,7 @@ describe("SpotifyClient", () => {
     );
   });
 
-  it("rejects making a profile-published playlist collaborative without removing it from the profile", async () => {
+  it("rejects making a playlist collaborative without setting public=false", async () => {
     const store = createTokenStore();
     const fetchMock = createRouterFetchMock({
       "GET https://api.spotify.com/v1/playlists/playlist": () =>
@@ -960,7 +960,7 @@ describe("SpotifyClient", () => {
         playlistId: "playlist",
         collaborative: true
       })
-    ).rejects.toThrow("cannot be published");
+    ).rejects.toThrow("require `public` to be `false`");
 
     expect(fetchMock).not.toHaveBeenCalledWith(
       "https://api.spotify.com/v1/playlists/playlist",

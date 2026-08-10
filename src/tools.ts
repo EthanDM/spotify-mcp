@@ -63,8 +63,7 @@ const createPlaylistFields = {
 export const createPlaylistSchema = z
   .object(createPlaylistFields)
   .refine((input) => !(input.public === true && input.collaborative === true), {
-    message:
-      "Collaborative playlists cannot be published on the owner's profile.",
+    message: "Collaborative playlists require `public` to be `false`.",
     path: ["collaborative"]
   });
 
@@ -82,8 +81,7 @@ const changePlaylistDetailsFields = {
 export const changePlaylistDetailsSchema = z
   .object(changePlaylistDetailsFields)
   .refine((input) => !(input.public === true && input.collaborative === true), {
-    message:
-      "Collaborative playlists cannot be published on the owner's profile.",
+    message: "Collaborative playlists require `public` to be `false`.",
     path: ["collaborative"]
   });
 

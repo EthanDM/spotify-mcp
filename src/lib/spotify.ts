@@ -871,9 +871,9 @@ export class SpotifyClient {
   /**
    * Rejects metadata combinations that Spotify would refuse after a network round trip.
    *
-   * The main special case is enabling collaboration on a playlist published
-   * on the owner's profile: callers must also request its removal from that
-   * profile in the same update.
+   * The main special case is enabling collaboration when Spotify reports the
+   * playlist's `public` field as true: callers must also set that field to
+   * false in the same update.
    */
   private async validatePlaylistDetailChange(input: {
     playlistId: string;
@@ -889,7 +889,7 @@ export class SpotifyClient {
 
     if (effectivePublic) {
       throw new SpotifyMcpError(
-        "Collaborative playlists cannot be published on the owner's profile. Set `public` to `false` in the same request.",
+        "Collaborative playlists require `public` to be `false`. Set it in the same request.",
         "playlist_invalid_visibility"
       );
     }
