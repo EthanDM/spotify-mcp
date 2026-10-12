@@ -91,3 +91,5 @@ Use conventional commits where practical:
 - `fix(spotify): ...`
 - `chore(tooling): ...`
 - `chore(readme): ...`
+
+Private ChatGPT access uses the same built stdio entrypoint through Secure MCP Tunnel. Keep runtime keys and machine-specific tunnel profiles outside the repository. Artifact tools must remain confined to the configured artifact root and retain shared-storage availability checks. Run `pnpm skills:check` when updating bundled workflow instructions.

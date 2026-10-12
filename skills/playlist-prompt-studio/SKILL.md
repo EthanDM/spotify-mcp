@@ -9,6 +9,10 @@ Help the user discover and express the playlist they want. Produce choices, not 
 
 Do not create, edit, inspect, or review a Spotify playlist with this skill. Send a selected prompt to `$playlist-builder-from-context`; review the result with `$playlist-builder-quality-loop`.
 
+## Private ChatGPT access
+
+When running through the private Spotify MCP connection, use `spotify_list_artifacts`, `spotify_read_artifact`, and `spotify_write_artifact` for saved sidecars. Paths are relative to the server's configured artifact root, which uses shared storage when enabled. Save revisions with new timestamped filenames; do not overwrite prior evidence. Use `spotify_check_playlist_constraints` with the manifest object instead of executing the bundled Python checker locally. The server's filesystem paths refer to its host Mac, not the chat execution environment. Returned artifact references can be recorded in playlist history.
+
 ## Choose the Mode
 
 Infer the mode from the request:

@@ -15,6 +15,10 @@ Read `references/review-patterns.md` when you need:
 - tighter guidance on common failure modes
 - artifact naming patterns for saved writeups
 
+## Private ChatGPT access
+
+When running through the private Spotify MCP connection, use `spotify_list_artifacts`, `spotify_read_artifact`, and `spotify_write_artifact` for saved sidecars. Paths are relative to the server's configured artifact root, which uses shared storage when enabled. Save revisions with new timestamped filenames; do not overwrite prior evidence. Use `spotify_check_playlist_constraints` with the manifest object instead of executing the bundled Python checker locally. The server's filesystem paths refer to its host Mac, not the chat execution environment. Returned artifact references can be recorded in playlist history.
+
 ## Use When
 
 - A playlist needs a quality review before sharing or reusing it

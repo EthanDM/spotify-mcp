@@ -3,6 +3,8 @@ import "dotenv/config";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { ArtifactStore, registerArtifactTools } from "./artifacts.js";
+
 import { TokenStore } from "./auth/token-store.js";
 import { getStorageConfig } from "./config.js";
 import { SpotifyClient } from "./lib/spotify.js";
@@ -45,10 +47,16 @@ import {
  * MCP entrypoint that wires the validated tool layer to the Spotify client over
  * a stdio transport for local Codex use.
  */
-const server = new McpServer({
-  name: "spotify-mcp",
-  version: "0.1.0"
-});
+const server = new McpServer(
+  {
+    name: "spotify-mcp",
+    version: "0.1.0"
+  },
+  {
+    instructions:
+      "Before playlist building, seed radio, reviewing, or quality evaluation, retrieve the matching bundled skill using spotify_get_workflow. Use spotify_list_artifacts, spotify_read_artifact, and spotify_write_artifact for sidecars; paths are relative to the server artifact root, which may be shared between Macs. Use spotify_check_playlist_constraints for manifest checks. Save artifact revisions under new filenames. Respect confirm gates and verify Spotify changes by reading back."
+  }
+);
 
 const storage = getStorageConfig();
 const sharedStorage = storage.sharedMode
@@ -398,6 +406,14 @@ server.registerTool(
     inputSchema: recordPersonFeedbackInputSchema
   },
   handlers.recordPersonFeedback
+);
+
+registerArtifactTools(
+  server,
+  new ArtifactStore(
+    storage,
+    sharedStorage ? () => sharedStorage.assertWritable() : undefined
+  )
 );
 
 const transport = new StdioServerTransport();

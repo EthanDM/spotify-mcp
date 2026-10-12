@@ -8,6 +8,11 @@ This project wraps Spotify's Web API in a small MCP tool surface for managing pl
 
 The server exposes these tools:
 
+- `spotify_get_workflow`
+- `spotify_list_artifacts`
+- `spotify_read_artifact`
+- `spotify_write_artifact`
+- `spotify_check_playlist_constraints`
 - `spotify_get_my_profile`
 - `spotify_list_playlists`
 - `spotify_get_playlist`
@@ -454,3 +459,11 @@ GitHub Actions runs this verification stack on pushes to `main` and on pull requ
 - `pnpm typecheck`
 - `pnpm test`
 - `pnpm build`
+
+## Private ChatGPT plugin
+
+Use an OpenAI Secure MCP Tunnel to run the built stdio server on your Mac, like a local Codex connection. No public listener is required. See [the persistent tunnel runbook](docs/private-chatgpt-tunnel.md).
+
+All Spotify and durable-state tools remain available. The tunnel must load the same local `.env` so the shared root and machine identity stay consistent. Chat requests from another computer execute on the tunnel host and append to that host's history stream. Keep the other Mac's distinct identity and local credentials; iCloud sync remains responsible for cross-machine availability.
+
+`spotify_get_workflow` returns any of the five bundled workflows with reference notes. Use `spotify_check_playlist_constraints` to run the existing Python checker with a JSON manifest without shell access. `spotify_list_artifacts` lists one directory with pagination; `spotify_read_artifact` returns saved text; `spotify_write_artifact` saves UTF-8 md/txt/json/csv/html sidecars. Inputs and text artifacts are capped at 512 KiB. Paths are relative to the configured artifact root; symlinks and traversal are refused. Existing artifacts are not overwritten: save a timestamped revision to preserve historical evidence across Macs. Writes return portable `artifacts/...` references suitable for durable history. This connection returns artifact contents to ChatGPT, not a public download URL or automatic file attachment.
