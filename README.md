@@ -462,7 +462,7 @@ GitHub Actions runs this verification stack on pushes to `main` and on pull requ
 
 ## Private ChatGPT plugin
 
-Use an OpenAI Secure MCP Tunnel to run the built stdio server on your Mac, like a local Codex connection. No public listener is required. See [the persistent tunnel runbook](docs/private-chatgpt-tunnel.md).
+Use an OpenAI Secure MCP Tunnel to run the built stdio server on your Mac, like a local Codex connection. No public listener is required. See [the Spotify tunnel guide](docs/private-chatgpt-tunnel.md). For other MCPs, use the `private-chatgpt-mcp` skill maintained in the personal codex-skills collection.
 
 All Spotify and durable-state tools remain available. The tunnel must load the same local `.env` so the shared root and machine identity stay consistent. Chat requests from another computer execute on the tunnel host and append to that host's history stream. Keep the other Mac's distinct identity and local credentials; iCloud sync remains responsible for cross-machine availability.
 
